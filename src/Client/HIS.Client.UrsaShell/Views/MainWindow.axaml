@@ -1,0 +1,86 @@
+<u:UrsaWindow xmlns="https://github.com/avaloniaui"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:u="https://irihi.tech/ursa"
+              xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+              xmlns:views="using:HIS.Client.UrsaShell.Views"
+              x:Class="HIS.Client.UrsaShell.Views.MainWindow"
+              x:DataType="vm:WorkbenchModel"
+              Title="医院信息系统 (HIS V4.3) - 全院一体化综合业务工作台"
+              Width="1280" Height="860"
+              WindowStartupLocation="CenterScreen">
+    <u:UrsaWindow.TitleBarContent>
+        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center" Margin="10,0">
+            <!-- System Title -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="🏥 HIS V4.3" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" Foreground="{DynamicResource SemiColorPrimary}"/>
+                <u:Badge Header="LTS" Classes="Primary"/>
+            </StackPanel>
+
+            <!-- 4-Dimensional Department Switcher (门诊 / 住院 / 医技 / 病区) -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="执业上下文:" VerticalAlignment="Center" Foreground="{DynamicResource SemiColorText2}"/>
+                <ComboBox Name="CmbCampus" SelectedIndex="0" VerticalAlignment="Center">
+                    <ComboBoxItem Content="总院区 (Campus 1)"/>
+                    <ComboBoxItem Content="东院分院区 (Campus 2)"/>
+                </ComboBox>
+
+                <ComboBox Name="CmbDeptCategory" SelectedIndex="0" VerticalAlignment="Center">
+                    <ComboBoxItem Content="门诊科室 (OPD_DEPT)"/>
+                    <ComboBoxItem Content="住院科室 (IPD_DEPT)"/>
+                    <ComboBoxItem Content="护理病区 (NURSING_WARD)"/>
+                    <ComboBoxItem Content="医技科室 (MEDTECH_DEPT)"/>
+                </ComboBox>
+
+                <ComboBox Name="CmbDepartment" SelectedIndex="0" VerticalAlignment="Center">
+                    <ComboBoxItem Content="心血管内科门诊"/>
+                    <ComboBoxItem Content="急诊医学科 (绿通)"/>
+                    <ComboBoxItem Content="心血管内科住院一科"/>
+                    <ComboBoxItem Content="内科一病区 (01~45床)"/>
+                    <ComboBoxItem Content="内科二病区 (跨病区借床病区)"/>
+                    <ComboBoxItem Content="医学检验科 (LAB)"/>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- User Context -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <TextBlock Text="{Binding UserName}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <u:Badge Header="在线" Classes="Success"/>
+            </StackPanel>
+        </Grid>
+    </u:UrsaWindow.TitleBarContent>
+
+    <Grid RowDefinitions="*,Auto">
+        <!-- Main Work Area with Tabs -->
+        <TabControl Grid.Row="0">
+            <!-- 1. 结构化电子病历与 OFD 生成 -->
+            <TabItem Header="结构化电子病历与 OFD 生成 (EMR)">
+                <views:UrsaStructuredEmrEditorView/>
+            </TabItem>
+
+            <!-- 2. 护理病区床位图与跨病区借床 -->
+            <TabItem Header="病区床位矩阵与跨病区借床 (IPD &amp; WARD)">
+                <views:UrsaBedMapView/>
+            </TabItem>
+
+            <!-- 3. 动态扩展表单配置中心 -->
+            <TabItem Header="动态表单配置中心 (CFG)">
+                <views:UrsaDynamicFormPresenter/>
+            </TabItem>
+        </TabControl>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,1,0,0" Padding="12,6">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16">
+                    <TextBlock Text="● 数据库通信正常 (ANSI SQL 跨库纯存储，零业务逻辑)" Foreground="{DynamicResource SemiColorSuccess}" FontSize="12"/>
+                    <TextBlock Text="JWT 鉴权: 已启用 (RBAC 细粒度至单组件/单章节)" Foreground="{DynamicResource SemiColorText2}" FontSize="12"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="16">
+                    <TextBlock Text="国标版式: GB/T 33190-2016 OFD" Foreground="{DynamicResource SemiColorText2}" FontSize="12"/>
+                    <TextBlock Text="Avalonia 11 + Ursa.Avalonia 2.3" Foreground="{DynamicResource SemiColorText2}" FontSize="12"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</u:UrsaWindow>
+

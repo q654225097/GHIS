@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\HIS.Contracts\HIS.Contracts.csproj" />
+    <ProjectReference Include="..\..\HIS.BuildingBlocks\HIS.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Platform\HIS.Modules.Platform.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Config\HIS.Modules.Config.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Emr\HIS.Modules.Emr.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Patient\HIS.Modules.Patient.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Outpatient\HIS.Modules.Outpatient.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Inpatient\HIS.Modules.Inpatient.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Ordering\HIS.Modules.Ordering.csproj" />
+    <ProjectReference Include="..\HIS.Modules.MedTech\HIS.Modules.MedTech.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Pharmacy\HIS.Modules.Pharmacy.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Inventory\HIS.Modules.Inventory.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Finance\HIS.Modules.Finance.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Integration\HIS.Modules.Integration.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Operations\HIS.Modules.Operations.csproj" />
+  </ItemGroup>
+</Project>
+

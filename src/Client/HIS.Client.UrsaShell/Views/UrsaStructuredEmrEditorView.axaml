@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             x:Class="HIS.Client.UrsaShell.Views.UrsaStructuredEmrEditorView"
+             x:DataType="vm:EmrEditorWorkspaceModel">
+    <u:LoadingContainer IsLoading="{Binding IsBusy}" LoadingMessage="正在进行病历结构化质控并生成国标 OFD 版式文档...">
+        <Border Padding="20" Background="{DynamicResource SemiColorBackground0}">
+            <ScrollViewer>
+                <StackPanel Spacing="16" MaxWidth="1000" HorizontalAlignment="Stretch">
+                    <!-- Title & Header Bar -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding DocTitle}" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding DocNo, StringFormat='文档编号: {0}'}" Foreground="{DynamicResource SemiColorText2}" FontSize="12"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                            <Button Name="BtnSignOfd" Content="医师审签并生成国标 OFD" Classes="Primary"/>
+                            <Button Name="BtnExportOfd" Content="导出国标 OFD"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <u:Divider Content="患者基本信息 (宏引用绑定)"/>
+
+                    <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto">
+                        <u:FormItem Grid.Column="0" Label="患者姓名:">
+                            <TextBox Text="{Binding PatientName}" IsReadOnly="True"/>
+                        </u:FormItem>
+                        <u:FormItem Grid.Column="1" Label="性别:">
+                            <TextBox Text="{Binding Gender}" IsReadOnly="True"/>
+                        </u:FormItem>
+                        <u:FormItem Grid.Column="2" Label="年龄:">
+                            <u:NumericIntUpDown Value="{Binding Age}" IsReadOnly="True"/>
+                        </u:FormItem>
+                        <u:FormItem Grid.Column="3" Label="OFD 归档状态:">
+                            <u:Badge Header="已归档" IsVisible="{Binding OfdNo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding OfdNo}" VerticalAlignment="Center"/>
+                            </u:Badge>
+                        </u:FormItem>
+                    </Grid>
+
+                    <u:Divider Content="门诊结构化临床章节"/>
+
+                    <!-- Form Sections -->
+                    <u:Form LabelPosition="Top">
+                        <u:FormItem Label="主诉 (Chief Complaint):" IsRequired="True">
+                            <TextBox Text="{Binding ChiefComplaint}" PlaceholderText="录入主要症状及持续时间..."/>
+                        </u:FormItem>
+
+                        <u:FormItem Label="现病史 (Present Illness):" IsRequired="True">
+                            <TextBox Text="{Binding PresentIllness}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80"/>
+                        </u:FormItem>
+
+                        <u:FormItem Label="初步诊断 (ICD-10):" IsRequired="True">
+                            <TextBox Text="{Binding Diagnosis}"/>
+                        </u:FormItem>
+
+                        <u:Divider Content="专科专病数据元 (带性别排他规则)"/>
+
+                        <Grid ColumnDefinitions="*,*">
+                            <u:FormItem Grid.Column="0" Label="前列腺触诊 (男性专有 - MALE_ONLY):">
+                                <TextBox Text="{Binding ProstateExam}" PlaceholderText="仅限男性患者录入"/>
+                            </u:FormItem>
+
+                            <u:FormItem Grid.Column="1" Label="孕产次数 (女性专有 - FEMALE_ONLY):">
+                                <u:NumericIntUpDown Value="{Binding PregnancyCount}" Minimum="0" Maximum="20"/>
+                            </u:FormItem>
+                        </Grid>
+                    </u:Form>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </u:LoadingContainer>
+</UserControl>
+

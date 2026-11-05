@@ -1,0 +1,32 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HIS.BuildingBlocks/HIS.BuildingBlocks.csproj" />
+    <Project Path="src/HIS.Contracts/HIS.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/Client/">
+    <Project Path="src/Client/HIS.Client.Core/HIS.Client.Core.csproj" />
+    <Project Path="src/Client/HIS.Client.Platform.Desktop/HIS.Client.Platform.Desktop.csproj" />
+    <Project Path="src/Client/HIS.Client.UrsaShell/HIS.Client.UrsaShell.csproj" />
+  </Folder>
+  <Folder Name="/src/Server/">
+    <Project Path="src/Server/HIS.Modules.Config/HIS.Modules.Config.csproj" />
+    <Project Path="src/Server/HIS.Modules.Emr/HIS.Modules.Emr.csproj" />
+    <Project Path="src/Server/HIS.Modules.Finance/HIS.Modules.Finance.csproj" />
+    <Project Path="src/Server/HIS.Modules.Inpatient/HIS.Modules.Inpatient.csproj" />
+    <Project Path="src/Server/HIS.Modules.Integration/HIS.Modules.Integration.csproj" />
+    <Project Path="src/Server/HIS.Modules.Inventory/HIS.Modules.Inventory.csproj" />
+    <Project Path="src/Server/HIS.Modules.MedTech/HIS.Modules.MedTech.csproj" />
+    <Project Path="src/Server/HIS.Modules.Operations/HIS.Modules.Operations.csproj" />
+    <Project Path="src/Server/HIS.Modules.Ordering/HIS.Modules.Ordering.csproj" />
+    <Project Path="src/Server/HIS.Modules.Outpatient/HIS.Modules.Outpatient.csproj" />
+    <Project Path="src/Server/HIS.Modules.Patient/HIS.Modules.Patient.csproj" />
+    <Project Path="src/Server/HIS.Modules.Pharmacy/HIS.Modules.Pharmacy.csproj" />
+    <Project Path="src/Server/HIS.Modules.Platform/HIS.Modules.Platform.csproj" />
+    <Project Path="src/Server/HIS.Server.Host/HIS.Server.Host.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HIS.ArchitectureTests/HIS.ArchitectureTests.csproj" />
+    <Project Path="tests/HIS.IntegrationTests/HIS.IntegrationTests.csproj" />
+    <Project Path="tests/HIS.UnitTests/HIS.UnitTests.csproj" />
+  </Folder>
+</Solution>

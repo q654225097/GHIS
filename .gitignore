@@ -1,0 +1,9 @@
+[Bb]in/
+[Oo]bj/
+*.user
+*.db
+*.db-shm
+*.db-wal
+.vs/
+.idea/
+.gemini/
