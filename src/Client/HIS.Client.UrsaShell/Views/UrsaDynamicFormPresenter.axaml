@@ -2,33 +2,58 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:u="https://irihi.tech/ursa"
              x:Class="HIS.Client.UrsaShell.Views.UrsaDynamicFormPresenter">
-    <Border Padding="20" Background="{DynamicResource SemiColorBackground0}">
-        <StackPanel Spacing="16">
-            <TextBlock Text="动态扩展字段配置中心 (CFG 模块渲染器)" FontSize="20" FontWeight="Bold"/>
-            <TextBlock Text="根据服务端发布的表单 Schema 与字段定义动态生成 Ursa 组件输入槽，支持 EAV 纯数据通用存储" Foreground="{DynamicResource SemiColorText2}"/>
+    <Border Padding="16" Background="{DynamicResource SemiColorBackground0}" CornerRadius="8" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+        <StackPanel Spacing="14">
+            <!-- Sandbox Header -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Text="动态扩展表单实时呈现沙箱 (EAV Presenter)" FontSize="15" FontWeight="Bold"/>
+                    <TextBlock Text="根据服务端 Schema 动态渲染 Ursa 控件槽位 · 纯数据驱动存储" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <u:Badge Grid.Column="1" Header="EMR_CARDIO_V1 实时实例" Classes="Primary"/>
+            </Grid>
 
-            <u:Divider Content="患者建档通用扩展表单 (PAT_EXT_FORM)"/>
+            <u:Divider Content="患者建档与门诊专科通用扩展字段"/>
 
             <u:Form LabelPosition="Top">
                 <Grid ColumnDefinitions="*,*">
-                    <u:FormItem Grid.Column="0" Label="家庭医保共济账户绑定:" IsRequired="False">
-                        <TextBox PlaceholderText="录入共济授权人身份证号..."/>
+                    <u:FormItem Grid.Column="0" Label="家庭医保共济账户授权绑定:" Margin="0,0,8,0">
+                        <TextBox Text="330106198506182215" Height="32"/>
                     </u:FormItem>
-                    <u:FormItem Grid.Column="1" Label="特殊慢性病种待遇分类:">
-                        <TextBox PlaceholderText="高血压 III 期 / 冠心病支架植入术后..."/>
+                    <u:FormItem Grid.Column="1" Label="特殊慢性病种待遇认定分类:" Margin="8,0,0,0">
+                        <TextBox Text="高血压 III 期 (极高危) / 冠心病" Height="32"/>
                     </u:FormItem>
                 </Grid>
 
                 <Grid ColumnDefinitions="*,*">
-                    <u:FormItem Grid.Column="0" Label="冷链药品专有温度接收上限 (°C):">
-                        <u:NumericDoubleUpDown Value="8.0" Minimum="0" Maximum="25"/>
+                    <u:FormItem Grid.Column="0" Label="冷链药品专有温度接收上限 (°C):" Margin="0,0,8,0">
+                        <u:NumericDoubleUpDown Value="8.0" Minimum="0" Maximum="25" Height="32"/>
                     </u:FormItem>
-                    <u:FormItem Grid.Column="1" Label="急诊绿色通道先诊疗后付费授信额度:">
-                        <u:NumericDoubleUpDown Value="5000.0" Minimum="0" Maximum="50000"/>
+                    <u:FormItem Grid.Column="1" Label="急诊绿色通道授信额度 (元):" Margin="8,0,0,0">
+                        <u:NumericDoubleUpDown Value="5000.0" Minimum="0" Maximum="50000" Step="500" Height="32"/>
+                    </u:FormItem>
+                </Grid>
+
+                <u:Divider Content="专科专病数据元 (GATE-03 性别排他规则)"/>
+
+                <Grid ColumnDefinitions="*,*">
+                    <u:FormItem Grid.Column="0" Label="前列腺触诊 [男性专属 - MALE ONLY]:" Margin="0,0,8,0">
+                        <TextBox Text="质地韧，中央沟存在，未触及明显硬结" Height="32"/>
+                    </u:FormItem>
+                    <u:FormItem Grid.Column="1" Label="孕产次数 [女性专属 - FEMALE ONLY]:" Margin="8,0,0,0">
+                        <u:NumericIntUpDown Value="0" Minimum="0" Maximum="20" Height="32" IsEnabled="False"/>
                     </u:FormItem>
                 </Grid>
             </u:Form>
+
+            <!-- Bottom Action Footer -->
+            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="12,8">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Grid.Column="0" Text="EAV 存储特征:" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="零 DDL 变更扩展 · ANSI SQL 纯存储 · 前后端双向 JSON 校验" FontSize="10" Foreground="{DynamicResource SemiColorText2}" Margin="8,0" VerticalAlignment="Center"/>
+                    <Button Grid.Column="2" Content="保存动态表单实例" Classes="Primary" Height="28" Padding="12,0"/>
+                </Grid>
+            </Border>
         </StackPanel>
     </Border>
 </UserControl>
-

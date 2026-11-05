@@ -94,6 +94,55 @@ public class CoreBusinessGateTests
     }
 
     [Fact]
+    public void Gate04_Reverse_Xml_SemanticData_Lossless_Extraction_Test()
+    {
+        var structuredXml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <EmrStructuredData xmlns="http://www.ofdspec.org/2016" Version="1.0" DocNo="DOC-2026-REVERSE">
+          <PatientInfo>
+            <PatientName>周建强</PatientName>
+            <Gender>男</Gender>
+            <Age>41</Age>
+          </PatientInfo>
+          <ClinicalData>
+            <ChiefComplaint>阵发性心前区隐痛、心悸3天</ChiefComplaint>
+            <Diagnosis>冠状动脉粥样硬化性心脏病</Diagnosis>
+          </ClinicalData>
+        </EmrStructuredData>
+        """;
+
+        var options = new OfdRenderOptions(
+            DocId: "DOC-2026-REVERSE",
+            DocNo: "MRN-20261105-002",
+            Title: "门诊病历 (国标版式)",
+            Author: "张建国 (主治医师)",
+            CreationDate: DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            ContentText: "【主诉】阵发性心前区隐痛、心悸3天。\n【初步诊断】冠状动脉粥样硬化性心脏病。",
+            StructuredSemanticXml: structuredXml,
+            SignerName: "张建国 (主治医师)",
+            WatermarkText: "三甲门诊病历归档专章"
+        );
+
+        var ofdBytes = OfdDocumentPackage.BuildOfdPackage(options);
+        Assert.NotNull(ofdBytes);
+
+        using var ms = new MemoryStream(ofdBytes);
+        using var archive = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read);
+        var entry = archive.GetEntry("Doc_0/CustomTags/EmrStructuredData.xml");
+        Assert.NotNull(entry);
+
+        using var reader = new StreamReader(entry.Open(), System.Text.Encoding.UTF8);
+        var extractedXml = reader.ReadToEnd();
+        var xdoc = System.Xml.Linq.XDocument.Parse(extractedXml);
+
+        var patientName = xdoc.Descendants().FirstOrDefault(x => x.Name.LocalName == "PatientName")?.Value;
+        var diagnosis = xdoc.Descendants().FirstOrDefault(x => x.Name.LocalName == "Diagnosis")?.Value;
+
+        Assert.Equal("周建强", patientName);
+        Assert.Equal("冠状动脉粥样硬化性心脏病", diagnosis);
+    }
+
+    [Fact]
     public void CryptoHelper_AesGcm_And_BlindIndex_Tests()
     {
         var plainIdCard = "110101199003072345";

@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:u="https://irihi.tech/ursa"
         xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+        xmlns:views="using:HIS.Client.UrsaShell.Views"
         x:Class="HIS.Client.UrsaShell.Views.MainWindow"
         x:DataType="vm:WorkbenchModel"
         Title="智医 HIS V4.3 - 全院一体化综合业务工作台 (三甲医院专用定稿版)"
@@ -243,7 +244,7 @@
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                                         <Button Content="叫号下一位" Classes="Secondary" Height="28" Click="CallNext_Click"/>
                                         <Button Content="跨病区借床入科" Classes="Warning" Height="28" Click="BorrowBed_Click"/>
-                                        <Button Content="完成本次诊疗" Classes="Primary" Height="28"/>
+                                        <Button Content="完成本次诊疗" Classes="Primary" Height="28" Click="FinishVisit_Click"/>
                                     </StackPanel>
                                 </Grid>
 
@@ -358,7 +359,7 @@
                                             <StackPanel Spacing="8">
                                                 <Grid ColumnDefinitions="*,Auto">
                                                     <TextBlock Grid.Column="0" Text="门诊处方明细表 (含皮试自动阻断与抗菌药物级别管控)" FontSize="15" FontWeight="Bold"/>
-                                                    <Button Grid.Column="1" Content="+ 新增处方药品" Classes="Primary" Height="30"/>
+                                                    <Button Grid.Column="1" Content="+ 新增处方药品" Classes="Primary" Height="30" Click="AddPrescription_Click"/>
                                                 </Grid>
 
                                                 <!-- Column Headers -->
@@ -415,7 +416,7 @@
                                         <Grid ColumnDefinitions="Auto,*,Auto">
                                             <TextBlock Grid.Column="0" Text="🛡️ 门禁5 (GATE-05) 触发:" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
                                             <TextBlock Grid.Column="1" Text="检测到患者存在青霉素既往过敏史且皮试结果为阳性！注射用青霉素钠已被用药安全屏障强制阻断，发药与执行接口100%拒绝提交！" Foreground="{DynamicResource SemiColorDanger}" Margin="10,0" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="2" Content="自动替换为不过敏替代药物" Classes="Danger"/>
+                                            <Button Grid.Column="2" Content="自动替换为不过敏替代药物" Classes="Danger" Click="AutoReplaceDrug_Click"/>
                                         </Grid>
                                     </Border>
                                 </Grid>
@@ -429,7 +430,7 @@
                                             <StackPanel Spacing="10">
                                                 <Grid ColumnDefinitions="*,Auto">
                                                     <TextBlock Grid.Column="0" Text="医技项目开单与全院智能路由执行池" FontSize="15" FontWeight="Bold"/>
-                                                    <Button Grid.Column="1" Content="+ 新增医技申请" Classes="Primary" Height="30"/>
+                                                    <Button Grid.Column="1" Content="+ 新增医技申请" Classes="Primary" Height="30" Click="AddMedTech_Click"/>
                                                 </Grid>
 
                                                 <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="10,6">
@@ -475,7 +476,7 @@
                                         <Grid ColumnDefinitions="Auto,*,Auto">
                                             <TextBlock Grid.Column="0" Text="🔒 门禁6 (GATE-06) 触发:" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
                                             <TextBlock Grid.Column="1" Text="12导联心电图单据状态为 is_fee_confirmed=1 (已扫码确费)！系统已锁定该单据，临床直接撤单或财务直接退费将100%拦截！" Foreground="{DynamicResource SemiColorWarning}" Margin="10,0" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="2" Content="查看医技冲正退费证明" Classes="Warning"/>
+                                            <Button Grid.Column="2" Content="查看医技冲正退费证明" Classes="Warning" Click="ShowRefundProof_Click"/>
                                         </Grid>
                                     </Border>
                                 </Grid>
@@ -588,7 +589,7 @@
                                 <TextBlock Text="2 人" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Button Content="办理新入院" Classes="Primary" Height="32"/>
+                                <Button Content="办理新入院" Classes="Primary" Height="32" Click="AdmitInpatient_Click"/>
                                 <Button Content="出院六严关终审" Classes="Warning" Height="32" Click="DischargeCheck_Click"/>
                             </StackPanel>
                         </Grid>
@@ -628,7 +629,7 @@
                                                     <TextBlock Grid.Column="5" Text="{Binding DailySummary}" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"/>
                                                     <TextBlock Grid.Column="6" Text="{Binding AttendingDoctor}" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
                                                     <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                                        <Button Content="长期医嘱" Height="28" Padding="8,0" FontSize="11"/>
+                                                        <Button Content="长期医嘱" Height="28" Padding="8,0" FontSize="11" Click="LongTermOrder_Click"/>
                                                         <Button Content="六严关" Classes="Warning" Height="28" Padding="8,0" FontSize="11" Click="DischargeCheck_Click"/>
                                                     </StackPanel>
                                                 </Grid>
@@ -770,7 +771,7 @@
                         <Grid ColumnDefinitions="Auto,*,Auto">
                             <TextBlock Grid.Column="0" Text="🔒 门禁6 (GATE-06) 规则引擎:" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
                             <TextBlock Grid.Column="1" Text="医技确费锁单门禁：当 is_fee_confirmed=1 时，系统已强行锁定单据，临床直接撤单或财务直接退费均被100%拦截！" Foreground="{DynamicResource SemiColorWarning}" Margin="12,0" VerticalAlignment="Center"/>
-                            <Button Grid.Column="2" Content="查看医技冲正凭单" Classes="Warning"/>
+                            <Button Grid.Column="2" Content="查看医技冲正凭单" Classes="Warning" Click="ShowRefundProof_Click"/>
                         </Grid>
                     </Border>
                 </Grid>
@@ -818,7 +819,7 @@
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
                                                         <Button Content="条码核验发药" Classes="Primary" Height="30" Padding="12,0" Click="Dispense_Click"/>
-                                                        <Button Content="退药扫码质检" Height="30" Padding="12,0"/>
+                                                        <Button Content="退药扫码质检" Height="30" Padding="12,0" Click="ReturnDrugCheck_Click"/>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -874,8 +875,8 @@
                                                         </StackPanel>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                        <Button Content="预览 OFD 版式" Classes="Primary" Height="30" Padding="12,0"/>
-                                                        <Button Content="反向解析 XML" Height="30" Padding="12,0"/>
+                                                        <Button Content="预览 OFD 版式" Classes="Primary" Height="30" Padding="12,0" Click="PreviewOfd_Click"/>
+                                                        <Button Content="反向解析 XML" Height="30" Padding="12,0" Click="ReverseXml_Click"/>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -897,47 +898,57 @@
                                 <TextBlock Text="动态表单配置引擎 (EAV 实体-属性-值模型 &amp; GATE-03 性别排他规则)" FontSize="16" FontWeight="Bold"/>
                                 <TextBlock Text="纯数据驱动渲染临床表单，支持科室定制、专病扩展，彻底免去重新发版部署！" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
                             </StackPanel>
-                            <Button Content="+ 新建表单模板" Classes="Primary" Height="34"/>
+                            <Button Content="+ 新建表单模板" Classes="Primary" Height="34" Click="NewTemplate_Click"/>
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
-                        <ScrollViewer>
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="已装配临床动态表单列表" FontSize="15" FontWeight="Bold"/>
+                    <Grid Grid.Row="1" ColumnDefinitions="*,560">
+                        <!-- Left: Form Templates List -->
+                        <Border Grid.Column="0" Margin="0,0,12,0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                            <ScrollViewer>
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="已装配临床动态表单列表 (EAV Schema 定义)" FontSize="15" FontWeight="Bold"/>
 
-                                <ItemsControl ItemsSource="{Binding DynamicFormTemplates}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:DynamicFormTemplateModel">
-                                            <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
-                                                <Grid ColumnDefinitions="*,Auto">
-                                                    <StackPanel Grid.Column="0" Spacing="6">
-                                                        <Grid ColumnDefinitions="Auto,*,Auto">
-                                                            <TextBlock Grid.Column="0" Text="{Binding TemplateCode}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                            <TextBlock Grid.Column="1" Text="{Binding TemplateName}" FontWeight="Bold" FontSize="15" Margin="14,0,0,0"/>
-                                                            <u:Badge Grid.Column="2" Header="{Binding Version}" Classes="Success"/>
-                                                        </Grid>
-                                                        <TextBlock Text="{Binding DeptScope, StringFormat='{}适用科室范围: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                        <StackPanel Orientation="Horizontal" Spacing="14">
-                                                            <TextBlock Text="{Binding FieldCount, StringFormat='{}数据元总数: {0} 个'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
-                                                            <TextBlock Text="{Binding GenderRuleCount, StringFormat='{}性别排他数据元: {0} 个 (GATE-03)'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" FontWeight="Bold"/>
+                                    <ItemsControl ItemsSource="{Binding DynamicFormTemplates}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:DynamicFormTemplateModel">
+                                                <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <StackPanel Grid.Column="0" Spacing="6">
+                                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                                <TextBlock Grid.Column="0" Text="{Binding TemplateCode}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding TemplateName}" FontWeight="Bold" FontSize="15" Margin="14,0,0,0"/>
+                                                                <u:Badge Grid.Column="2" Header="{Binding Version}" Classes="Success"/>
+                                                            </Grid>
+                                                            <TextBlock Text="{Binding DeptScope, StringFormat='{}适用科室范围: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                            <StackPanel Orientation="Horizontal" Spacing="14">
+                                                                <TextBlock Text="{Binding FieldCount, StringFormat='{}数据元总数: {0} 个'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                                <TextBlock Text="{Binding GenderRuleCount, StringFormat='{}性别排他数据元: {0} 个 (GATE-03)'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" FontWeight="Bold"/>
+                                                            </StackPanel>
+                                                            <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                                                <TextBlock Text="{Binding GenderRuleDescription, StringFormat='{}排他规则: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                            </Border>
                                                         </StackPanel>
-                                                        <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
-                                                            <TextBlock Text="{Binding GenderRuleDescription, StringFormat='{}排他规则: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
-                                                        </Border>
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                        <Button Content="设计表单" Classes="Primary" Height="30" Padding="12,0"/>
-                                                        <Button Content="实时渲染预览" Height="30" Padding="12,0"/>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </ScrollViewer>
-                    </Border>
+                                                        <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
+                                                            <Button Content="设计表单" Classes="Primary" Height="30" Padding="12,0" Click="DesignForm_Click"/>
+                                                            <Button Content="实时渲染预览" Height="30" Padding="12,0" Click="PreviewForm_Click"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- Right: Live Form Presenter Sandbox -->
+                        <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                            <ScrollViewer>
+                                <views:UrsaDynamicFormPresenter/>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Carousel>
         </Grid>

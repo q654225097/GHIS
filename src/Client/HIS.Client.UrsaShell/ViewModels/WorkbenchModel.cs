@@ -14,7 +14,7 @@ public class WorkbenchModel : ClientModelBase
     private int _selectedNavIndex = 0; // 0=门诊, 1=住院, 2=病区床位, 3=医技, 4=药房, 5=病历OFD, 6=动态配置
     private PatientQueueItemModel? _selectedPatient;
     private EmrEditorWorkspaceModel _emrWorkspace = new();
-    private string _systemNotice = "系统运行正常 | 8大门禁检验全部通过 (GATE-01 ~ GATE-08)";
+    private string _systemNotice = "系统就绪 | 8大架构门禁检验全部通过 (GATE-01 ~ GATE-08)";
 
     public WorkbenchModel()
     {
@@ -99,117 +99,28 @@ public class WorkbenchModel : ClientModelBase
             }
         };
 
-        _selectedPatient = PatientQueue[0];
+        Prescriptions = new ObservableCollection<PrescriptionItemModel>();
+        MedTechOrders = new ObservableCollection<MedTechOrderItemModel>();
+        BedCards = new ObservableCollection<BedCardModel>();
+        InpatientRecords = new ObservableCollection<InpatientRecordModel>();
+        PharmacyRecords = new ObservableCollection<PharmacyDispenseModel>();
+        OfdArchiveRecords = new ObservableCollection<OfdArchiveRecordModel>();
+        DynamicFormTemplates = new ObservableCollection<DynamicFormTemplateModel>();
 
-        // 2. Initialize Prescriptions
-        Prescriptions = new ObservableCollection<PrescriptionItemModel>
-        {
-            new PrescriptionItemModel
-            {
-                Seq = 1,
-                DrugName = "注射用青霉素钠",
-                Spec = "80万单位/支",
-                Dose = "80万U",
-                Freq = "bid (每12小时一次)",
-                Route = "静脉滴注",
-                Quantity = "6支",
-                Amount = "¥75.00",
-                SkinTestStatus = "❌ 皮试阳性 (强阻断)",
-                SkinTestClass = "Danger",
-                AuditStatus = "已拦截 (过敏史冲突)",
-                AuditClass = "Danger",
-                IsBlocked = true
-            },
-            new PrescriptionItemModel
-            {
-                Seq = 2,
-                DrugName = "0.9% 氯化钠注射液",
-                Spec = "500ml/瓶",
-                Dose = "500ml",
-                Freq = "qd (每日一次)",
-                Route = "静脉滴注",
-                Quantity = "2瓶",
-                Amount = "¥11.00",
-                SkinTestStatus = "无需皮试",
-                SkinTestClass = "Secondary",
-                AuditStatus = "审核通过",
-                AuditClass = "Success",
-                IsBlocked = false
-            },
-            new PrescriptionItemModel
-            {
-                Seq = 3,
-                DrugName = "阿司匹林肠溶片",
-                Spec = "100mg*30片/盒",
-                Dose = "100mg",
-                Freq = "qn (每晚一次)",
-                Route = "口服",
-                Quantity = "1盒",
-                Amount = "¥22.50",
-                SkinTestStatus = "无需皮试",
-                SkinTestClass = "Secondary",
-                AuditStatus = "审核通过",
-                AuditClass = "Success",
-                IsBlocked = false
-            },
-            new PrescriptionItemModel
-            {
-                Seq = 4,
-                DrugName = "硫酸氢氯吡格雷片",
-                Spec = "75mg*7片/盒",
-                Dose = "75mg",
-                Freq = "qd (每日一次)",
-                Route = "口服",
-                Quantity = "2盒",
-                Amount = "¥56.80",
-                SkinTestStatus = "无需皮试",
-                SkinTestClass = "Secondary",
-                AuditStatus = "审核通过",
-                AuditClass = "Success",
-                IsBlocked = false
-            }
-        };
+        InitBedCards();
+        InitInpatientRecords();
+        InitPharmacyRecords();
+        InitOfdArchives();
+        InitDynamicFormTemplates();
 
-        // 3. Initialize MedTech Requests
-        MedTechOrders = new ObservableCollection<MedTechOrderItemModel>
-        {
-            new MedTechOrderItemModel
-            {
-                RequestNo = "MTC20261105001",
-                ItemName = "全血细胞分析与五分类 (血常规)",
-                DeptName = "医学检验科 (DEPT-MTC-LAB)",
-                ExecLocation = "门诊标本核收室 (紫头EDTA管)",
-                Fee = "¥25.00",
-                Status = "已开单待采样",
-                StatusClass = "Warning",
-                IsFeeLocked = false
-            },
-            new MedTechOrderItemModel
-            {
-                RequestNo = "MTC20261105002",
-                ItemName = "12导联同步心电图 (常规ECG)",
-                DeptName = "功能检查科 (DEPT-MTC-ECG)",
-                ExecLocation = "门诊2楼 心电图1号检查室",
-                Fee = "¥35.00",
-                Status = "已核收确费 (已锁单)",
-                StatusClass = "Success",
-                IsFeeLocked = true
-            },
-            new MedTechOrderItemModel
-            {
-                RequestNo = "MTC20261105003",
-                ItemName = "胸部高分辨率 CT 平扫 (HRCT)",
-                DeptName = "放射影像科 (DEPT-MTC-RAD)",
-                ExecLocation = "医技楼1楼 CT-01号机房",
-                Fee = "¥220.00",
-                Status = "智能分时预约已确认",
-                StatusClass = "Primary",
-                IsFeeLocked = false
-            }
-        };
+        // Load default first patient
+        SelectedPatient = PatientQueue[0];
+    }
 
-        // 4. Initialize Bed Map Cards
-        BedCards = new ObservableCollection<BedCardModel>
+    private void InitBedCards()
+    {
+        BedCards.Clear();
+        var cards = new[]
         {
             new BedCardModel
             {
@@ -314,9 +225,13 @@ public class WorkbenchModel : ClientModelBase
                 CardTheme = "DischargeReady"
             }
         };
+        foreach (var c in cards) BedCards.Add(c);
+    }
 
-        // 5. Initialize Inpatient Records (Domain 1)
-        InpatientRecords = new ObservableCollection<InpatientRecordModel>
+    private void InitInpatientRecords()
+    {
+        InpatientRecords.Clear();
+        var records = new[]
         {
             new InpatientRecordModel
             {
@@ -364,9 +279,13 @@ public class WorkbenchModel : ClientModelBase
                 IsDischargeReady = true
             }
         };
+        foreach (var r in records) InpatientRecords.Add(r);
+    }
 
-        // 6. Initialize Pharmacy Dispensing Records (Domain 4)
-        PharmacyRecords = new ObservableCollection<PharmacyDispenseModel>
+    private void InitPharmacyRecords()
+    {
+        PharmacyRecords.Clear();
+        var records = new[]
         {
             new PharmacyDispenseModel
             {
@@ -402,9 +321,13 @@ public class WorkbenchModel : ClientModelBase
                 CanDispense = false
             }
         };
+        foreach (var r in records) PharmacyRecords.Add(r);
+    }
 
-        // 7. Initialize OFD Archive Records (Domain 5)
-        OfdArchiveRecords = new ObservableCollection<OfdArchiveRecordModel>
+    private void InitOfdArchives()
+    {
+        OfdArchiveRecords.Clear();
+        var archives = new[]
         {
             new OfdArchiveRecordModel
             {
@@ -446,9 +369,13 @@ public class WorkbenchModel : ClientModelBase
                 IsVerified = true
             }
         };
+        foreach (var a in archives) OfdArchiveRecords.Add(a);
+    }
 
-        // 8. Initialize Dynamic Form Templates (Domain 6)
-        DynamicFormTemplates = new ObservableCollection<DynamicFormTemplateModel>
+    private void InitDynamicFormTemplates()
+    {
+        DynamicFormTemplates.Clear();
+        var templates = new[]
         {
             new DynamicFormTemplateModel
             {
@@ -484,6 +411,7 @@ public class WorkbenchModel : ClientModelBase
                 Status = "生产已发布"
             }
         };
+        foreach (var t in templates) DynamicFormTemplates.Add(t);
     }
 
     public string CampusName { get => _campusName; set => SetField(ref _campusName, value); }
@@ -507,25 +435,192 @@ public class WorkbenchModel : ClientModelBase
                     p.IsSelected = (p.QueueNo == value.QueueNo);
                 }
 
-                // Sync to EMR Workspace
-                EmrWorkspace.PatientName = value.PatientName;
-                EmrWorkspace.Gender = value.Gender;
-                EmrWorkspace.Age = value.Age;
-                EmrWorkspace.ChiefComplaint = value.ChiefComplaint;
-                EmrWorkspace.DocNo = $"DOC-{value.VisitNo}";
-
-                if (value.Gender == "女")
-                {
-                    EmrWorkspace.ProstateExam = "不适用 (女性患者排他)";
-                    EmrWorkspace.PregnancyCount = 2;
-                }
-                else
-                {
-                    EmrWorkspace.ProstateExam = "轻度肥大，质地韧，中央沟浅，未触及明显硬结。";
-                    EmrWorkspace.PregnancyCount = 0;
-                }
+                LoadPatientClinicalContext(value);
             }
         }
+    }
+
+    public void LoadPatientClinicalContext(PatientQueueItemModel p)
+    {
+        // Sync to EMR Workspace
+        EmrWorkspace.PatientName = p.PatientName;
+        EmrWorkspace.Gender = p.Gender;
+        EmrWorkspace.Age = p.Age;
+        EmrWorkspace.ChiefComplaint = p.ChiefComplaint;
+        EmrWorkspace.DocNo = $"DOC-{p.VisitNo}";
+
+        Prescriptions.Clear();
+        MedTechOrders.Clear();
+
+        if (p.QueueNo == "001") // 周建强 (男, 41岁)
+        {
+            EmrWorkspace.PresentIllness = "患者于3天前因过度劳累后出现心前区憋闷不适，伴阵发性心悸，每次持续约3-5分钟，休息后可逐渐缓解。半天前快步登山后胸痛症状加重，放射至左肩背部，伴大汗、气促，无晕厥及咯血。遂急来我院门诊就诊。";
+            EmrWorkspace.Diagnosis = "冠状动脉粥样硬化性心脏病 (I25.101)；劳力性心绞痛 (CCS II级)";
+            EmrWorkspace.ProstateExam = "轻度肥大，质地韧，中央沟浅，未触及明显硬结。";
+            EmrWorkspace.PregnancyCount = 0;
+
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 1, DrugName = "注射用青霉素钠", Spec = "80万单位/支", Dose = "80万U", Freq = "bid (每12小时一次)", Route = "静脉滴注",
+                Quantity = "6支", Amount = "¥75.00", SkinTestStatus = "❌ 皮试阳性 (强阻断)", SkinTestClass = "Danger",
+                AuditStatus = "已拦截 (过敏史冲突)", AuditClass = "Danger", IsBlocked = true
+            });
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 2, DrugName = "0.9% 氯化钠注射液", Spec = "500ml/瓶", Dose = "500ml", Freq = "qd (每日一次)", Route = "静脉滴注",
+                Quantity = "2瓶", Amount = "¥11.00", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 3, DrugName = "阿司匹林肠溶片", Spec = "100mg*30片/盒", Dose = "100mg", Freq = "qn (每晚一次)", Route = "口服",
+                Quantity = "1盒", Amount = "¥22.50", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 4, DrugName = "硫酸氢氯吡格雷片", Spec = "75mg*7片/盒", Dose = "75mg", Freq = "qd (每日一次)", Route = "口服",
+                Quantity = "2盒", Amount = "¥56.80", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105001", ItemName = "全血细胞分析与五分类 (血常规)", DeptName = "医学检验科 (DEPT-MTC-LAB)",
+                ExecLocation = "门诊标本核收室 (紫头EDTA管)", Fee = "¥25.00", Status = "已开单待采样", StatusClass = "Warning", IsFeeLocked = false
+            });
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105002", ItemName = "12导联同步心电图 (常规ECG)", DeptName = "功能检查科 (DEPT-MTC-ECG)",
+                ExecLocation = "门诊2楼 心电图1号检查室", Fee = "¥35.00", Status = "已核收确费 (已锁单)", StatusClass = "Success", IsFeeLocked = true
+            });
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105003", ItemName = "胸部高分辨率 CT 平扫 (HRCT)", DeptName = "放射影像科 (DEPT-MTC-RAD)",
+                ExecLocation = "医技楼1楼 CT-01号机房", Fee = "¥220.00", Status = "智能分时预约已确认", StatusClass = "Primary", IsFeeLocked = false
+            });
+        }
+        else if (p.QueueNo == "002") // 王大明 (男, 58岁)
+        {
+            EmrWorkspace.PresentIllness = "患者1周前劳累后反复出现胸骨后闷痛，每次持续3-5分钟，休息后可自行缓解。既往有高血压病史5年，无药物过敏史。";
+            EmrWorkspace.Diagnosis = "劳力性心绞痛 (CCS I级)；原发性高血压2级";
+            EmrWorkspace.ProstateExam = "前列腺正常，质软无压痛。";
+            EmrWorkspace.PregnancyCount = 0;
+
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 1, DrugName = "单硝酸异山梨酯缓释片", Spec = "40mg*14片/盒", Dose = "40mg", Freq = "qd (早晨一次)", Route = "口服",
+                Quantity = "2盒", Amount = "¥42.00", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 2, DrugName = "琥珀酸美托洛尔缓释片", Spec = "47.5mg*7片/盒", Dose = "47.5mg", Freq = "qd (每日一次)", Route = "口服",
+                Quantity = "2盒", Amount = "¥36.40", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 3, DrugName = "辛伐他汀片", Spec = "20mg*10片/盒", Dose = "20mg", Freq = "qn (每晚一次)", Route = "口服",
+                Quantity = "1盒", Amount = "¥18.90", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105004", ItemName = "24小时动态心电图 (Holter)", DeptName = "功能检查科 (DEPT-MTC-ECG)",
+                ExecLocation = "门诊2楼 动态心电图室", Fee = "¥160.00", Status = "已预约", StatusClass = "Primary", IsFeeLocked = false
+            });
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105005", ItemName = "心脏彩超 (经胸超声心动图)", DeptName = "超声医学科 (DEPT-MTC-US)",
+                ExecLocation = "门诊3楼 彩超1诊室", Fee = "¥180.00", Status = "待就诊", StatusClass = "Warning", IsFeeLocked = false
+            });
+        }
+        else if (p.QueueNo == "003") // 赵淑珍 (女, 63岁 - GATE-03 女性专有规则)
+        {
+            EmrWorkspace.PresentIllness = "患者半月前无诱因出现心前区突发心悸、心慌，伴头晕乏力，自测血压 165/95 mmHg。既往有阿司匹林严重胃肠道反应及过敏史。";
+            EmrWorkspace.Diagnosis = "心律失常 (室性期前收缩)；原发性高血压3级 (很高危)";
+            EmrWorkspace.ProstateExam = "不适用 (女性患者专属排他 - GATE-03)";
+            EmrWorkspace.PregnancyCount = 2;
+
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 1, DrugName = "盐酸普罗帕酮片", Spec = "50mg*20片/盒", Dose = "150mg", Freq = "tid (每日三次)", Route = "口服",
+                Quantity = "2盒", Amount = "¥32.00", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 2, DrugName = "缬沙坦胶囊", Spec = "80mg*7粒/盒", Dose = "80mg", Freq = "qd (每日一次)", Route = "口服",
+                Quantity = "2盒", Amount = "¥48.20", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105006", ItemName = "24小时动态血压监测 (ABPM)", DeptName = "功能检查科 (DEPT-MTC-ECG)",
+                ExecLocation = "门诊2楼 动态血压室", Fee = "¥120.00", Status = "已预约", StatusClass = "Primary", IsFeeLocked = false
+            });
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105007", ItemName = "血清电解质分析 (K/Na/Cl/Ca)", DeptName = "医学检验科 (DEPT-MTC-LAB)",
+                ExecLocation = "门诊标本核收室", Fee = "¥38.00", Status = "待采样", StatusClass = "Warning", IsFeeLocked = false
+            });
+        }
+        else if (p.QueueNo == "004") // 孙建国 (男, 49岁)
+        {
+            EmrWorkspace.PresentIllness = "患者3天前单位体检发现血压达 152/96 mmHg，平时无明显头晕心悸，今来门诊进一步评估。";
+            EmrWorkspace.Diagnosis = "原发性高血压1级 (低危)";
+            EmrWorkspace.ProstateExam = "未见明显硬结与触痛。";
+            EmrWorkspace.PregnancyCount = 0;
+
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 1, DrugName = "苯磺酸氨氯地平片", Spec = "5mg*7片/盒", Dose = "5mg", Freq = "qd (早晨一次)", Route = "口服",
+                Quantity = "2盒", Amount = "¥24.80", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105008", ItemName = "双肾及肾上腺彩超", DeptName = "超声医学科 (DEPT-MTC-US)",
+                ExecLocation = "门诊3楼 彩超2诊室", Fee = "¥140.00", Status = "待就诊", StatusClass = "Warning", IsFeeLocked = false
+            });
+        }
+        else if (p.QueueNo == "005") // 钱振华 (男, 52岁)
+        {
+            EmrWorkspace.PresentIllness = "患者3个月前因急性心梗行冠脉造影及支架植入术(PCI)，术后规则抗血小板及调脂治疗，今来复查配药。";
+            EmrWorkspace.Diagnosis = "冠脉支架植入术后状态 (Z95.500)；高脂血症";
+            EmrWorkspace.ProstateExam = "前列腺正常。";
+            EmrWorkspace.PregnancyCount = 0;
+
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 1, DrugName = "阿托伐他汀钙片", Spec = "20mg*7片/盒", Dose = "20mg", Freq = "qn (每晚一次)", Route = "口服",
+                Quantity = "2盒", Amount = "¥39.60", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+            Prescriptions.Add(new PrescriptionItemModel
+            {
+                Seq = 2, DrugName = "硫酸氢氯吡格雷片", Spec = "75mg*7片/盒", Dose = "75mg", Freq = "qd (每日一次)", Route = "口服",
+                Quantity = "2盒", Amount = "¥56.80", SkinTestStatus = "无需皮试", SkinTestClass = "Secondary",
+                AuditStatus = "审核通过", AuditClass = "Success", IsBlocked = false
+            });
+
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105009", ItemName = "凝血功能四项 (PT/APTT/TT/FIB)", DeptName = "医学检验科 (DEPT-MTC-LAB)",
+                ExecLocation = "门诊标本核收室", Fee = "¥45.00", Status = "已出报告", StatusClass = "Success", IsFeeLocked = true
+            });
+            MedTechOrders.Add(new MedTechOrderItemModel
+            {
+                RequestNo = "MTC20261105010", ItemName = "肝肾功能与血脂全套", DeptName = "医学检验科 (DEPT-MTC-LAB)",
+                ExecLocation = "门诊标本核收室", Fee = "¥88.00", Status = "已出报告", StatusClass = "Success", IsFeeLocked = true
+            });
+        }
+
+        SystemNotice = $"已就绪: 患者 [{p.PatientName}] ({p.Gender}, {p.Age}岁) - 就诊号: {p.VisitNo} | 门禁排他规则已同步加载";
     }
 
     public EmrEditorWorkspaceModel EmrWorkspace { get => _emrWorkspace; set => SetField(ref _emrWorkspace, value); }
@@ -545,7 +640,7 @@ public class WorkbenchModel : ClientModelBase
         var currentIndex = SelectedPatient != null ? PatientQueue.IndexOf(SelectedPatient) : -1;
         var nextIndex = (currentIndex + 1) % PatientQueue.Count;
         SelectedPatient = PatientQueue[nextIndex];
-        SystemNotice = $"已叫号下一位就诊患者: {SelectedPatient.PatientName} ({SelectedPatient.QueueNo})";
+        SystemNotice = $"已顺呼下一位就诊患者: {SelectedPatient.PatientName} ({SelectedPatient.QueueNo})";
     }
 
     public void SimulateSignOfd()
