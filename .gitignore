@@ -4,6 +4,9 @@
 *.db
 *.db-shm
 *.db-wal
+*.png
+*.log
 .vs/
 .idea/
 .gemini/
+

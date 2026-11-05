@@ -128,6 +128,14 @@ app.Use(async (context, next) =>
 });
 
 app.MapControllers();
+app.MapGet("/", () => Results.Ok(new {
+    System = "HIS V4.3 Hospital Information System",
+    Status = "Healthy",
+    Runtime = Environment.Version.ToString(),
+    Architecture = "Pure Full-Stack MVC",
+    Decoupling = "4-Dimensional Department (OPD/IPD/WARD/MEDTECH)",
+    GB_Standard = "GB/T 33190-2016 OFD"
+}));
 
 // Initialize DB schema & seeds
 using (var scope = app.Services.CreateScope())
