@@ -63,13 +63,13 @@
                         <TextBlock Text="{Binding UserName}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Right"/>
                         <TextBlock Text="工号: EMP002 | 权限: 主治医师/处方权II级" FontSize="11" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                    <u:Badge Header="在线 (v1)" Classes="Success" VerticalAlignment="Center"/>
+                    <u:Badge Header="在线 ✓" Classes="Success" VerticalAlignment="Center"/>
                     <Button Content="锁屏" Height="28" Padding="10,0"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- 2. Main Workstation Area (Sidebar + Clinical Content) -->
+        <!-- 2. Main Workstation Area (Sidebar + Dynamic View Container) -->
         <Grid Grid.Row="1" ColumnDefinitions="200,*">
             <!-- Left Navigation Sidebar -->
             <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,1,0" Padding="10,12">
@@ -131,9 +131,9 @@
                         </ListBox>
                     </StackPanel>
 
-                    <!-- Sidebar Footer System Info -->
+                    <!-- Sidebar Footer System Info (DOD Gate Verification Checklist) -->
                     <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="10">
-                        <StackPanel Spacing="4">
+                        <StackPanel Spacing="3">
                             <TextBlock Text="门禁验证状态 (DOD)" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
                             <TextBlock Text="✓ GATE-01: 全局纯粹MVC" FontSize="10" Foreground="{DynamicResource SemiColorSuccess}"/>
                             <TextBlock Text="✓ GATE-02: 四维科室隔离" FontSize="10" Foreground="{DynamicResource SemiColorSuccess}"/>
@@ -148,382 +148,818 @@
                 </Grid>
             </Border>
 
-            <!-- Main Workstation Layout (Patient Queue + Clinical Desktop) -->
-            <Grid Grid.Column="1" ColumnDefinitions="260,*">
-                <!-- 2.1 Left Patient Queue Column (260px) -->
-                <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,1,0" Padding="10,12">
-                    <Grid RowDefinitions="Auto,Auto,*">
-                        <!-- Queue Search Box -->
-                        <TextBox Grid.Row="0" PlaceholderText="输入患者姓名/病历号检索..." Height="32" Margin="0,0,0,8"/>
+            <!-- Main Workstation Layout - Driven by SelectedNavIndex using Carousel -->
+            <Carousel Grid.Column="1" SelectedIndex="{Binding SelectedNavIndex}">
 
-                        <!-- Queue Status Counter -->
-                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*" Margin="0,0,0,8">
-                            <Border Grid.Column="0" Margin="2" Padding="4" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="1" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="就诊中" FontSize="10" HorizontalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                            <Border Grid.Column="1" Margin="2" Padding="4" Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="3" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource SemiColorWarning}" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="待接诊" FontSize="10" HorizontalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                            <Border Grid.Column="2" Margin="2" Padding="4" Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="1" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource SemiColorSuccess}" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="已就诊" FontSize="10" HorizontalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                        </Grid>
+                <!-- ========================================== -->
+                <!-- VIEW 0: 门诊医生站 (OPD Doctor Station)     -->
+                <!-- ========================================== -->
+                <Grid ColumnDefinitions="260,*">
+                    <!-- Patient Queue Column (260px) -->
+                    <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,1,0" Padding="10,12">
+                        <Grid RowDefinitions="Auto,Auto,*">
+                            <!-- Queue Search Box -->
+                            <TextBox Grid.Row="0" PlaceholderText="输入患者姓名/病历号检索..." Height="32" Margin="0,0,0,8"/>
 
-                        <!-- Patient Card List -->
-                        <ScrollViewer Grid.Row="2">
-                            <ItemsControl ItemsSource="{Binding PatientQueue}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                            <StackPanel Spacing="4">
-                                                <Grid ColumnDefinitions="Auto,*,Auto">
-                                                    <TextBlock Grid.Column="0" Text="{Binding QueueNo, StringFormat='{}#{0}'}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding PatientName}" FontWeight="Bold" FontSize="14" Margin="6,0,0,0"/>
-                                                    <Border Grid.Column="2" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
-                                                        <TextBlock Text="{Binding Status}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                    </Border>
-                                                </Grid>
-                                                <Grid ColumnDefinitions="*,*">
-                                                    <TextBlock Grid.Column="0" Text="{Binding Gender, StringFormat='{}性别: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding Age, StringFormat='{}年龄: {0}岁'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                                </Grid>
-                                                <TextBlock Text="{Binding ChiefComplaint}" FontSize="11" Foreground="{DynamicResource SemiColorText1}" TextTrimming="CharacterEllipsis"/>
-                                                
-                                                <!-- Allergy Alert Flag -->
-                                                <Border IsVisible="{Binding HasAllergyAlert}" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="3" Padding="4,2">
-                                                    <TextBlock Text="{Binding AllergyTags, StringFormat='{}⚠️ 过敏: {0}'}" FontSize="10" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold"/>
-                                                </Border>
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
-                </Border>
-
-                <!-- 2.2 Right Clinical Desktop (Patient Banner + Tabs) -->
-                <Grid Grid.Column="1" RowDefinitions="Auto,*">
-                    <!-- Patient Banner Header Strip -->
-                    <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1" Padding="16,10">
-                        <StackPanel Spacing="8">
-                            <!-- Line 1: Patient Vital Info & Action Buttons -->
-                            <Grid ColumnDefinitions="*,Auto">
-                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding SelectedPatient.PatientName}" FontSize="18" FontWeight="Bold"/>
-                                    <TextBlock Text="{Binding SelectedPatient.Gender}" FontSize="13" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding SelectedPatient.Age, StringFormat='{}{0} 岁'}" FontSize="13" VerticalAlignment="Center"/>
-                                    <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
-                                        <TextBlock Text="{Binding SelectedPatient.FeeType}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                    </Border>
-                                    <TextBlock Text="{Binding SelectedPatient.MedicalRecordNo, StringFormat='{}病历号: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding SelectedPatient.VisitNo, StringFormat='{}就诊流水: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="就诊科室: 心血管内科门诊" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <!-- Action Buttons -->
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                    <Button Content="叫号下一位" Classes="Secondary" Height="28"/>
-                                    <Button Content="跨病区借床入科" Classes="Warning" Height="28"/>
-                                    <Button Content="完成本次诊疗" Classes="Primary" Height="28"/>
-                                </StackPanel>
-                            </Grid>
-
-                            <!-- Line 2: High-Risk Allergy Alert Strip (GATE-05 Safe Baseline) -->
-                            <Border Background="{DynamicResource SemiColorDangerLight}" BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="1" CornerRadius="4" Padding="10,4">
-                                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                                    <TextBlock Text="⚠️ 高危用药红线警示:" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" FontSize="11" VerticalAlignment="Center"/>
-                                    <Border Background="{DynamicResource SemiColorDanger}" CornerRadius="3" Padding="6,2">
-                                        <TextBlock Text="青霉素过敏史 (皮试阳性强阻断)" Foreground="White" FontWeight="Bold" FontSize="10"/>
-                                    </Border>
-                                    <Border Background="{DynamicResource SemiColorDanger}" CornerRadius="3" Padding="6,2">
-                                        <TextBlock Text="磺胺类药物过敏" Foreground="White" FontWeight="Bold" FontSize="10"/>
-                                    </Border>
-                                    <TextBlock Text="— 处方及用药执行环节将强制拦截上述药品" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Work Area Tabbed Container -->
-                    <TabControl Grid.Row="1" Margin="8">
-                        <!-- Tab 1: 结构化门诊病历书写 (EMR & OFD) -->
-                        <TabItem Header="1. 结构化门诊病历 (EMR &amp; OFD)">
-                            <Grid ColumnDefinitions="*,340" Margin="10">
-                                <!-- Left Form Column -->
-                                <Border Grid.Column="0" Margin="0,0,10,0" Padding="16" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
-                                    <ScrollViewer>
-                                        <StackPanel Spacing="12">
-                                            <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                                                <TextBlock Text="心血管内科门诊病历书写" FontSize="16" FontWeight="Bold"/>
-                                                <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
-                                                    <TextBlock Text="文档编号: DOC-OPD-20261105001" Foreground="{DynamicResource SemiColorText2}" FontSize="11"/>
-                                                </Border>
-                                            </StackPanel>
-
-                                            <u:Divider Content="门诊核心临床章节 (带必填与自动质控)"/>
-
-                                            <u:Form LabelPosition="Top">
-                                                <u:FormItem Label="主诉 (Chief Complaint):" IsRequired="True">
-                                                    <TextBox Text="{Binding EmrWorkspace.ChiefComplaint}" Height="36"/>
-                                                </u:FormItem>
-
-                                                <u:FormItem Label="现病史 (Present Illness):" IsRequired="True">
-                                                    <TextBox Text="{Binding EmrWorkspace.PresentIllness}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="85"/>
-                                                </u:FormItem>
-
-                                                <u:FormItem Label="初步诊断 (ICD-10):" IsRequired="True">
-                                                    <TextBox Text="{Binding EmrWorkspace.Diagnosis}" Height="36"/>
-                                                </u:FormItem>
-
-                                                <u:Divider Content="专科专病数据元 (GATE-03 性别排他规则)"/>
-
-                                                <Grid ColumnDefinitions="*,*">
-                                                    <u:FormItem Grid.Column="0" Label="前列腺触诊 (仅限男性患者 - MALE_ONLY):">
-                                                        <TextBox Text="{Binding EmrWorkspace.ProstateExam}" Height="36"/>
-                                                    </u:FormItem>
-                                                    <u:FormItem Grid.Column="1" Label="孕产次数 (仅限女性患者 - FEMALE_ONLY):">
-                                                        <u:NumericIntUpDown Value="{Binding EmrWorkspace.PregnancyCount}" Minimum="0" Maximum="20" Height="36"/>
-                                                    </u:FormItem>
-                                                </Grid>
-                                            </u:Form>
-                                        </StackPanel>
-                                    </ScrollViewer>
+                            <!-- Queue Status Counter -->
+                            <Grid Grid.Row="1" ColumnDefinitions="*,*,*" Margin="0,0,0,8">
+                                <Border Grid.Column="0" Margin="2" Padding="4" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="1" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="就诊中" FontSize="10" HorizontalAlignment="Center"/>
+                                    </StackPanel>
                                 </Border>
-
-                                <!-- Right Column: 实时病历质控与国标 OFD 审签中心 -->
-                                <Border Grid.Column="1" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
-                                    <StackPanel Spacing="12">
-                                        <TextBlock Text="病历质控与国标 OFD 审签中心" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                        
-                                        <!-- Quality Control Card -->
-                                        <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="6" Padding="10">
-                                            <StackPanel Spacing="4">
-                                                <Grid ColumnDefinitions="*,Auto">
-                                                    <TextBlock Grid.Column="0" Text="实时质控评分: 98 分" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
-                                                    <u:Badge Grid.Column="1" Header="甲级病历" Classes="Success"/>
-                                                </Grid>
-                                                <TextBlock Text="✓ 性别排他校验: 男性患者录入男性数据元通过" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
-                                                <TextBlock Text="✓ 必填字段校验: 主诉/现病史/诊断均完备" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
-                                                <TextBlock Text="✓ 规范编码校验: 命中标准 ICD-10 疾病库" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <u:Divider Content="国标 OFD 版式文档状态"/>
-
-                                        <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="10">
-                                            <StackPanel Spacing="6">
-                                                <TextBlock Text="版式标准: GB/T 33190-2016" FontWeight="SemiBold" FontSize="12"/>
-                                                <TextBlock Text="语义数据元映射: CustomTags/EmrStructuredData.xml" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Text="防篡改签名: SHA-256 + 电子验签封包已就绪" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
-                                                <TextBlock Text="归档单号: OFD-20261105-CARDIO-001" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Sign and Export Actions -->
-                                        <StackPanel Spacing="8">
-                                            <Button Content="三级审签并生成国标 OFD" Classes="Primary" HorizontalAlignment="Stretch"/>
-                                            <Button Content="导出国标 OFD 文件 (.ofd)" Classes="Secondary" HorizontalAlignment="Stretch"/>
-                                            <Button Content="执行防篡改哈希完整性校验" HorizontalAlignment="Stretch"/>
-                                        </StackPanel>
+                                <Border Grid.Column="1" Margin="2" Padding="4" Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="3" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource SemiColorWarning}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="待接诊" FontSize="10" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="2" Margin="2" Padding="4" Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="1" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource SemiColorSuccess}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="已就诊" FontSize="10" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Border>
                             </Grid>
-                        </TabItem>
 
-                        <!-- Tab 2: 处方医嘱与用药安全红线 (GATE-05 闭环) -->
-                        <TabItem Header="2. 处方与安全用药红线 (CPOE)">
-                            <Grid RowDefinitions="*,Auto" Margin="10">
-                                <!-- Prescription Items List -->
-                                <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
-                                    <ScrollViewer>
-                                        <StackPanel Spacing="8">
-                                            <TextBlock Text="门诊处方明细表 (含皮试自动阻断与抗菌药物级别管控)" FontSize="15" FontWeight="Bold"/>
-
-                                            <ItemsControl ItemsSource="{Binding Prescriptions}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Margin="0,3" Padding="10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                                            <Grid ColumnDefinitions="30,160,110,90,110,80,60,70,170,130">
-                                                                <TextBlock Grid.Column="0" Text="{Binding Seq}" FontWeight="Bold" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="1" Text="{Binding DrugName}" FontWeight="Bold" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="2" Text="{Binding Spec}" Foreground="{DynamicResource SemiColorText2}" FontSize="11" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="3" Text="{Binding Dose}" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="4" Text="{Binding Freq}" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="5" Text="{Binding Route}" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="6" Text="{Binding Quantity}" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="7" Text="{Binding Amount}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
-                                                                <Border Grid.Column="8" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
-                                                                    <TextBlock Text="{Binding SkinTestStatus}" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" FontSize="11"/>
-                                                                </Border>
-                                                                <Border Grid.Column="9" Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
-                                                                    <TextBlock Text="{Binding AuditStatus}" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}" FontSize="11"/>
-                                                                </Border>
-                                                            </Grid>
+                            <!-- Patient Card List (Clickable!) -->
+                            <ScrollViewer Grid.Row="2">
+                                <ItemsControl ItemsSource="{Binding PatientQueue}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PatientQueueItemModel">
+                                            <Border Margin="0,4" Padding="10" CornerRadius="6"
+                                                    Background="{Binding CardBackground}"
+                                                    BorderBrush="{Binding CardBorderBrush}"
+                                                    BorderThickness="1.5"
+                                                    PointerPressed="PatientCard_PointerPressed"
+                                                    Cursor="Hand">
+                                                <StackPanel Spacing="4">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding QueueNo, StringFormat='{}#{0}'}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding PatientName}" FontWeight="Bold" FontSize="14" Margin="6,0,0,0"/>
+                                                        <Border Grid.Column="2" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                                                            <TextBlock Text="{Binding Status}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
                                                         </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </ScrollViewer>
+                                                    </Grid>
+                                                    <Grid ColumnDefinitions="*,*">
+                                                        <TextBlock Grid.Column="0" Text="{Binding Gender, StringFormat='{}性别: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Age, StringFormat='{}年龄: {0}岁'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding ChiefComplaint}" FontSize="11" Foreground="{DynamicResource SemiColorText1}" TextTrimming="CharacterEllipsis"/>
+                                                    
+                                                    <!-- Allergy Alert Flag -->
+                                                    <Border IsVisible="{Binding HasAllergyAlert}" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="3" Padding="4,2">
+                                                        <TextBlock Text="{Binding AllergyTags, StringFormat='{}⚠️ 过敏: {0}'}" FontSize="10" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold"/>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <!-- Right Clinical Desktop (Patient Banner + 4 OPD Tabs) -->
+                    <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                        <!-- Patient Banner Header Strip -->
+                        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1" Padding="16,10">
+                            <StackPanel Spacing="8">
+                                <!-- Line 1: Patient Vital Info & Action Buttons -->
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding SelectedPatient.PatientName}" FontSize="18" FontWeight="Bold"/>
+                                        <TextBlock Text="{Binding SelectedPatient.Gender}" FontSize="13" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SelectedPatient.Age, StringFormat='{}{0} 岁'}" FontSize="13" VerticalAlignment="Center"/>
+                                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                                            <TextBlock Text="{Binding SelectedPatient.FeeType}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding SelectedPatient.MedicalRecordNo, StringFormat='{}病历号: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SelectedPatient.VisitNo, StringFormat='{}就诊流水: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <!-- Action Buttons -->
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                        <Button Content="叫号下一位" Classes="Secondary" Height="28" Click="CallNext_Click"/>
+                                        <Button Content="跨病区借床入科" Classes="Warning" Height="28" Click="BorrowBed_Click"/>
+                                        <Button Content="完成本次诊疗" Classes="Primary" Height="28"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Line 2: High-Risk Allergy Alert Strip (GATE-05 Safe Baseline) -->
+                                <Border Background="{DynamicResource SemiColorDangerLight}" BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="1" CornerRadius="4" Padding="10,4">
+                                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                        <TextBlock Text="⚠️ 高危用药红线警示:" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Border Background="{DynamicResource SemiColorDanger}" CornerRadius="3" Padding="6,2">
+                                            <TextBlock Text="青霉素过敏史 (皮试阳性强阻断)" Foreground="White" FontWeight="Bold" FontSize="10"/>
+                                        </Border>
+                                        <Border Background="{DynamicResource SemiColorDanger}" CornerRadius="3" Padding="6,2">
+                                            <TextBlock Text="磺胺类药物过敏" Foreground="White" FontWeight="Bold" FontSize="10"/>
+                                        </Border>
+                                        <TextBlock Text="— 处方及用药执行环节将强制拦截上述药品" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </Border>
+                            </StackPanel>
+                        </Border>
 
-                                <!-- Red Line Safe Alert -->
-                                <Border Grid.Row="1" Margin="0,10,0,0" Background="{DynamicResource SemiColorDangerLight}" BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="1.5" CornerRadius="8" Padding="14">
-                                    <Grid ColumnDefinitions="Auto,*,Auto">
-                                        <TextBlock Grid.Column="0" Text="🛡️ 门禁5 (GATE-05) 触发:" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="检测到患者存在青霉素既往过敏史且皮试结果为阳性！注射用青霉素钠已被用药安全屏障强制阻断，发药与执行接口100%拒绝提交！" Foreground="{DynamicResource SemiColorDanger}" Margin="10,0" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="自动替换为不过敏替代药物" Classes="Danger"/>
-                                    </Grid>
-                                </Border>
-                            </Grid>
-                        </TabItem>
+                        <!-- OPD 4-Tabs Container -->
+                        <TabControl Grid.Row="1" Margin="8,4,8,8">
+                            <!-- Tab 1: 结构化门诊病历书写 (EMR & OFD) -->
+                            <TabItem Header="1. 门诊病历 (EMR &amp; OFD)">
+                                <Grid ColumnDefinitions="*,340" Margin="10">
+                                    <!-- Left Form Column -->
+                                    <Border Grid.Column="0" Margin="0,0,10,0" Padding="16" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+                                        <ScrollViewer>
+                                            <StackPanel Spacing="12">
+                                                <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                                                    <TextBlock Text="心血管内科门诊病历书写" FontSize="16" FontWeight="Bold"/>
+                                                    <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding EmrWorkspace.DocNo, StringFormat='{}文档编号: {0}'}" Foreground="{DynamicResource SemiColorText2}" FontSize="11"/>
+                                                    </Border>
+                                                </StackPanel>
 
-                        <!-- Tab 3: 医技智能路由与确费锁单 (GATE-06 闭环) -->
-                        <TabItem Header="3. 医技检查检验与确费锁单 (MTC)">
-                            <Grid RowDefinitions="*,Auto" Margin="10">
-                                <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
-                                    <ScrollViewer>
-                                        <StackPanel Spacing="10">
-                                            <TextBlock Text="医技项目开单与全院智能路由执行池" FontSize="15" FontWeight="Bold"/>
+                                                <u:Divider Content="门诊核心临床章节 (带必填与自动质控)"/>
 
-                                            <ItemsControl ItemsSource="{Binding MedTechOrders}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Margin="0,4" Padding="12" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                                            <Grid ColumnDefinitions="140,240,160,*,80,140">
-                                                                <TextBlock Grid.Column="0" Text="{Binding RequestNo}" FontWeight="Bold" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="1" Text="{Binding ItemName}" FontWeight="Bold" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="2" Text="{Binding DeptName}" Foreground="{DynamicResource SemiColorText2}" FontSize="11" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="3" Text="{Binding ExecLocation}" Foreground="{DynamicResource SemiColorText1}" FontSize="12" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="4" Text="{Binding Fee}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
-                                                                <Border Grid.Column="5" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                                    <TextBlock Text="{Binding Status}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" FontSize="11"/>
-                                                                </Border>
-                                                            </Grid>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                                <u:Form LabelPosition="Top">
+                                                    <u:FormItem Label="主诉 (Chief Complaint):" IsRequired="True">
+                                                        <TextBox Text="{Binding EmrWorkspace.ChiefComplaint}" Height="36"/>
+                                                    </u:FormItem>
+
+                                                    <u:FormItem Label="现病史 (Present Illness):" IsRequired="True">
+                                                        <TextBox Text="{Binding EmrWorkspace.PresentIllness}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="85"/>
+                                                    </u:FormItem>
+
+                                                    <u:FormItem Label="初步诊断 (ICD-10):" IsRequired="True">
+                                                        <TextBox Text="{Binding EmrWorkspace.Diagnosis}" Height="36"/>
+                                                    </u:FormItem>
+
+                                                    <u:Divider Content="专科专病数据元 (GATE-03 性别排他规则)"/>
+
+                                                    <Grid ColumnDefinitions="*,*">
+                                                        <u:FormItem Grid.Column="0" Label="前列腺触诊 [男性专属 - MALE ONLY]:" Margin="0,0,8,0">
+                                                            <TextBox Text="{Binding EmrWorkspace.ProstateExam}" Height="36"/>
+                                                        </u:FormItem>
+                                                        <u:FormItem Grid.Column="1" Label="孕产次数 [女性专属 - FEMALE ONLY]:" Margin="8,0,0,0">
+                                                            <u:NumericIntUpDown Value="{Binding EmrWorkspace.PregnancyCount}" Minimum="0" Maximum="20" Height="36"/>
+                                                        </u:FormItem>
+                                                    </Grid>
+                                                </u:Form>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </Border>
+
+                                    <!-- Right Column: 实时病历质控与国标 OFD 审签中心 -->
+                                    <Border Grid.Column="1" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+                                        <StackPanel Spacing="12">
+                                            <TextBlock Text="病历质控与国标 OFD 审签中心" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            
+                                            <!-- Quality Control Card -->
+                                            <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="6" Padding="10">
+                                                <StackPanel Spacing="4">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="实时质控评分: 98 分" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                        <u:Badge Grid.Column="1" Header="甲级病历" Classes="Success"/>
+                                                    </Grid>
+                                                    <TextBlock Text="✓ 性别排他校验: 患者数据元排他规则验证通过" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    <TextBlock Text="✓ 必填字段校验: 主诉/现病史/诊断均完备" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    <TextBlock Text="✓ 规范编码校验: 命中标准 ICD-10 疾病库" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <u:Divider Content="国标 OFD 版式文档状态"/>
+
+                                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="10">
+                                                <StackPanel Spacing="6">
+                                                    <TextBlock Text="版式标准: GB/T 33190-2016" FontWeight="SemiBold" FontSize="12"/>
+                                                    <TextBlock Text="语义数据元: CustomTags/EmrStructuredData.xml" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <TextBlock Text="防篡改签名: SHA-256 + 电子验签封包已就绪" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    <TextBlock Text="{Binding EmrWorkspace.DocNo, StringFormat='{}归档单号: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Sign and Export Actions -->
+                                            <StackPanel Spacing="8">
+                                                <Button Content="三级审签并生成国标 OFD" Classes="Primary" HorizontalAlignment="Stretch" Click="SignOfd_Click"/>
+                                                <Button Content="导出国标 OFD 文件 (.ofd)" Classes="Secondary" HorizontalAlignment="Stretch" Click="ExportOfd_Click"/>
+                                                <Button Content="执行防篡改哈希完整性校验" HorizontalAlignment="Stretch" Click="VerifyHash_Click"/>
+                                            </StackPanel>
                                         </StackPanel>
-                                    </ScrollViewer>
-                                </Border>
+                                    </Border>
+                                </Grid>
+                            </TabItem>
 
-                                <!-- MedTech Lock Alert -->
-                                <Border Grid.Row="1" Margin="0,10,0,0" Background="{DynamicResource SemiColorWarningLight}" BorderBrush="{DynamicResource SemiColorWarning}" BorderThickness="1.5" CornerRadius="8" Padding="14">
-                                    <Grid ColumnDefinitions="Auto,*,Auto">
-                                        <TextBlock Grid.Column="0" Text="🔒 门禁6 (GATE-06) 触发:" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="12导联心电图单据状态为 is_fee_confirmed=1 (已扫码确费)！系统已锁定该单据，临床直接撤单或财务直接退费将100%拦截！" Foreground="{DynamicResource SemiColorWarning}" Margin="10,0" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="查看医技冲正退费证明" Classes="Warning"/>
-                                    </Grid>
-                                </Border>
-                            </Grid>
-                        </TabItem>
+                            <!-- Tab 2: 处方医嘱与用药安全红线 (GATE-05 闭环) -->
+                            <TabItem Header="2. 处方与安全用药 (CPOE)">
+                                <Grid RowDefinitions="*,Auto" Margin="10">
+                                    <!-- Prescription Items List -->
+                                    <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                                        <ScrollViewer>
+                                            <StackPanel Spacing="8">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="门诊处方明细表 (含皮试自动阻断与抗菌药物级别管控)" FontSize="15" FontWeight="Bold"/>
+                                                    <Button Grid.Column="1" Content="+ 新增处方药品" Classes="Primary" Height="30"/>
+                                                </Grid>
 
-                        <!-- Tab 4: 病区床位矩阵与跨病区借床 (GATE-02 闭环) -->
-                        <TabItem Header="4. 病区床位全景与跨病区借床 (WARD &amp; IPD)">
-                            <Grid RowDefinitions="Auto,*" Margin="10">
-                                <!-- Ward Stats Bar -->
-                                <Border Grid.Row="0" Margin="0,0,0,10" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
-                                    <Grid ColumnDefinitions="*,*,*,*,*,*,*">
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="编制床位" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                            <TextBlock Text="45 张" FontSize="18" FontWeight="Bold"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock Text="实际开放" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                            <TextBlock Text="48 张" FontSize="18" FontWeight="Bold"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="当前占用" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                            <TextBlock Text="42 张" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="3">
-                                            <TextBlock Text="可用空床" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                            <TextBlock Text="6 张" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="4">
-                                            <TextBlock Text="病重/病危" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                            <TextBlock Text="3 人" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="5">
-                                            <TextBlock Text="跨病区借床" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                            <TextBlock Text="3 张 (内科二病区)" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="6" Content="办理跨病区借床" Classes="Primary" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Border>
-
-                                <!-- Bed Cards Grid -->
-                                <ScrollViewer Grid.Row="1">
-                                    <ItemsControl ItemsSource="{Binding BedCards}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <UniformGrid Columns="3"/>
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Margin="6" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
-                                                    <StackPanel Spacing="6">
-                                                        <Grid ColumnDefinitions="*,Auto">
-                                                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                                                                <TextBlock Text="{Binding BedCode}" FontWeight="Bold" FontSize="16" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                                <TextBlock Text="{Binding BedType}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                                            </StackPanel>
-                                                            <u:Badge Grid.Column="1" Header="{Binding NursingLevel}" Classes="Primary"/>
-                                                        </Grid>
-
-                                                        <u:Divider Margin="0,2"/>
-
-                                                        <Grid ColumnDefinitions="*,*">
-                                                            <TextBlock Grid.Column="0" Text="{Binding PatientName, StringFormat='{}患者: {0}'}" FontWeight="Bold" FontSize="14"/>
-                                                            <TextBlock Grid.Column="1" Text="{Binding AdmissionNo, StringFormat='{}住院号: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Right"/>
-                                                        </Grid>
-
-                                                        <!-- Highlight Borrowed Bed Relationship -->
-                                                        <Border IsVisible="{Binding IsBorrowed}" Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="6,4">
-                                                            <StackPanel Spacing="2">
-                                                                <TextBlock Text="{Binding AdmittingDeptName, StringFormat='{}医疗归属: {0} (查房开医嘱)'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
-                                                                <TextBlock Text="{Binding NursingWardName, StringFormat='{}护理执行: {0} (病区扫码核收)'}" FontSize="10" Foreground="{DynamicResource SemiColorWarning}"/>
-                                                            </StackPanel>
-                                                        </Border>
-
-                                                        <TextBlock Text="{Binding Diagnosis, StringFormat='{}诊断: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
-                                                        <TextBlock Text="{Binding DailyFee, StringFormat='{}床位费: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                                    </StackPanel>
+                                                <!-- Column Headers -->
+                                                <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="10,6">
+                                                    <Grid ColumnDefinitions="30,160,110,80,160,70,60,70,170,130">
+                                                        <TextBlock Grid.Column="0" Text="#" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="1" Text="药品名称" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="2" Text="规格" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="3" Text="剂量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="4" Text="频次" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="5" Text="途径" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="6" Text="数量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="7" Text="金额" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="8" Text="皮试状态" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="9" Text="审核结果" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </Grid>
                                                 </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-                            </Grid>
-                        </TabItem>
-                    </TabControl>
+
+                                                <ItemsControl ItemsSource="{Binding Prescriptions}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:PrescriptionItemModel">
+                                                            <Border Margin="0,3" Padding="10,8" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                                <Grid ColumnDefinitions="30,160,110,80,160,70,60,70,170,130">
+                                                                    <TextBlock Grid.Column="0" Text="{Binding Seq}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding DrugName}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                                        <Border IsVisible="{Binding IsBlocked}" Background="{DynamicResource SemiColorDanger}" CornerRadius="3" Padding="4,1" VerticalAlignment="Center">
+                                                                            <TextBlock Text="已阻断" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                                                        </Border>
+                                                                    </StackPanel>
+                                                                    <TextBlock Grid.Column="2" Text="{Binding Spec}" Foreground="{DynamicResource SemiColorText2}" FontSize="11" VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="3" Text="{Binding Dose}" VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="4" Text="{Binding Freq}" VerticalAlignment="Center" FontSize="11"/>
+                                                                    <TextBlock Grid.Column="5" Text="{Binding Route}" VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="6" Text="{Binding Quantity}" VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="7" Text="{Binding Amount}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                                    <Border Grid.Column="8" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding SkinTestStatus}" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" FontSize="10"/>
+                                                                    </Border>
+                                                                    <Border Grid.Column="9" Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding AuditStatus}" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}" FontSize="10"/>
+                                                                    </Border>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </Border>
+
+                                    <!-- Red Line Safe Alert -->
+                                    <Border Grid.Row="1" Margin="0,10,0,0" Background="{DynamicResource SemiColorDangerLight}" BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="1.5" CornerRadius="8" Padding="14">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <TextBlock Grid.Column="0" Text="🛡️ 门禁5 (GATE-05) 触发:" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="检测到患者存在青霉素既往过敏史且皮试结果为阳性！注射用青霉素钠已被用药安全屏障强制阻断，发药与执行接口100%拒绝提交！" Foreground="{DynamicResource SemiColorDanger}" Margin="10,0" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2" Content="自动替换为不过敏替代药物" Classes="Danger"/>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </TabItem>
+
+                            <!-- Tab 3: 医技智能路由与确费锁单 (GATE-06 闭环) -->
+                            <TabItem Header="3. 医技检查与确费 (MTC)">
+                                <Grid RowDefinitions="*,Auto" Margin="10">
+                                    <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                                        <ScrollViewer>
+                                            <StackPanel Spacing="10">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="医技项目开单与全院智能路由执行池" FontSize="15" FontWeight="Bold"/>
+                                                    <Button Grid.Column="1" Content="+ 新增医技申请" Classes="Primary" Height="30"/>
+                                                </Grid>
+
+                                                <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="10,6">
+                                                    <Grid ColumnDefinitions="140,240,160,*,80,140">
+                                                        <TextBlock Grid.Column="0" Text="申请单号" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="1" Text="项目名称" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="2" Text="执行科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="3" Text="智能路由执行地点" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="4" Text="费用" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="5" Text="状态" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <ItemsControl ItemsSource="{Binding MedTechOrders}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:MedTechOrderItemModel">
+                                                            <Border Margin="0,4" Padding="12" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                                    <Grid ColumnDefinitions="140,240,160,*,80,140">
+                                                                        <TextBlock Grid.Column="0" Text="{Binding RequestNo}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                                            <TextBlock Text="{Binding ItemName}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                                            <Border IsVisible="{Binding IsFeeLocked}" Background="{DynamicResource SemiColorWarning}" CornerRadius="3" Padding="4,1" VerticalAlignment="Center">
+                                                                                <TextBlock Text="🔒 已锁单" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                                                            </Border>
+                                                                        </StackPanel>
+                                                                        <TextBlock Grid.Column="2" Text="{Binding DeptName}" Foreground="{DynamicResource SemiColorText2}" FontSize="11" VerticalAlignment="Center"/>
+                                                                        <TextBlock Grid.Column="3" Text="{Binding ExecLocation}" Foreground="{DynamicResource SemiColorText1}" FontSize="12" VerticalAlignment="Center"/>
+                                                                        <TextBlock Grid.Column="4" Text="{Binding Fee}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                                        <Border Grid.Column="5" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                                            <TextBlock Text="{Binding Status}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" FontSize="11"/>
+                                                                        </Border>
+                                                                    </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </Border>
+
+                                    <!-- MedTech Lock Alert -->
+                                    <Border Grid.Row="1" Margin="0,10,0,0" Background="{DynamicResource SemiColorWarningLight}" BorderBrush="{DynamicResource SemiColorWarning}" BorderThickness="1.5" CornerRadius="8" Padding="14">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <TextBlock Grid.Column="0" Text="🔒 门禁6 (GATE-06) 触发:" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="12导联心电图单据状态为 is_fee_confirmed=1 (已扫码确费)！系统已锁定该单据，临床直接撤单或财务直接退费将100%拦截！" Foreground="{DynamicResource SemiColorWarning}" Margin="10,0" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2" Content="查看医技冲正退费证明" Classes="Warning"/>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </TabItem>
+
+                            <!-- Tab 4: 病区床位全景与跨病区借床 (GATE-02 闭环) -->
+                            <TabItem Header="4. 病区床位全景 (WARD)">
+                                <Grid RowDefinitions="Auto,*" Margin="10">
+                                    <!-- Ward Stats Bar -->
+                                    <Border Grid.Row="0" Margin="0,0,0,10" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                                        <Grid ColumnDefinitions="*,*,*,*,*,*,*">
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="编制床位" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="45 张" FontSize="18" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="实际开放" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="48 张" FontSize="18" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="当前占用" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="42 张" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3">
+                                                <TextBlock Text="可用空床" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="6 张" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="4">
+                                                <TextBlock Text="病重/病危" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="3 人" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="5">
+                                                <TextBlock Text="跨病区借床" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="3 张 (内科二)" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="6" Content="办理跨病区借床" Classes="Primary" VerticalAlignment="Center" Click="BorrowBed_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Bed Cards Grid -->
+                                    <ScrollViewer Grid.Row="1">
+                                        <ItemsControl ItemsSource="{Binding BedCards}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <UniformGrid Columns="3"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:BedCardModel">
+                                                    <Border Margin="6" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                                        <StackPanel Spacing="6">
+                                                            <Grid ColumnDefinitions="*,Auto">
+                                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                                                    <TextBlock Text="{Binding BedCode}" FontWeight="Bold" FontSize="16" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                                    <TextBlock Text="{Binding BedType}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                                <u:Badge Grid.Column="1" Header="{Binding NursingLevel}" Classes="Primary"/>
+                                                            </Grid>
+
+                                                            <u:Divider Margin="0,2"/>
+
+                                                            <Grid ColumnDefinitions="*,*">
+                                                                <TextBlock Grid.Column="0" Text="{Binding PatientName, StringFormat='{}患者: {0}'}" FontWeight="Bold" FontSize="14"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding AdmissionNo, StringFormat='{}住院号: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Right"/>
+                                                            </Grid>
+
+                                                            <!-- Highlight Borrowed Bed Relationship -->
+                                                            <Border IsVisible="{Binding IsBorrowed}" Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="6,4">
+                                                                <StackPanel Spacing="2">
+                                                                    <TextBlock Text="{Binding AdmittingDeptName, StringFormat='{}医疗归属: {0} (查房开医嘱)'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                                    <TextBlock Text="{Binding NursingWardName, StringFormat='{}护理执行: {0} (病区扫码核收)'}" FontSize="10" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                                </StackPanel>
+                                                            </Border>
+
+                                                            <TextBlock Text="{Binding Diagnosis, StringFormat='{}诊断: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                            <TextBlock Text="{Binding DailyFee, StringFormat='{}床位费: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </TabItem>
+                        </TabControl>
+                    </Grid>
                 </Grid>
-            </Grid>
+
+                <!-- ========================================== -->
+                <!-- VIEW 1: 住院医生站 (Inpatient Station)       -->
+                <!-- ========================================== -->
+                <Grid RowDefinitions="Auto,*" Margin="16">
+                    <!-- Top Inpatient Metrics -->
+                    <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid ColumnDefinitions="*,*,*,*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="在院总人数" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="42 人" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="今日新入院" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="5 人" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="今日出院" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="3 人" FontSize="22" FontWeight="Bold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3">
+                                <TextBlock Text="出院六严关待审" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="2 人" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Button Content="办理新入院" Classes="Primary" Height="32"/>
+                                <Button Content="出院六严关终审" Classes="Warning" Height="32" Click="DischargeCheck_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Inpatient Records Table & Detail -->
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="住院主管患者全流程病程与医嘱总览 (心血管内科一科)" FontSize="16" FontWeight="Bold"/>
+                                
+                                <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="12,8">
+                                    <Grid ColumnDefinitions="110,90,70,160,90,*,120,120">
+                                        <TextBlock Grid.Column="0" Text="住院单号" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Grid.Column="1" Text="患者姓名" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Grid.Column="2" Text="床位号" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Grid.Column="3" Text="主要诊断" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Grid.Column="4" Text="护理级别" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Grid.Column="5" Text="每日病情摘要与查房要点" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Grid.Column="6" Text="主管医生" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Grid.Column="7" Text="操作" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    </Grid>
+                                </Border>
+
+                                <ItemsControl ItemsSource="{Binding InpatientRecords}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:InpatientRecordModel">
+                                            <Border Margin="0,4" Padding="12" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="110,90,70,160,90,*,120,120">
+                                                    <TextBlock Grid.Column="0" Text="{Binding AdmissionNo}" FontWeight="Bold" VerticalAlignment="Center" FontSize="12"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding PatientName}" FontWeight="Bold" VerticalAlignment="Center" FontSize="14"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding BedCode}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding Diagnosis}" VerticalAlignment="Center" FontSize="12"/>
+                                                    <Border Grid.Column="4" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                                        <TextBlock Text="{Binding NursingLevel}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="5" Text="{Binding DailySummary}" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"/>
+                                                    <TextBlock Grid.Column="6" Text="{Binding AttendingDoctor}" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                        <Button Content="长期医嘱" Height="28" Padding="8,0" FontSize="11"/>
+                                                        <Button Content="六严关" Classes="Warning" Height="28" Padding="8,0" FontSize="11" Click="DischargeCheck_Click"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- GATE-07 Card -->
+                                <Border Margin="0,10,0,0" Background="{DynamicResource SemiColorSuccessLight}" BorderBrush="{DynamicResource SemiColorSuccess}" BorderThickness="1.5" CornerRadius="8" Padding="14">
+                                    <StackPanel Spacing="6">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="🛡️ 门禁7 (GATE-07) - 出院六严关完整闭环校验器" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}" FontSize="14"/>
+                                            <u:Badge Grid.Column="1" Header="六严关已装配" Classes="Success"/>
+                                        </Grid>
+                                        <TextBlock Text="① 全部医嘱闭环归档 | ② 医技报告全部发布并签收 | ③ 出院带药已配发 | ④ 出院小结主治已签审 | ⑤ 医保预结清完成 | ⑥ 患者押金账目结清" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                        <TextBlock Text="本系统严格拦截未满足六严关的非法强退操作，100% 杜绝漏费与医疗纠纷隐患！" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- ========================================== -->
+                <!-- VIEW 2: 病区床位矩阵 (Ward Bed Matrix)     -->
+                <!-- ========================================== -->
+                <Grid RowDefinitions="Auto,*" Margin="16">
+                    <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="内科二病区 - 全院床位智能拓扑矩阵 (GATE-02 四维科室隔离)" FontSize="16" FontWeight="Bold"/>
+                                <TextBlock Text="支持跨科借床、加床、急危重症监护床动态流转，医疗与护理职责彻底解耦！" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="办理跨病区借床" Classes="Primary" Height="34" Click="BorrowBed_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding BedCards}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="3"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:BedCardModel">
+                                    <Border Margin="8" Padding="16" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="2">
+                                        <StackPanel Spacing="8">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock Text="{Binding BedCode}" FontWeight="Bold" FontSize="18" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding BedType}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <u:Badge Grid.Column="1" Header="{Binding NursingLevel}" Classes="Primary"/>
+                                            </Grid>
+
+                                            <u:Divider Margin="0,4"/>
+
+                                            <Grid ColumnDefinitions="*,*">
+                                                <TextBlock Grid.Column="0" Text="{Binding PatientName, StringFormat='{}患者: {0}'}" FontWeight="Bold" FontSize="15"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding AdmissionNo, StringFormat='{}住院号: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Right"/>
+                                            </Grid>
+
+                                            <!-- Borrowed Bed Highlight -->
+                                            <Border IsVisible="{Binding IsBorrowed}" Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="8,6">
+                                                <StackPanel Spacing="3">
+                                                    <TextBlock Text="⚡ 跨病区借床状态 (GATE-02 隔离生效)" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                    <TextBlock Text="{Binding AdmittingDeptName, StringFormat='{}主管科室: {0} (开医嘱/查房)'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <TextBlock Text="{Binding NursingWardName, StringFormat='{}执行病区: {0} (护理扫码/生命体征)'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <TextBlock Text="{Binding Diagnosis, StringFormat='{}主要诊断: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                                            <Grid ColumnDefinitions="*,*">
+                                                <TextBlock Grid.Column="0" Text="{Binding DailyFee, StringFormat='{}床位费: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding NursingWardName}" FontSize="11" Foreground="{DynamicResource SemiColorText3}" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- ========================================== -->
+                <!-- VIEW 3: 医技诊疗中心 (MedTech Center)       -->
+                <!-- ========================================== -->
+                <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+                    <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <StackPanel Orientation="Horizontal" Spacing="20">
+                            <TextBlock Text="医技诊疗中心 - 全院智能路由池与标本核收站" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <u:Badge Header="GATE-06: 确费锁单保障中" Classes="Warning"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <ScrollViewer>
+                            <StackPanel Spacing="10">
+                                <ItemsControl ItemsSource="{Binding MedTechOrders}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:MedTechOrderItemModel">
+                                            <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0" Spacing="6">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                            <TextBlock Grid.Column="0" Text="{Binding RequestNo}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding ItemName}" FontWeight="Bold" FontSize="15" Margin="12,0,0,0"/>
+                                                            <Border Grid.Column="2" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                                                                <TextBlock Text="{Binding Fee}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding DeptName, StringFormat='{}执行科室: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding ExecLocation, StringFormat='{}智能路由执行地点: {0}'}" FontSize="12"/>
+                                                    </StackPanel>
+
+                                                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
+                                                        <Border CornerRadius="4" Padding="8,4" Background="{DynamicResource SemiColorPrimaryLight}" HorizontalAlignment="Center">
+                                                            <TextBlock Text="{Binding Status}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                        </Border>
+                                                        <Border IsVisible="{Binding IsFeeLocked}" Background="{DynamicResource SemiColorWarning}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center">
+                                                            <TextBlock Text="🔒 确费已锁定 (GATE-06)" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- GATE-06 Alert -->
+                    <Border Grid.Row="2" Margin="0,14,0,0" Background="{DynamicResource SemiColorWarningLight}" BorderBrush="{DynamicResource SemiColorWarning}" BorderThickness="1.5" CornerRadius="8" Padding="14">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Column="0" Text="🔒 门禁6 (GATE-06) 规则引擎:" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="医技确费锁单门禁：当 is_fee_confirmed=1 时，系统已强行锁定单据，临床直接撤单或财务直接退费均被100%拦截！" Foreground="{DynamicResource SemiColorWarning}" Margin="12,0" VerticalAlignment="Center"/>
+                            <Button Grid.Column="2" Content="查看医技冲正凭单" Classes="Warning"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- ========================================== -->
+                <!-- VIEW 4: 药房发药闭环 (Pharmacy Dispensing)  -->
+                <!-- ========================================== -->
+                <Grid RowDefinitions="Auto,*" Margin="16">
+                    <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid ColumnDefinitions="*,*,*,*,Auto">
+                            <StackPanel Grid.Column="0"><TextBlock Text="待发药处方" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/><TextBlock Text="12 张" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/></StackPanel>
+                            <StackPanel Grid.Column="1"><TextBlock Text="今日已出库" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/><TextBlock Text="38 张" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/></StackPanel>
+                            <StackPanel Grid.Column="2"><TextBlock Text="高危拦截" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/><TextBlock Text="3 次" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/></StackPanel>
+                            <StackPanel Grid.Column="3"><TextBlock Text="退药质检单" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/><TextBlock Text="2 张" FontSize="22" FontWeight="Bold"/></StackPanel>
+                            <Button Grid.Column="4" Content="扫码出库核验" Classes="Primary" Height="34" Click="Dispense_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="药房发药与退药闭环管理工作台 (含皮试阳性拦截与扫码复核)" FontSize="16" FontWeight="Bold"/>
+
+                                <ItemsControl ItemsSource="{Binding PharmacyRecords}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PharmacyDispenseModel">
+                                            <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0" Spacing="6">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                            <TextBlock Grid.Column="0" Text="{Binding PrescriptionNo}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding PatientName, StringFormat='{}患者: {0}'}" FontWeight="Bold" FontSize="14" Margin="14,0,0,0"/>
+                                                            <Border Grid.Column="2" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                                                                <TextBlock Text="{Binding DispenseStatus}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding DrugSummary, StringFormat='{}发药明细: {0}'}" FontSize="12"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                                            <TextBlock Text="{Binding PharmacistName, StringFormat='{}复核药师: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                            <TextBlock Text="{Binding SafetyAudit, StringFormat='{}安全审计: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                                                        </StackPanel>
+                                                        <Border IsVisible="{Binding IsAllergyBlocked}" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="6,3">
+                                                            <TextBlock Text="🛡️ GATE-05 门禁强制阻断: 青霉素皮试阳性药品已在药房端彻底闭锁！" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" FontWeight="Bold"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
+                                                        <Button Content="条码核验发药" Classes="Primary" Height="30" Padding="12,0" Click="Dispense_Click"/>
+                                                        <Button Content="退药扫码质检" Height="30" Padding="12,0"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- ========================================== -->
+                <!-- VIEW 5: 电子病历与OFD归档 (EMR & OFD)       -->
+                <!-- ========================================== -->
+                <Grid RowDefinitions="Auto,*" Margin="16">
+                    <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="国家标准 OFD 版式病历与电子归档中心 (GB/T 33190-2016)" FontSize="16" FontWeight="Bold"/>
+                                <TextBlock Text="包含完整 OFD.xml、Document.xml、CustomTags/EmrStructuredData.xml 与数字签名包防篡改验签" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button Content="验证防篡改签名" Classes="Success" Height="32" Click="VerifyHash_Click"/>
+                                <Button Content="导出国标 OFD" Classes="Primary" Height="32" Click="ExportOfd_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="国标 OFD 电子病历归档记录台账" FontSize="15" FontWeight="Bold"/>
+
+                                <ItemsControl ItemsSource="{Binding OfdArchiveRecords}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:OfdArchiveRecordModel">
+                                            <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0" Spacing="6">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                            <TextBlock Grid.Column="0" Text="{Binding ArchiveNo}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding DocType}" FontWeight="Bold" FontSize="14" Margin="14,0,0,0"/>
+                                                            <u:Badge Grid.Column="2" Header="GB/T 33190-2016" Classes="Primary"/>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding PatientName, StringFormat='{}归档患者: {0}'}" FontSize="12"/>
+                                                        <TextBlock Text="{Binding ZipEntries, StringFormat='{}OFD 规范压缩包内部结构: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding HashSha256, StringFormat='{}SHA-256 哈希值: {0}'}" FontSize="10" Foreground="{DynamicResource SemiColorText3}"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                                            <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4" Padding="6,2">
+                                                                <TextBlock Text="{Binding SignatureStatus}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding ArchiveTime, StringFormat='{}归档时间: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
+                                                        <Button Content="预览 OFD 版式" Classes="Primary" Height="30" Padding="12,0"/>
+                                                        <Button Content="反向解析 XML" Height="30" Padding="12,0"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- ========================================== -->
+                <!-- VIEW 6: 动态表单配置 (EAV Dynamic Form)     -->
+                <!-- ========================================== -->
+                <Grid RowDefinitions="Auto,*" Margin="16">
+                    <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="动态表单配置引擎 (EAV 实体-属性-值模型 &amp; GATE-03 性别排他规则)" FontSize="16" FontWeight="Bold"/>
+                                <TextBlock Text="纯数据驱动渲染临床表单，支持科室定制、专病扩展，彻底免去重新发版部署！" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Content="+ 新建表单模板" Classes="Primary" Height="34"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="已装配临床动态表单列表" FontSize="15" FontWeight="Bold"/>
+
+                                <ItemsControl ItemsSource="{Binding DynamicFormTemplates}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:DynamicFormTemplateModel">
+                                            <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0" Spacing="6">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                            <TextBlock Grid.Column="0" Text="{Binding TemplateCode}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding TemplateName}" FontWeight="Bold" FontSize="15" Margin="14,0,0,0"/>
+                                                            <u:Badge Grid.Column="2" Header="{Binding Version}" Classes="Success"/>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding DeptScope, StringFormat='{}适用科室范围: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="14">
+                                                            <TextBlock Text="{Binding FieldCount, StringFormat='{}数据元总数: {0} 个'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                            <TextBlock Text="{Binding GenderRuleCount, StringFormat='{}性别排他数据元: {0} 个 (GATE-03)'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" FontWeight="Bold"/>
+                                                        </StackPanel>
+                                                        <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                                            <TextBlock Text="{Binding GenderRuleDescription, StringFormat='{}排他规则: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
+                                                        <Button Content="设计表单" Classes="Primary" Height="30" Padding="12,0"/>
+                                                        <Button Content="实时渲染预览" Height="30" Padding="12,0"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </Carousel>
         </Grid>
 
         <!-- 3. Bottom System Status Bar -->
         <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,1,0,0" Padding="14,0">
             <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                    <TextBlock Text="● 数据库存储引擎: ANSI SQL 纯存储 (0存储过程 / 0触发器 / 0视图 / 0外键)" Foreground="{DynamicResource SemiColorSuccess}" FontSize="12"/>
-                    <TextBlock Text="JWT RBAC 鉴权: 已启用 (细粒度至单组件/单章节)" Foreground="{DynamicResource SemiColorText2}" FontSize="12"/>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock Text="● 数据库存储引擎: ANSI SQL 纯存储 (0存储过程 / 0触发器 / 0视图 / 0外键)" Foreground="{DynamicResource SemiColorSuccess}" FontSize="11"/>
+                    <TextBlock Text="|" Foreground="{DynamicResource SemiColorBorder}"/>
+                    <TextBlock Text="JWT RBAC 鉴权: 细粒度至单组件" Foreground="{DynamicResource SemiColorText2}" FontSize="11"/>
                 </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                    <TextBlock Text="国标版式: GB/T 33190-2016 OFD" Foreground="{DynamicResource SemiColorText2}" FontSize="12"/>
-                    <TextBlock Text="Avalonia 12 + Ursa.Avalonia 2.3 + SemiTheme" Foreground="{DynamicResource SemiColorText2}" FontSize="12"/>
-                    <TextBlock Text="服务端: http://localhost:5200 (Healthy)" Foreground="{DynamicResource SemiColorSuccess}" FontSize="12"/>
+
+                <!-- Dynamic System Notification -->
+                <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="10,2" Margin="16,0" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding SystemNotice}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                </Border>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock Text="国标版式: GB/T 33190-2016 OFD" Foreground="{DynamicResource SemiColorText2}" FontSize="11"/>
+                    <TextBlock Text="|" Foreground="{DynamicResource SemiColorBorder}"/>
+                    <TextBlock Text="服务端: http://localhost:5200 (Healthy)" Foreground="{DynamicResource SemiColorSuccess}" FontSize="11"/>
                 </StackPanel>
             </Grid>
         </Border>
