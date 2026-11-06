@@ -77,6 +77,55 @@ public partial class App : Application
 
                         // Reset back to View 0
                         vm.SelectedNavIndex = 0;
+                        await System.Threading.Tasks.Task.Delay(150);
+
+                        // Capture Overlay 1: Patient 360 Timeline Drawer
+                        vm.IsTimelineDrawerOpen = true;
+                        await System.Threading.Tasks.Task.Delay(200);
+                        Capture(@"d:\GHIS\drawer_timeline.png");
+                        vm.IsTimelineDrawerOpen = false;
+                        await System.Threading.Tasks.Task.Delay(100);
+
+                        // Capture Overlay 2: Critical Value Alert Modal
+                        vm.IsCriticalValueAlertOpen = true;
+                        await System.Threading.Tasks.Task.Delay(200);
+                        Capture(@"d:\GHIS\modal_critical_value.png");
+                        vm.IsCriticalValueAlertOpen = false;
+                        await System.Threading.Tasks.Task.Delay(100);
+
+                        // Capture Overlay 3: WHO Surgery Check Modal
+                        vm.IsWhoSurgeryCheckOpen = true;
+                        await System.Threading.Tasks.Task.Delay(200);
+                        Capture(@"d:\GHIS\modal_who_surgery.png");
+                        vm.IsWhoSurgeryCheckOpen = false;
+                        await System.Threading.Tasks.Task.Delay(100);
+
+                        // Capture Overlay 4: Add Prescription Dialog
+                        vm.IsAddPrescriptionDialogOpen = true;
+                        await System.Threading.Tasks.Task.Delay(200);
+                        Capture(@"d:\GHIS\modal_add_prescription.png");
+                        vm.IsAddPrescriptionDialogOpen = false;
+                        await System.Threading.Tasks.Task.Delay(100);
+
+                        // Capture Overlay 5: Discharge Six Gates Drawer
+                        vm.IsDischargeCheckDrawerOpen = true;
+                        await System.Threading.Tasks.Task.Delay(200);
+                        Capture(@"d:\GHIS\drawer_discharge_check.png");
+                        vm.IsDischargeCheckDrawerOpen = false;
+                        await System.Threading.Tasks.Task.Delay(100);
+
+                        // Capture Overlay 6: OFD High-Fidelity Viewer
+                        vm.IsOfdViewerDrawerOpen = true;
+                        await System.Threading.Tasks.Task.Delay(200);
+                        Capture(@"d:\GHIS\drawer_ofd_book.png");
+                        vm.IsOfdViewerDrawerOpen = false;
+                        await System.Threading.Tasks.Task.Delay(100);
+
+                        // Capture Overlay 7: Borrow Bed Dialog
+                        vm.IsBorrowBedDialogOpen = true;
+                        await System.Threading.Tasks.Task.Delay(200);
+                        Capture(@"d:\GHIS\modal_borrow_bed.png");
+                        vm.IsBorrowBedDialogOpen = false;
                         await System.Threading.Tasks.Task.Delay(100);
                     }
                 }

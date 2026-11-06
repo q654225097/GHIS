@@ -241,9 +241,11 @@
                                     </StackPanel>
 
                                     <!-- Action Buttons -->
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                         <Button Content="叫号下一位" Classes="Secondary" Height="28" Click="CallNext_Click"/>
-                                        <Button Content="跨病区借床入科" Classes="Warning" Height="28" Click="BorrowBed_Click"/>
+                                        <Button Content="患者360°全息视图" Height="28" Click="OpenTimeline_Click"/>
+                                        <Button Content="🚨 危急值双签收" Classes="Danger" Height="28" Click="OpenCriticalValue_Click"/>
+                                        <Button Content="跨病区借床入科" Classes="Warning" Height="28" Click="OpenBorrowBed_Click"/>
                                         <Button Content="完成本次诊疗" Classes="Primary" Height="28" Click="FinishVisit_Click"/>
                                     </StackPanel>
                                 </Grid>
@@ -359,7 +361,7 @@
                                             <StackPanel Spacing="8">
                                                 <Grid ColumnDefinitions="*,Auto">
                                                     <TextBlock Grid.Column="0" Text="门诊处方明细表 (含皮试自动阻断与抗菌药物级别管控)" FontSize="15" FontWeight="Bold"/>
-                                                    <Button Grid.Column="1" Content="+ 新增处方药品" Classes="Primary" Height="30" Click="AddPrescription_Click"/>
+                                                    <Button Grid.Column="1" Content="+ 新增处方药品" Classes="Primary" Height="30" Click="OpenAddPrescription_Click"/>
                                                 </Grid>
 
                                                 <!-- Column Headers -->
@@ -428,9 +430,10 @@
                                     <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
                                         <ScrollViewer>
                                             <StackPanel Spacing="10">
-                                                <Grid ColumnDefinitions="*,Auto">
+                                                <Grid ColumnDefinitions="*,Auto,Auto">
                                                     <TextBlock Grid.Column="0" Text="医技项目开单与全院智能路由执行池" FontSize="15" FontWeight="Bold"/>
-                                                    <Button Grid.Column="1" Content="+ 新增医技申请" Classes="Primary" Height="30" Click="AddMedTech_Click"/>
+                                                    <Button Grid.Column="1" Content="WHO 手术三方核查" Classes="Warning" Height="30" Margin="0,0,8,0" Click="OpenWhoSurgery_Click"/>
+                                                    <Button Grid.Column="2" Content="+ 新增医技申请" Classes="Primary" Height="30" Click="AddMedTech_Click"/>
                                                 </Grid>
 
                                                 <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="10,6">
@@ -512,7 +515,7 @@
                                                 <TextBlock Text="跨病区借床" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
                                                 <TextBlock Text="3 张 (内科二)" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
                                             </StackPanel>
-                                            <Button Grid.Column="6" Content="办理跨病区借床" Classes="Primary" VerticalAlignment="Center" Click="BorrowBed_Click"/>
+                                            <Button Grid.Column="6" Content="办理跨病区借床" Classes="Primary" VerticalAlignment="Center" Click="OpenBorrowBed_Click"/>
                                         </Grid>
                                     </Border>
 
@@ -590,7 +593,7 @@
                             </StackPanel>
                             <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Button Content="办理新入院" Classes="Primary" Height="32" Click="AdmitInpatient_Click"/>
-                                <Button Content="出院六严关终审" Classes="Warning" Height="32" Click="DischargeCheck_Click"/>
+                                <Button Content="出院六严关终审" Classes="Warning" Height="32" Click="OpenDischargeCheck_Click"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -630,7 +633,7 @@
                                                     <TextBlock Grid.Column="6" Text="{Binding AttendingDoctor}" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
                                                     <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                         <Button Content="长期医嘱" Height="28" Padding="8,0" FontSize="11" Click="LongTermOrder_Click"/>
-                                                        <Button Content="六严关" Classes="Warning" Height="28" Padding="8,0" FontSize="11" Click="DischargeCheck_Click"/>
+                                                        <Button Content="六严关" Classes="Warning" Height="28" Padding="8,0" FontSize="11" Click="OpenDischargeCheck_Click"/>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -664,7 +667,7 @@
                                 <TextBlock Text="内科二病区 - 全院床位智能拓扑矩阵 (GATE-02 四维科室隔离)" FontSize="16" FontWeight="Bold"/>
                                 <TextBlock Text="支持跨科借床、加床、急危重症监护床动态流转，医疗与护理职责彻底解耦！" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
                             </StackPanel>
-                            <Button Grid.Column="1" Content="办理跨病区借床" Classes="Primary" Height="34" Click="BorrowBed_Click"/>
+                            <Button Grid.Column="1" Content="办理跨病区借床" Classes="Primary" Height="34" Click="OpenBorrowBed_Click"/>
                         </Grid>
                     </Border>
 
@@ -723,10 +726,11 @@
                 <!-- ========================================== -->
                 <Grid RowDefinitions="Auto,*,Auto" Margin="16">
                     <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
-                        <StackPanel Orientation="Horizontal" Spacing="20">
-                            <TextBlock Text="医技诊疗中心 - 全院智能路由池与标本核收站" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
-                            <u:Badge Header="GATE-06: 确费锁单保障中" Classes="Warning"/>
-                        </StackPanel>
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <TextBlock Grid.Column="0" Text="医技诊疗中心 - 全院智能路由池与标本核收站" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <u:Badge Grid.Column="1" Header="GATE-06: 确费锁单保障中" Classes="Warning" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Button Grid.Column="2" Content="WHO 手术三方安全核查" Classes="Warning" Height="32" Click="OpenWhoSurgery_Click"/>
+                        </Grid>
                     </Border>
 
                     <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
@@ -875,7 +879,7 @@
                                                         </StackPanel>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                        <Button Content="预览 OFD 版式" Classes="Primary" Height="30" Padding="12,0" Click="PreviewOfd_Click"/>
+                                                        <Button Content="预览 OFD 版式" Classes="Primary" Height="30" Padding="12,0" Click="OpenOfdViewer_Click"/>
                                                         <Button Content="反向解析 XML" Height="30" Padding="12,0" Click="ReverseXml_Click"/>
                                                     </StackPanel>
                                                 </Grid>
@@ -912,7 +916,8 @@
                                     <ItemsControl ItemsSource="{Binding DynamicFormTemplates}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:DynamicFormTemplateModel">
-                                                <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                                <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5"
+                                                        PointerPressed="TemplateCard_PointerPressed" Cursor="Hand">
                                                     <Grid ColumnDefinitions="*,Auto">
                                                         <StackPanel Grid.Column="0" Spacing="6">
                                                             <Grid ColumnDefinitions="Auto,*,Auto">
@@ -931,7 +936,7 @@
                                                         </StackPanel>
                                                         <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
                                                             <Button Content="设计表单" Classes="Primary" Height="30" Padding="12,0" Click="DesignForm_Click"/>
-                                                            <Button Content="实时渲染预览" Height="30" Padding="12,0" Click="PreviewForm_Click"/>
+                                                            <Button Content="实时渲染预览" Height="30" Padding="12,0" Tag="{Binding}" Click="SelectTemplate_Click"/>
                                                         </StackPanel>
                                                     </Grid>
                                                 </Border>
@@ -974,5 +979,598 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- ======================================================== -->
+        <!-- OVERLAYS & MODALS (Grid.RowSpan="3")                     -->
+        <!-- ======================================================== -->
+
+        <!-- 1. 患者 360° 全生命周期临床诊疗时间轴抽屉 -->
+        <Grid Grid.RowSpan="3" Background="#70000000" IsVisible="{Binding IsTimelineDrawerOpen}">
+            <Border HorizontalAlignment="Right" Width="480" Background="{DynamicResource SemiColorBackground0}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1,0,0,0">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <!-- Drawer Header -->
+                    <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" Padding="18,14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="患者 360° 全息诊疗时间轴" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <u:Badge Header="CDR五级乙等" Classes="Success"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding SelectedPatient.PatientName, StringFormat='{}患者: {0} (EMPI 全生命周期临床全集)'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕" Width="30" Height="30" Classes="Tertiary" Padding="0" Click="CloseTimeline_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Events Timeline List -->
+                    <ScrollViewer Grid.Row="1" Padding="16">
+                        <ItemsControl ItemsSource="{Binding TimelineEvents}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TimelineEventModel">
+                                    <Grid ColumnDefinitions="32,*" Margin="0,0,0,16">
+                                        <!-- Vertical Line & Marker -->
+                                        <Grid Grid.Column="0">
+                                            <Rectangle Width="2" HorizontalAlignment="Center" Fill="{DynamicResource SemiColorBorder}"/>
+                                            <Border Width="24" Height="24" CornerRadius="12" Background="{DynamicResource SemiColorPrimaryLight}" BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1.5" VerticalAlignment="Top">
+                                                <TextBlock Text="{Binding ResultIcon}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Event Content Box -->
+                                        <Border Grid.Column="1" Margin="8,0,0,0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="6">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding EventTitle}" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                                                    <Border Grid.Column="1" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                                                        <TextBlock Text="{Binding EventType}" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="Bold"/>
+                                                    </Border>
+                                                </Grid>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock Text="{Binding EventTime}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <TextBlock Text="|" Foreground="{DynamicResource SemiColorBorder}"/>
+                                                    <TextBlock Text="{Binding Department}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Summary}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <TextBlock Text="{Binding DoctorOrOperator, StringFormat='{}责任人: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Drawer Footer -->
+                    <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground1}" Padding="16,12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,1,0,0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="数据源: 国家区域医疗中心集成引擎 (HL7 V3 / FHIR)" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="关闭视图" Height="30" Classes="Primary" Click="CloseTimeline_Click"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 2. 急诊医学检验危急值双通道强预警弹窗 -->
+        <Grid Grid.RowSpan="3" Background="#85000000" IsVisible="{Binding IsCriticalValueAlertOpen}">
+            <Border Width="620" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource SemiColorBackground0}" CornerRadius="12"
+                    BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="2"
+                    BoxShadow="0 8 32 0 #40000000">
+                <StackPanel Spacing="0">
+                    <!-- Title Bar with Danger Color -->
+                    <Border Background="{DynamicResource SemiColorDanger}" CornerRadius="10,10,0,0" Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <TextBlock Text="🚨" FontSize="20" VerticalAlignment="Center"/>
+                                <StackPanel>
+                                    <TextBlock Text="国家急危重症质控 · 检验危急值双通道强阻断警报" FontWeight="Bold" FontSize="15" Foreground="White"/>
+                                    <TextBlock Text="医护双签收闭环前，系统强制锁定诊疗工作站" FontSize="11" Foreground="#FFEEEEEE"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕" Width="28" Height="28" Background="Transparent" Foreground="White" BorderThickness="0" Click="CloseCriticalValue_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Content -->
+                    <Border Padding="20">
+                        <StackPanel Spacing="14">
+                            <!-- Critical Value Metric Card -->
+                            <Border Background="{DynamicResource SemiColorDangerLight}" CornerRadius="8" Padding="16" BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="1">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" Spacing="6">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{Binding CriticalValueAlert.TestItem}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                            <Border Background="{DynamicResource SemiColorDanger}" CornerRadius="4" Padding="6,2">
+                                                <TextBlock Text="{Binding CriticalValueAlert.AlertLevel}" FontSize="11" Foreground="White" FontWeight="Bold"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <TextBlock Text="{Binding CriticalValueAlert.PatientName, StringFormat='{}患者: {0}'}" FontSize="13" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding CriticalValueAlert.BedCode, StringFormat='{}床位: {0}'}" FontSize="13" Foreground="{DynamicResource SemiColorWarning}" FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding CriticalValueAlert.ReportingDept, StringFormat='{}出具科室: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding CriticalValueAlert.MeasuredValue}" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                        <TextBlock Text="{Binding CriticalValueAlert.ReferenceRange, StringFormat='{}参考区间: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Right"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Clinical Action Recommendation -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" Padding="12,8">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="⚡ 临床质控急救指引与处置建议:" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource SemiColorWarning}"/>
+                                    <TextBlock Text="{Binding CriticalValueAlert.ClinicalAction}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Dual Acknowledgment Status Section -->
+                            <Grid ColumnDefinitions="*,*">
+                                <!-- Doctor Ack -->
+                                <Border Grid.Column="0" Margin="0,0,6,0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="① 经治医生首接签收" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding CriticalValueAlert.DoctorAck, StringFormat='{}状态: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="Bold"/>
+                                        <Button Content="经治医生审签" Classes="Primary" HorizontalAlignment="Stretch" Click="AckDoctorCriticalValue_Click"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Nurse Ack -->
+                                <Border Grid.Column="1" Margin="6,0,0,0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="② 责任护士复核签收" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding CriticalValueAlert.NurseAck, StringFormat='{}状态: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                        <Button Content="责任护士签收" Classes="Success" HorizontalAlignment="Stretch" Click="AckNurseCriticalValue_Click"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- Green Channel Action -->
+                            <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="8" Padding="12" BorderBrush="{DynamicResource SemiColorWarning}" BorderThickness="1">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="急危重症国家胸痛中心 / 卒中中心绿色通道" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorWarning}"/>
+                                        <TextBlock Text="一键激活导管室 PCI 抢救准入，自动联动医护双签收并解除工作站锁屏" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="启动急救绿通" Classes="Warning" Height="34" Margin="10,0,0,0" Click="LaunchChestPainProtocol_Click"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Modal Close / Defer -->
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="报告下达时间: 2026-11-06 08:05:12 | 报告单号: CRIT-LAB-2026110509" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="暂存关闭" Height="30" Click="CloseCriticalValue_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 3. WHO 手术三方安全核查模态框 -->
+        <Grid Grid.RowSpan="3" Background="#85000000" IsVisible="{Binding IsWhoSurgeryCheckOpen}">
+            <Border Width="720" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource SemiColorBackground0}" CornerRadius="12"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    BoxShadow="0 8 32 0 #40000000">
+                <StackPanel Spacing="0">
+                    <!-- Title Bar -->
+                    <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="11,11,0,0" Padding="18,14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="WHO 手术安全三方核查工作台" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <u:Badge Header="国家核心制度" Classes="Warning"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding WhoSurgeryCheck.SurgeryName, StringFormat='{}拟施手术: {0} | 患者: 周建强 (ADM20261105001)'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕" Width="28" Height="28" Classes="Tertiary" Padding="0" Click="CloseWhoSurgery_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Three-Stage Verification Panels -->
+                    <Border Padding="20">
+                        <StackPanel Spacing="12">
+                            <!-- Stage 1: Sign-In (麻醉实施前) -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="阶段一: 麻醉实施前 (Sign-In) · 麻醉医师与手术护士核对" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <u:Badge Grid.Column="1" Header="已核查" Classes="Success"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,*,*">
+                                        <CheckBox Grid.Column="0" Content="患者身份与腕带确认无误" IsChecked="{Binding WhoSurgeryCheck.SignInIdentityOk}" IsEnabled="False"/>
+                                        <CheckBox Grid.Column="1" Content="手术部位与侧别已明确标识" IsChecked="{Binding WhoSurgeryCheck.SignInSiteMarked}" IsEnabled="False"/>
+                                        <CheckBox Grid.Column="2" Content="麻醉机及用药安全核查完成" IsChecked="{Binding WhoSurgeryCheck.SignInAnesthesiaSafetyCheck}" IsEnabled="False"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Stage 2: Time-Out (皮肤切开前) -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="阶段二: 皮肤切开前暂停 (Time-Out) · 主刀/麻醉/巡回三方共同核对" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorWarning}"/>
+                                        <u:Badge Grid.Column="1" Header="已暂停核查" Classes="Success"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,*,*">
+                                        <CheckBox Grid.Column="0" Content="手术团队成员角色确认" IsChecked="{Binding WhoSurgeryCheck.TimeOutAllTeamAgreed}" IsEnabled="False"/>
+                                        <CheckBox Grid.Column="1" Content="切皮前预防性抗生素已给予" IsChecked="{Binding WhoSurgeryCheck.TimeOutAntibioticGiven}" IsEnabled="False"/>
+                                        <CheckBox Grid.Column="2" Content="冠脉造影关键影像已上屏" IsChecked="{Binding WhoSurgeryCheck.TimeOutImagingDisplayed}" IsEnabled="False"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Stage 3: Sign-Out (患者离开手术室前) -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="阶段三: 离开手术室前 (Sign-Out) · 巡回护士与手术团队清点" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                        <u:Badge Grid.Column="1" Header="清点无误" Classes="Success"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,*,*">
+                                        <CheckBox Grid.Column="0" Content="器械/敷料/缝针清点核对一致" IsChecked="{Binding WhoSurgeryCheck.SignOutInstrumentCountMatched}" IsEnabled="False"/>
+                                        <CheckBox Grid.Column="1" Content="术中病理标本核对标记无误" IsChecked="{Binding WhoSurgeryCheck.SignOutSpecimenLabeled}" IsEnabled="False"/>
+                                        <TextBlock Grid.Column="2" Text="植入物 UDI 扫码追溯登记完成" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    </Grid>
+                                    <!-- UDI Box -->
+                                    <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="10,6" Margin="0,4,0,0">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="📦 高值耗材/药物支架 UDI 追溯码:" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <TextBlock Text="{Binding WhoSurgeryCheck.UdiImplantBarcode}" FontSize="11" FontFamily="Consolas, monospace" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Three Signers Information -->
+                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="12,8">
+                                <Grid ColumnDefinitions="*,*,*">
+                                    <TextBlock Grid.Column="0" Text="{Binding WhoSurgeryCheck.Surgeon, StringFormat='{}主刀: {0}'}" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding WhoSurgeryCheck.Anesthesiologist, StringFormat='{}麻醉: {0}'}" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding WhoSurgeryCheck.CirculatingNurse, StringFormat='{}巡回: {0}'}" FontSize="12" FontWeight="SemiBold"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Action Buttons -->
+                            <Grid ColumnDefinitions="*,Auto,Auto">
+                                <TextBlock Grid.Column="0" Text="{Binding WhoSurgeryCheck.CheckStatus}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="取消" Height="32" Margin="0,0,10,0" Click="CloseWhoSurgery_Click"/>
+                                <Button Grid.Column="2" Content="✓ 三方联合签署确认" Classes="Primary" Height="32" Click="ConfirmWhoSurgery_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 4. 门诊合理用药处方开立字典弹窗 -->
+        <Grid Grid.RowSpan="3" Background="#80000000" IsVisible="{Binding IsAddPrescriptionDialogOpen}">
+            <Border Width="750" Height="580" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource SemiColorBackground0}" CornerRadius="12"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    BoxShadow="0 8 32 0 #40000000">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <!-- Title Header -->
+                    <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" Padding="18,14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="门诊合理用药处方开立字典" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <u:Badge Header="GATE-05 前置审方" Classes="Success"/>
+                                </StackPanel>
+                                <TextBlock Text="支持常用药物、抗菌药物分级管控、皮试阻断测试及同类安全替代开立" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕" Width="28" Height="28" Classes="Tertiary" Padding="0" Click="CloseAddPrescription_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Drug Catalog List -->
+                    <ScrollViewer Grid.Row="1" Padding="16">
+                        <ItemsControl ItemsSource="{Binding AvailableDrugsCatalog}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DrugCatalogItemModel">
+                                    <Border Margin="0,0,0,8" Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="4">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{Binding DrugName}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                                                    <Border IsVisible="{Binding IsSkinTestRequired}" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="6,1">
+                                                        <TextBlock Text="需皮试 (GATE-05管控)" FontSize="10" Foreground="{DynamicResource SemiColorDanger}" FontWeight="Bold"/>
+                                                    </Border>
+                                                    <Border IsVisible="{Binding IsHighRisk}" Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="6,1">
+                                                        <TextBlock Text="重点监控" FontSize="10" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock Text="{Binding Spec, StringFormat='{}规格: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <TextBlock Text="{Binding DefaultDose, StringFormat='{}单次剂量: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                    <TextBlock Text="{Binding DefaultFreq, StringFormat='{}频次: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                    <TextBlock Text="{Binding DefaultRoute, StringFormat='{}给药途径: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock Text="{Binding UnitPrice, StringFormat='{}单价: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding StockQuantity, StringFormat='{}门诊药房库存: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="+ 选入处方" Classes="Primary" Height="30" VerticalAlignment="Center" Tag="{Binding}" Click="SelectDrugToAdd_Click"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Footer -->
+                    <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground1}" Padding="16,12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,1,0,0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="提示: 若添加过敏史冲突药物 (如青霉素钠)，系统将启动红线阻断，并提示一键安全替换" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="关闭字典" Height="30" Click="CloseAddPrescription_Click"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 5. GATE-07 出院六严关终审工作台抽屉 -->
+        <Grid Grid.RowSpan="3" Background="#85000000" IsVisible="{Binding IsDischargeCheckDrawerOpen}">
+            <Border Width="680" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource SemiColorBackground0}" CornerRadius="12"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    BoxShadow="0 8 32 0 #40000000">
+                <StackPanel Spacing="0">
+                    <!-- Title Bar -->
+                    <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="11,11,0,0" Padding="18,14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="🛡️ GATE-07 出院六严关终审工作台" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <u:Badge Header="出院终审门禁" Classes="Success"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding DischargeCheckDetails.PatientName, StringFormat='{}患者: {0} ({Binding DischargeCheckDetails.BedCode}) | 就诊流水: {Binding DischargeCheckDetails.AdmissionNo}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕" Width="28" Height="28" Classes="Tertiary" Padding="0" Click="CloseDischargeCheck_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Six Gates Status Grid -->
+                    <Border Padding="20">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="系统已完成全院六严关自动对账检验，任一项未达标将强制锁止出院结算通道:" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+
+                            <!-- Gate 1 -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" Padding="12,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Grid.Column="0" Text="关卡 1: 长期与临时医嘱全部停止并闭环执行" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="✓ 医嘱全部停止 (执行完毕)" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Gate 2 -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" Padding="12,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Grid.Column="0" Text="关卡 2: 检验/检查/病理医技报告全部归档审签" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="✓ 报告已全出具 (无待回传项目)" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Gate 3 -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" Padding="12,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Grid.Column="0" Text="关卡 3: 出院带药合理用药审方并通过药房发药" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="✓ 药房已配发 (双人复核出库)" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Gate 4 -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" Padding="12,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Grid.Column="0" Text="关卡 4: 电子病历三级医师审签并完成 OFD 归档" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="✓ 主治/副高已双签 (OFD防篡改封包)" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Gate 5 -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" Padding="12,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Grid.Column="0" Text="关卡 5: 医保基金结算单或商保理赔核验结清" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="✓ 医保国家局平台已预结清" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Gate 6 -->
+                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" Padding="12,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Grid.Column="0" Text="关卡 6: 住院预交金与自费费用清算退补归零" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="✓ 预交金 ¥15000 / 自费 ¥10520.5 / 应退 ¥4479.5" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Financial Ledger Summary -->
+                            <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="8" Padding="14,10" Margin="0,6,0,0">
+                                <Grid ColumnDefinitions="*,*,*">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="预交金总额" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Text="¥15,000.00" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="患者自费自负" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Text="¥10,520.50" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="结算应退金额" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                        <TextBlock Text="¥4,479.50" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Action Buttons -->
+                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,10,0,0">
+                                <TextBlock Grid.Column="0" Text="全部六严关检验 100% 通过，允许办结出院" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="出院召回" Classes="Warning" Height="32" Margin="0,0,10,0" Click="RecallDischarge_Click"/>
+                                <Button Grid.Column="2" Content="✓ 六严关终审通过并办结出院" Classes="Primary" Height="32" Click="ApproveDischarge_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 6. 国家标准 OFD 电子病历与整案版式阅览器 -->
+        <Grid Grid.RowSpan="3" Background="#85000000" IsVisible="{Binding IsOfdViewerDrawerOpen}">
+            <Border Width="800" Height="700" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource SemiColorBackground0}" CornerRadius="12"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    BoxShadow="0 8 32 0 #40000000">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <!-- Title Header -->
+                    <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" Padding="18,14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="国标 GB/T 33190-2016 OFD 电子病历版式阅览器" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <u:Badge Header="GB/T 33190-2016" Classes="Primary"/>
+                                    <u:Badge Header="SM2-SM3 双验签" Classes="Success"/>
+                                </StackPanel>
+                                <TextBlock Text="电子文件存储与交换格式 · 遵循真实版式、图元矢量、水印渲染与结构化双向语义嵌入" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕" Width="28" Height="28" Classes="Tertiary" Padding="0" Click="CloseOfdViewer_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Rendered A4 Document Canvas Preview -->
+                    <ScrollViewer Grid.Row="1" Padding="20">
+                        <Border Width="560" MinHeight="680" Background="White" CornerRadius="2" BorderBrush="#CCCCCC" BorderThickness="1" Padding="36" BoxShadow="0 4 12 0 #20000000">
+                            <StackPanel Spacing="16">
+                                <!-- Hospital Header -->
+                                <StackPanel HorizontalAlignment="Center" Spacing="4">
+                                    <TextBlock Text="国家区域医疗中心 (三级甲等综合医院)" FontSize="18" FontWeight="Bold" Foreground="#111111" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="门 诊 初 诊 病 历" FontSize="16" FontWeight="Bold" LetterSpacing="2" Foreground="#333333" HorizontalAlignment="Center"/>
+                                    <Rectangle Height="2" Fill="#B71C1C" Margin="0,6"/>
+                                </StackPanel>
+
+                                <!-- Patient Meta Table -->
+                                <Grid ColumnDefinitions="*,*,*,*">
+                                    <TextBlock Grid.Column="0" Text="{Binding SelectedPatient.PatientName, StringFormat='{}姓名: {0}'}" FontSize="12" Foreground="#333333"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding SelectedPatient.Gender, StringFormat='{}性别: {0}'}" FontSize="12" Foreground="#333333"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding SelectedPatient.Age, StringFormat='{}年龄: {0}岁'}" FontSize="12" Foreground="#333333"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding SelectedPatient.VisitNo, StringFormat='{}流水号: {0}'}" FontSize="12" Foreground="#333333"/>
+                                </Grid>
+                                <Rectangle Height="1" Fill="#E0E0E0"/>
+
+                                <!-- Clinical Sections -->
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="【主诉】" FontWeight="Bold" FontSize="13" Foreground="#B71C1C"/>
+                                    <TextBlock Text="{Binding EmrWorkspace.ChiefComplaint}" FontSize="12" Foreground="#222222" Margin="12,0,0,0"/>
+
+                                    <TextBlock Text="【现病史】" FontWeight="Bold" FontSize="13" Foreground="#B71C1C"/>
+                                    <TextBlock Text="{Binding EmrWorkspace.PresentIllness}" FontSize="12" Foreground="#222222" TextWrapping="Wrap" Margin="12,0,0,0"/>
+
+                                    <TextBlock Text="【初步诊断】" FontWeight="Bold" FontSize="13" Foreground="#B71C1C"/>
+                                    <TextBlock Text="{Binding EmrWorkspace.Diagnosis}" FontSize="12" FontWeight="SemiBold" Foreground="#1565C0" Margin="12,0,0,0"/>
+
+                                    <TextBlock Text="【专科检查 (GATE-03 排他约束)】" FontWeight="Bold" FontSize="13" Foreground="#B71C1C"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="24" Margin="12,0,0,0">
+                                        <TextBlock Text="{Binding EmrWorkspace.ProstateExam, StringFormat='{}前列腺触诊: {0}'}" FontSize="12" Foreground="#333333"/>
+                                        <TextBlock Text="{Binding EmrWorkspace.PregnancyCount, StringFormat='{}孕产次数: {0}次'}" FontSize="12" Foreground="#333333"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Digital Signature & Stamp Box -->
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,30,0,0">
+                                    <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Bottom">
+                                        <TextBlock Text="电子签名人: 张主治 (EMP002)" FontSize="12" Foreground="#333333"/>
+                                        <TextBlock Text="签署算法: 国密 SM2/SM3 + SHA-256" FontSize="11" Foreground="#666666"/>
+                                        <TextBlock Text="国家标准: GB/T 33190-2016 归档包" FontSize="11" Foreground="#666666"/>
+                                    </StackPanel>
+
+                                    <!-- Red Hospital Seal Simulation -->
+                                    <Border Grid.Column="1" Width="100" Height="100" CornerRadius="50" BorderBrush="#D32F2F" BorderThickness="2" Background="#08D32F2F">
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <TextBlock Text="★" FontSize="18" Foreground="#D32F2F" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="三甲医院" FontSize="10" Foreground="#D32F2F" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="病历归档专用" FontSize="9" Foreground="#D32F2F" HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+
+                    <!-- Footer Controls -->
+                    <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground1}" Padding="16,12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,1,0,0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <Button Content="导出 OFD 归档文件" Classes="Primary" Height="30" Click="ExportOfd_Click"/>
+                                <Button Content="验签 (SM2-SM3)" Height="30" Click="VerifyHash_Click"/>
+                                <Button Content="反向解析 XML" Height="30" Click="ReverseXml_Click"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="关闭阅览器" Height="30" Click="CloseOfdViewer_Click"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 7. GATE-02 跨病区借床入科办理模态框 -->
+        <Grid Grid.RowSpan="3" Background="#80000000" IsVisible="{Binding IsBorrowBedDialogOpen}">
+            <Border Width="580" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource SemiColorBackground0}" CornerRadius="12"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    BoxShadow="0 8 32 0 #40000000">
+                <StackPanel Spacing="0">
+                    <!-- Title Bar -->
+                    <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="11,11,0,0" Padding="18,14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="⚡ GATE-02 跨病区借床入科办理" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <u:Badge Header="四维拓扑解耦" Classes="Warning"/>
+                                </StackPanel>
+                                <TextBlock Text="主管科室 (医疗职责) 与护理病区 (床位护理) 独立核算与分账流转" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕" Width="28" Height="28" Classes="Tertiary" Padding="0" Click="CloseBorrowBed_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Form Content -->
+                    <Border Padding="20">
+                        <StackPanel Spacing="14">
+                            <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="6" Padding="12,8">
+                                <TextBlock Text="【业务 SOP 规范】心血管内科编制床位满员，经医务处审批借用内科二病区 02 床。医疗权属心血管内科一科 (开立医嘱/查房)，护理权属内科二病区 (扫码执行/床位巡视)。" FontSize="12" Foreground="{DynamicResource SemiColorWarning}" TextWrapping="Wrap"/>
+                            </Border>
+
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="140,*" Margin="0,6">
+                                <!-- Field 1 -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="患者姓名 / 就诊号:" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="周建强 (男, 41岁) | ADM20261105001" VerticalAlignment="Center" FontSize="13" FontWeight="Bold"/>
+
+                                <!-- Field 2 -->
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="主管住院科室:" VerticalAlignment="Center" Margin="0,12,0,0" FontWeight="SemiBold" FontSize="12"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="心血管内科住院一科 (DEPT-IPD-01) · 医疗主管" VerticalAlignment="Center" Margin="0,12,0,0" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+
+                                <!-- Field 3 -->
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="执行借床病区:" VerticalAlignment="Center" Margin="0,12,0,0" FontWeight="SemiBold" FontSize="12"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="内科二病区 (DEPT-WARD-02) · 借用 02 床 (is_borrowed_bed=1)" VerticalAlignment="Center" Margin="0,12,0,0" FontSize="12" Foreground="{DynamicResource SemiColorWarning}" FontWeight="SemiBold"/>
+
+                                <!-- Field 4 -->
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="借床办理审批:" VerticalAlignment="Center" Margin="0,12,0,0" FontWeight="SemiBold" FontSize="12"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="✓ 医务处与双方护士长电子协同已核准" VerticalAlignment="Center" Margin="0,12,0,0" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}"/>
+                            </Grid>
+
+                            <!-- Action Buttons -->
+                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,10,0,0">
+                                <TextBlock Grid.Column="0" Text="已建立双向路由映射，护理执行单与医嘱自动分发" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="取消" Height="32" Margin="0,0,10,0" Click="CloseBorrowBed_Click"/>
+                                <Button Grid.Column="2" Content="✓ 办理借床入科" Classes="Primary" Height="32" Click="ConfirmBorrowBed_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

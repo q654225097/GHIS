@@ -410,4 +410,216 @@ public partial class MainWindow : Window
             vm.SystemNotice = "动态表单配置引擎: 实时加载 EAV Schema 成功，右侧表单呈现沙箱已动态渲染 Ursa 组件输入槽位！";
         }
     }
+
+    private void OpenTimeline_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsTimelineDrawerOpen = true;
+            vm.SystemNotice = "已打开患者 360° 全生命周期临床诊疗时间轴视图 (涵盖门诊/检验/医嘱/病历/危急值全链条)";
+        }
+    }
+
+    private void CloseTimeline_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsTimelineDrawerOpen = false;
+        }
+    }
+
+    private void OpenCriticalValue_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsCriticalValueAlertOpen = true;
+            vm.SystemNotice = "🚨 触发危急值双签收强制弹窗：超敏肌钙蛋白 I (hs-cTnI) 达 12.85 ng/mL！医护双签收前界面强制锁屏！";
+        }
+    }
+
+    private void CloseCriticalValue_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsCriticalValueAlertOpen = false;
+        }
+    }
+
+    private void AckDoctorCriticalValue_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.CriticalValueAlert.DoctorAck = $"已签收 (张主治 {DateTime.Now:HH:mm:ss})";
+            vm.SystemNotice = "✓ 经治医师已完成危急值初级审签并下达紧急处理指令！";
+        }
+    }
+
+    private void AckNurseCriticalValue_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.CriticalValueAlert.NurseAck = $"已签收 (李主管护师 {DateTime.Now:HH:mm:ss})";
+            vm.SystemNotice = "✓ 责任护士已完成危急值闭环复核并执行监护指令！";
+        }
+    }
+
+    private void LaunchChestPainProtocol_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.CriticalValueAlert.DoctorAck = $"已签收 (张主治 {DateTime.Now:HH:mm:ss})";
+            vm.CriticalValueAlert.NurseAck = $"已签收 (李主管护师 {DateTime.Now:HH:mm:ss})";
+            vm.IsCriticalValueAlertOpen = false;
+            vm.SystemNotice = "⚡ 国家胸痛中心急救绿色通道已激活！一键通知心内科急诊导管室、开启 PCI 急诊手术准入！";
+        }
+    }
+
+    private void OpenWhoSurgery_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsWhoSurgeryCheckOpen = true;
+            vm.SystemNotice = "已调取 WHO 手术安全核查工作台 (麻醉实施前 Sign-In、皮肤切开前 Time-Out、患者离开手术室前 Sign-Out 三方核对)";
+        }
+    }
+
+    private void CloseWhoSurgery_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsWhoSurgeryCheckOpen = false;
+        }
+    }
+
+    private void ConfirmWhoSurgery_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.WhoSurgeryCheck.CheckStatus = "✓ 三方全员核验签署完毕 · 允许实施切开与器械离室";
+            vm.IsWhoSurgeryCheckOpen = false;
+            vm.SystemNotice = "✓ WHO 手术安全核查三方签署完毕：主刀、麻醉、巡回三方身份核对与高值耗材 UDI 条码追溯登记完成！";
+        }
+    }
+
+    private void OpenAddPrescription_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsAddPrescriptionDialogOpen = true;
+            vm.SystemNotice = "已调取门诊合理用药处方开立字典 (支持抗菌药物分级管控、皮试强阻断拦截及同类安全替代)";
+        }
+    }
+
+    private void CloseAddPrescription_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsAddPrescriptionDialogOpen = false;
+        }
+    }
+
+    private void SelectDrugToAdd_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm && sender is Control ctrl && ctrl.Tag is DrugCatalogItemModel drug)
+        {
+            vm.AddPrescriptionFromCatalog(drug);
+            vm.IsAddPrescriptionDialogOpen = false;
+        }
+    }
+
+    private void OpenDischargeCheck_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsDischargeCheckDrawerOpen = true;
+            vm.SystemNotice = "已进入 GATE-07 出院六严关终审工作台：正在并发验证医嘱闭环、医技报告、带药配发、病历归档、医保结算、预交金结清...";
+        }
+    }
+
+    private void CloseDischargeCheck_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsDischargeCheckDrawerOpen = false;
+        }
+    }
+
+    private void ApproveDischarge_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsDischargeCheckDrawerOpen = false;
+            vm.SystemNotice = "✓ GATE-07 出院六严关终审通过！医保结算办结，预交金结清退还 ¥4479.50，已自动释放编制床位，生成出院小结 OFD！";
+        }
+    }
+
+    private void RecallDischarge_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsDischargeCheckDrawerOpen = false;
+            vm.SystemNotice = "出院召回处理：已撤回出院终审，恢复在院治疗状态。";
+        }
+    }
+
+    private void OpenOfdViewer_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsOfdViewerDrawerOpen = true;
+            vm.SystemNotice = "已打开国家标准 GB/T 33190-2016 OFD 电子病历版式阅览器 (支持图元矢量绘制、版式水印、双向语义树反查)";
+        }
+    }
+
+    private void CloseOfdViewer_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsOfdViewerDrawerOpen = false;
+        }
+    }
+
+    private void OpenBorrowBed_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsBorrowBedDialogOpen = true;
+            vm.SystemNotice = "已开启 GATE-02 跨病区借床入科向导：心血管内科一科借用内科二病区编制床位。";
+        }
+    }
+
+    private void CloseBorrowBed_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsBorrowBedDialogOpen = false;
+        }
+    }
+
+    private void ConfirmBorrowBed_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsBorrowBedDialogOpen = false;
+            vm.SystemNotice = "✓ 跨病区借床入科办理完成！床位状态更新为 [⚡ 跨病区借床 (GATE-02)]，医疗与护理职责彻底解耦并建立双向路由！";
+        }
+    }
+
+    private void TemplateCard_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control ctrl && ctrl.DataContext is DynamicFormTemplateModel tpl && DataContext is WorkbenchModel vm)
+        {
+            vm.SelectedFormTemplate = tpl;
+            vm.SystemNotice = $"已选择动态表单模板: [{tpl.TemplateName}]，包含 {tpl.FieldCount} 个数据元，{tpl.GenderRuleCount} 个性别排他规则";
+        }
+    }
+
+    private void SelectTemplate_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control ctrl && ctrl.Tag is DynamicFormTemplateModel tpl && DataContext is WorkbenchModel vm)
+        {
+            vm.SelectedFormTemplate = tpl;
+            vm.SystemNotice = $"表单沙箱已刷新: [{tpl.TemplateName}]，正在执行 GATE-03 性别动态校验！";
+        }
+    }
 }

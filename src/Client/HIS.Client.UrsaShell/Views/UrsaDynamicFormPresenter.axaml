@@ -1,17 +1,27 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:u="https://irihi.tech/ursa"
-             x:Class="HIS.Client.UrsaShell.Views.UrsaDynamicFormPresenter">
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             x:Class="HIS.Client.UrsaShell.Views.UrsaDynamicFormPresenter"
+             x:DataType="vm:WorkbenchModel">
     <Border Padding="16" Background="{DynamicResource SemiColorBackground0}" CornerRadius="8" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
         <StackPanel Spacing="14">
             <!-- Sandbox Header -->
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="动态扩展表单实时呈现沙箱 (EAV Presenter)" FontSize="15" FontWeight="Bold"/>
-                    <TextBlock Text="根据服务端 Schema 动态渲染 Ursa 控件槽位 · 纯数据驱动存储" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Text="{Binding SelectedFormTemplate.TemplateName, FallbackValue='心血管专病结构化随访表单'}" FontSize="16" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding SelectedFormTemplate.DeptScope, StringFormat='{}适用范围: {0} · 纯数据驱动 EAV 存储', FallbackValue='心血管内科 (OPD &amp; IPD)'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
                 </StackPanel>
-                <u:Badge Grid.Column="1" Header="EMR_CARDIO_V1 实时实例" Classes="Primary"/>
+                <u:Badge Grid.Column="1" Header="{Binding SelectedFormTemplate.Version, FallbackValue='v2.1'}" Classes="Primary"/>
             </Grid>
+
+            <!-- Dynamic Schema Rule Banner -->
+            <Border Background="{DynamicResource SemiColorWarningLight}" BorderBrush="{DynamicResource SemiColorWarning}" BorderThickness="1" CornerRadius="6" Padding="10,6">
+                <Grid ColumnDefinitions="Auto,*">
+                    <TextBlock Grid.Column="0" Text="🛡️ 门禁3 (GATE-03) 规则定义:" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding SelectedFormTemplate.GenderRuleDescription, FallbackValue='前列腺触诊仅限男性 (MALE_ONLY)；孕产史仅限女性 (FEMALE_ONLY)'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" Margin="8,0" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
 
             <u:Divider Content="患者建档与门诊专科通用扩展字段"/>
 
@@ -34,14 +44,14 @@
                     </u:FormItem>
                 </Grid>
 
-                <u:Divider Content="专科专病数据元 (GATE-03 性别排他规则)"/>
+                <u:Divider Content="专科专病数据元 (GATE-03 临床性别排他规则)"/>
 
                 <Grid ColumnDefinitions="*,*">
                     <u:FormItem Grid.Column="0" Label="前列腺触诊 [男性专属 - MALE ONLY]:" Margin="0,0,8,0">
-                        <TextBox Text="质地韧，中央沟存在，未触及明显硬结" Height="32"/>
+                        <TextBox Text="{Binding EmrWorkspace.ProstateExam}" Height="32"/>
                     </u:FormItem>
                     <u:FormItem Grid.Column="1" Label="孕产次数 [女性专属 - FEMALE ONLY]:" Margin="8,0,0,0">
-                        <u:NumericIntUpDown Value="0" Minimum="0" Maximum="20" Height="32" IsEnabled="False"/>
+                        <u:NumericIntUpDown Value="{Binding EmrWorkspace.PregnancyCount}" Minimum="0" Maximum="20" Height="32"/>
                     </u:FormItem>
                 </Grid>
             </u:Form>
