@@ -1,0 +1,156 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:u="https://irihi.tech/ursa"
+        xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+        x:Class="HIS.Client.UrsaShell.Views.LoginWindow"
+        x:DataType="vm:LoginModel"
+        Title="智医 HIS V4.3 — 系统登录"
+        Width="900" Height="600"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False">
+
+    <Grid ColumnDefinitions="380,*">
+
+        <!-- ============================= -->
+        <!-- LEFT: Hospital Brand Panel    -->
+        <!-- ============================= -->
+        <Border Grid.Column="0" Background="{DynamicResource SemiColorPrimary}">
+            <Grid RowDefinitions="*,Auto,*">
+                <!-- Brand Content (centered) -->
+                <StackPanel Grid.Row="1" Spacing="18" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Margin="40,0">
+                    <Border Background="#26FFFFFF" CornerRadius="20" Width="80" Height="80"
+                            HorizontalAlignment="Center">
+                        <TextBlock Text="🏥" FontSize="44" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+
+                    <StackPanel Spacing="6" HorizontalAlignment="Center">
+                        <TextBlock Text="智医 HIS V4.3" FontSize="28" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center"/>
+                        <TextBlock Text="全院一体化医院信息系统" FontSize="14"
+                                   Foreground="#CCFFFFFF" HorizontalAlignment="Center"/>
+                        <TextBlock Text="三甲医院专用 · 国标 GB/T 33190-2016" FontSize="11"
+                                   Foreground="#99FFFFFF" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Role Badges -->
+                    <Border Background="#1AFFFFFF" CornerRadius="8" Padding="16,12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="角色访问权限说明" FontSize="11" Foreground="#CCFFFFFF" FontWeight="SemiBold"/>
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" HorizontalAlignment="Left">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="🛡️" FontSize="12" Margin="0,2,8,2"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="超级管理员 — 全功能管理" FontSize="11" Foreground="#EEFFFFFF" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="🩺" FontSize="12" Margin="0,2,8,2"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="门诊医生 — 接诊/处方/医嘱" FontSize="11" Foreground="#EEFFFFFF" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="🏥" FontSize="12" Margin="0,2,8,2"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="住院医师/主治 — 电子病历" FontSize="11" Foreground="#EEFFFFFF" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="👩‍⚕️" FontSize="12" Margin="0,2,8,2"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="病区护士 — 执行护理医嘱" FontSize="11" Foreground="#EEFFFFFF" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="💊" FontSize="12" Margin="0,2,8,2"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="药剂师 — 发药审方管理" FontSize="11" Foreground="#EEFFFFFF" VerticalAlignment="Center"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Footer -->
+                <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20">
+                    <TextBlock Text="GATE 01~08 全架构门禁已验证通过" FontSize="10" Foreground="#77FFFFFF" HorizontalAlignment="Center"/>
+                    <TextBlock Text=".NET 10 · Avalonia 12 · Ursa 2.3" FontSize="10" Foreground="#55FFFFFF" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============================= -->
+        <!-- RIGHT: Login Form Panel       -->
+        <!-- ============================= -->
+        <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground0}" Padding="48,0">
+            <Grid RowDefinitions="*,Auto,*">
+                <StackPanel Grid.Row="1" Spacing="22" VerticalAlignment="Center">
+
+                    <!-- Form Title -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="用户登录" FontSize="22" FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                        <TextBlock Text="请选择您的职务身份并输入密码" FontSize="13"
+                                   Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+
+                    <!-- Quick Role Selection Grid -->
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="快速选择身份" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SemiColorText1}"/>
+                        <ItemsControl ItemsSource="{Binding KnownUsers}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:LoginUserOption">
+                                    <Button Margin="4" Padding="10,8" Click="UserCard_Click"
+                                            Tag="{Binding UserName}"
+                                            Classes="Outlined">
+                                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Avatar}" FontSize="18" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="{Binding DisplayName}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="{Binding RoleName}" FontSize="10"
+                                                       Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Username Field -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="用户名 / 工号" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBox Text="{Binding SelectedUserName}" Height="38"
+                                 PlaceholderText="输入用户名 (如: doc_opd)"/>
+                    </StackPanel>
+
+                    <!-- Password Field -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="登录密码" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBox Text="{Binding Password}" PasswordChar="●" Height="38"
+                                 PlaceholderText="输入密码 (演示密码: 123456)"
+                                 KeyDown="Password_KeyDown"/>
+                        <TextBlock Text="💡 演示环境所有账号密码均为 123456" FontSize="11"
+                                   Foreground="{DynamicResource SemiColorText3}"/>
+                    </StackPanel>
+
+                    <!-- Error Message -->
+                    <Border Background="{DynamicResource SemiColorDangerLight}" CornerRadius="6" Padding="12,8"
+                            IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource SemiColorDanger}"
+                                   FontSize="12" TextWrapping="Wrap"/>
+                    </Border>
+
+                    <!-- Login Button -->
+                    <Button Content="🔐  登录系统" Classes="Primary" Height="42" HorizontalAlignment="Stretch"
+                            FontSize="14" FontWeight="SemiBold"
+                            IsEnabled="{Binding !IsLoggingIn}"
+                            Click="LoginButton_Click"/>
+
+                    <TextBlock Text="选择账号后点击 · 登录系统 · 进入工作台" FontSize="11"
+                               Foreground="{DynamicResource SemiColorText3}"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Footer info -->
+                <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20" Spacing="4">
+                    <TextBlock Text="智医信息技术有限公司 © 2026" FontSize="11"
+                               Foreground="{DynamicResource SemiColorText3}" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
+

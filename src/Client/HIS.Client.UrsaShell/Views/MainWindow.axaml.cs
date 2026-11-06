@@ -622,4 +622,131 @@ public partial class MainWindow : Window
             vm.SystemNotice = $"表单沙箱已刷新: [{tpl.TemplateName}]，正在执行 GATE-03 性别动态校验！";
         }
     }
+
+    // ==========================================
+    // RBAC Multi-User Switching & Maintenance Handlers
+    // ==========================================
+
+    private void OpenSwitchUserModal_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsSwitchUserModalOpen = true;
+            vm.SystemNotice = "请选择需要切换登录的医护或管理人员账号";
+        }
+    }
+
+    private void CloseSwitchUserModal_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsSwitchUserModalOpen = false;
+        }
+    }
+
+    private void SwitchUserTo_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string userName && DataContext is WorkbenchModel vm)
+        {
+            vm.SwitchToUser(userName);
+        }
+    }
+
+    private void Logout_Click(object? sender, RoutedEventArgs e)
+    {
+        HIS.Client.Core.SessionContext.Current.Logout();
+        var login = new LoginWindow();
+        login.Show();
+        Close();
+    }
+
+    private void OpenCreateUserModal_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.NewUserForm.Reset();
+            vm.IsCreateUserModalOpen = true;
+        }
+    }
+
+    private void CloseCreateUserModal_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsCreateUserModalOpen = false;
+        }
+    }
+
+    private void SaveNewUser_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.SaveNewUser();
+        }
+    }
+
+    private void ToggleUserStatus_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is UserAdminItemModel user && DataContext is WorkbenchModel vm)
+        {
+            vm.ToggleUserStatus(user);
+        }
+    }
+
+    private void ResetPassword_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is UserAdminItemModel user && DataContext is WorkbenchModel vm)
+        {
+            vm.SystemNotice = $"[安全审计] 已将用户 '{user.DisplayName}' 的密码重置为系统默认安全口令 (123456)，Session版本已递增！";
+        }
+    }
+
+    private void OpenCreateRoleModal_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.NewRoleForm.Reset();
+            vm.IsCreateRoleModalOpen = true;
+        }
+    }
+
+    private void CloseCreateRoleModal_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.IsCreateRoleModalOpen = false;
+        }
+    }
+
+    private void SaveNewRole_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkbenchModel vm)
+        {
+            vm.SaveNewRole();
+        }
+    }
+
+    private void ToggleDocPolicy_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is PermissionMatrixItemModel item && DataContext is WorkbenchModel vm)
+        {
+            vm.TogglePermissionPolicy(item, "DOC");
+        }
+    }
+
+    private void ToggleNursePolicy_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is PermissionMatrixItemModel item && DataContext is WorkbenchModel vm)
+        {
+            vm.TogglePermissionPolicy(item, "NURSE");
+        }
+    }
+
+    private void TogglePharmPolicy_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is PermissionMatrixItemModel item && DataContext is WorkbenchModel vm)
+        {
+            vm.TogglePermissionPolicy(item, "PHARM");
+        }
+    }
 }

@@ -59,13 +59,14 @@
                 </Border>
 
                 <!-- Current User Profile & Status -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Right">
                         <TextBlock Text="{Binding UserName}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Right"/>
-                        <TextBlock Text="工号: EMP002 | 权限: 主治医师/处方权II级" FontSize="11" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding UserRoleSubtitle}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                    <u:Badge Header="在线 ✓" Classes="Success" VerticalAlignment="Center"/>
-                    <Button Content="锁屏" Height="28" Padding="10,0"/>
+                    <u:Badge Header="{Binding RoleBadgeText}" Classes="Success" VerticalAlignment="Center"/>
+                    <Button Content="切换身份" Height="28" Padding="10,0" Classes="Primary" Click="OpenSwitchUserModal_Click"/>
+                    <Button Content="注销" Height="28" Padding="10,0" Click="Logout_Click"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -127,6 +128,18 @@
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <TextBlock Text="⚙️" FontSize="16"/>
                                     <TextBlock Text="动态表单配置" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </ListBoxItem>
+                            <ListBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="👥" FontSize="16"/>
+                                    <TextBlock Text="用户账号维护" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </ListBoxItem>
+                            <ListBoxItem>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="🛡️" FontSize="16"/>
+                                    <TextBlock Text="角色权限矩阵" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                 </StackPanel>
                             </ListBoxItem>
                         </ListBox>
@@ -343,7 +356,7 @@
 
                                             <!-- Sign and Export Actions -->
                                             <StackPanel Spacing="8">
-                                                <Button Content="三级审签并生成国标 OFD" Classes="Primary" HorizontalAlignment="Stretch" Click="SignOfd_Click"/>
+                                                <Button Content="三级审签并生成国标 OFD" Classes="Primary" HorizontalAlignment="Stretch" IsEnabled="{Binding CanSignEmr}" Click="SignOfd_Click"/>
                                                 <Button Content="导出国标 OFD 文件 (.ofd)" Classes="Secondary" HorizontalAlignment="Stretch" Click="ExportOfd_Click"/>
                                                 <Button Content="执行防篡改哈希完整性校验" HorizontalAlignment="Stretch" Click="VerifyHash_Click"/>
                                             </StackPanel>
@@ -361,7 +374,7 @@
                                             <StackPanel Spacing="8">
                                                 <Grid ColumnDefinitions="*,Auto">
                                                     <TextBlock Grid.Column="0" Text="门诊处方明细表 (含皮试自动阻断与抗菌药物级别管控)" FontSize="15" FontWeight="Bold"/>
-                                                    <Button Grid.Column="1" Content="+ 新增处方药品" Classes="Primary" Height="30" Click="OpenAddPrescription_Click"/>
+                                                    <Button Grid.Column="1" Content="+ 新增处方药品" Classes="Primary" Height="30" IsEnabled="{Binding CanPrescribe}" Click="OpenAddPrescription_Click"/>
                                                 </Grid>
 
                                                 <!-- Column Headers -->
@@ -954,6 +967,166 @@
                             </ScrollViewer>
                         </Border>
                     </Grid>
+                </Grid>
+
+                <!-- ========================================== -->
+                <!-- VIEW 7: 用户账号维护 (SysUser Management)   -->
+                <!-- ========================================== -->
+                <Grid RowDefinitions="Auto,*" Margin="16">
+                    <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="全院系统用户与人员档案维护 (SysUser Management)" FontSize="16" FontWeight="Bold"/>
+                                    <u:Badge Header="RBAC 核心" Classes="Primary"/>
+                                </StackPanel>
+                                <TextBlock Text="基于严格的角色访问控制模型 (RBAC)，集中维护医护、技师、药师账户，绑定四维科室上下文与处方/手术/审签等级" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="+ 新增系统用户" Classes="Primary" Height="34" Click="OpenCreateUserModal_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid RowDefinitions="Auto,*">
+                            <!-- Table Headers -->
+                            <Grid Grid.Row="0" ColumnDefinitions="80,100,100,120,160,130,130,130,80,*" Margin="10,0,10,10">
+                                <TextBlock Grid.Column="0" Text="工号" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="1" Text="登录账号" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="2" Text="真实姓名" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="3" Text="所属职务角色" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="4" Text="执业科室上下文" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="5" Text="处方权级别" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="6" Text="手术资质等级" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="7" Text="电子审签权限" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="8" Text="账号状态" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="9" Text="管理操作" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </Grid>
+
+                            <!-- User Rows -->
+                            <ScrollViewer Grid.Row="1">
+                                <ItemsControl ItemsSource="{Binding UsersList}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:UserAdminItemModel">
+                                            <Border Margin="0,3" Padding="10,12" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="80,100,100,120,160,130,130,130,80,*">
+                                                    <TextBlock Grid.Column="0" Text="{Binding EmployeeNo}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding UserName}" FontFamily="Consolas,Menlo" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <u:Badge Grid.Column="3" Header="{Binding RoleName}" Classes="Primary" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="4" Text="{Binding DeptName}" VerticalAlignment="Center" FontSize="12"/>
+                                                    <TextBlock Grid.Column="5" Text="{Binding PrescribeLevelText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                    <TextBlock Grid.Column="6" Text="{Binding SurgeryLevelText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                    <TextBlock Grid.Column="7" Text="{Binding EmrSignLevelText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                    <u:Badge Grid.Column="8" Header="{Binding StatusText}" Classes="Success" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                    <StackPanel Grid.Column="9" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                        <Button Content="切换启停" Height="26" Padding="8,0" Tag="{Binding}" Click="ToggleUserStatus_Click"/>
+                                                        <Button Content="重置密码" Height="26" Padding="8,0" Tag="{Binding}" Click="ResetPassword_Click"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- ========================================== -->
+                <!-- VIEW 8: 角色与权限矩阵 (SysRole & Permissions) -->
+                <!-- ========================================== -->
+                <Grid RowDefinitions="Auto,*,*" Margin="16">
+                    <!-- Header -->
+                    <Border Grid.Row="0" Margin="0,0,0,14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="职务角色与安全访问控制矩阵 (SysRole &amp; Permission Matrix)" FontSize="16" FontWeight="Bold"/>
+                                    <u:Badge Header="GATE-01 ~ GATE-08 门禁" Classes="Success"/>
+                                </StackPanel>
+                                <TextBlock Text="基于最小特权原则，定义全院七大职务角色、四维科室数据隔离范围 (院区/科室/病区/医疗组) 与细粒度安全规则" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="+ 新建业务角色" Classes="Primary" Height="34" Click="OpenCreateRoleModal_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Top: Roles Cards Summary -->
+                    <Border Grid.Row="1" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid RowDefinitions="Auto,*">
+                            <TextBlock Grid.Row="0" Text="在册业务角色及数据隔离范围 (SysRole Registry)" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <ScrollViewer Grid.Row="1">
+                                <ItemsControl ItemsSource="{Binding RolesList}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:RoleAdminItemModel">
+                                            <Border Width="380" Margin="0,0,12,12" Padding="14" Background="{DynamicResource SemiColorBackground0}" CornerRadius="8" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <StackPanel Spacing="6">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                                            <TextBlock Text="{Binding RoleName}" FontWeight="Bold" FontSize="14"/>
+                                                            <TextBlock Text="{Binding RoleCode}" FontFamily="Consolas,Menlo" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <u:Badge Grid.Column="1" Header="{Binding StatusText}" Classes="Success"/>
+                                                    </Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="数据范围:" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <u:Badge Header="{Binding ScopeDescription}" Classes="Warning"/>
+                                                        <TextBlock Text="{Binding UserCount, StringFormat='{}在册人员: {0} 人'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <!-- Bottom: Fine-Grained Permission Matrix -->
+                    <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <Grid RowDefinitions="Auto,*">
+                            <TextBlock Grid.Row="0" Text="细粒度资源访问控制矩阵 (Resource-Action Matrix)" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <Grid Grid.Row="0" ColumnDefinitions="260,200,100,110,110,110,110,*" Margin="10,28,10,10">
+                                <TextBlock Grid.Column="0" Text="权限资源标识 (ResourceKey)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="1" Text="资源动作名称" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="2" Text="资源类型" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="3" Text="超级管理员" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="4" Text="临床医生" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="5" Text="病区护士" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="6" Text="审方药师" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="7" Text="快捷动态调权" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </Grid>
+                            <ScrollViewer Grid.Row="1">
+                                <ItemsControl ItemsSource="{Binding PermissionMatrixList}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PermissionMatrixItemModel">
+                                            <Border Margin="0,3" Padding="10,10" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="260,200,100,110,110,110,110,*">
+                                                    <TextBlock Grid.Column="0" Text="{Binding ResourceKey}" FontFamily="Consolas,Menlo" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding ResourceName}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                                                    <u:Badge Grid.Column="2" Header="{Binding ResourceType}" Classes="Secondary" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                    <u:Badge Grid.Column="3" Header="{Binding PolicyAdmin}" Classes="Success" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                    <u:Badge Grid.Column="4" Header="{Binding PolicyDoc}" Classes="Primary" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                    <u:Badge Grid.Column="5" Header="{Binding PolicyNurse}" Classes="Warning" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                    <u:Badge Grid.Column="6" Header="{Binding PolicyPharm}" Classes="Secondary" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                    <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                        <Button Content="调医生策略" Height="26" Padding="6,0" Tag="{Binding}" Click="ToggleDocPolicy_Click"/>
+                                                        <Button Content="调护士策略" Height="26" Padding="6,0" Tag="{Binding}" Click="ToggleNursePolicy_Click"/>
+                                                        <Button Content="调药师策略" Height="26" Padding="6,0" Tag="{Binding}" Click="TogglePharmPolicy_Click"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Carousel>
         </Grid>
@@ -1570,6 +1743,191 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+            </Border>
+
+            <!-- ======================================================== -->
+            <!-- OVERLAY 8: 新增系统用户对话框 (Create User Modal)         -->
+            <!-- ======================================================== -->
+            <Border Background="#88000000" IsVisible="{Binding IsCreateUserModalOpen}">
+                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="12" Width="640" HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 8 32 #40000000">
+                    <StackPanel>
+                        <!-- Modal Title Bar -->
+                        <Border Background="{DynamicResource SemiColorPrimary}" CornerRadius="12,12,0,0" Padding="20,16">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="👤" FontSize="20" VerticalAlignment="Center"/>
+                                    <TextBlock Text="新增全院医护/管理系统用户 (RBAC 注册)" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="✕" Classes="Tertiary" Foreground="White" Height="28" Width="28" Padding="0" Click="CloseCreateUserModal_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Padding="24">
+                            <StackPanel Spacing="14">
+                                <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,*">
+                                    <!-- User Name -->
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,12" Spacing="4">
+                                        <TextBlock Text="登录账号 (必填):" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding NewUserForm.UserName}" Height="34" PlaceholderText="例如: doc_cardio02"/>
+                                    </StackPanel>
+
+                                    <!-- Display Name -->
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,12" Spacing="4">
+                                        <TextBlock Text="真实姓名 (必填):" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding NewUserForm.DisplayName}" Height="34" PlaceholderText="例如: 王晓华"/>
+                                    </StackPanel>
+
+                                    <!-- Employee No -->
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,12" Spacing="4">
+                                        <TextBlock Text="员工工号:" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding NewUserForm.EmployeeNo}" Height="34" PlaceholderText="例如: EMP010"/>
+                                    </StackPanel>
+
+                                    <!-- Password -->
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="10,0,0,12" Spacing="4">
+                                        <TextBlock Text="初始登录口令:" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding NewUserForm.Password}" Height="34" PasswordChar="●"/>
+                                    </StackPanel>
+
+                                    <!-- Role -->
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,10,12" Spacing="4">
+                                        <TextBlock Text="所属职务角色:" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding NewUserForm.SelectedRole}" Height="34" PlaceholderText="ROLE-OPD-DOC / ROLE-WARD-NURSE"/>
+                                    </StackPanel>
+
+                                    <!-- Department -->
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="10,0,0,12" Spacing="4">
+                                        <TextBlock Text="执业科室上下文:" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding NewUserForm.SelectedDept}" Height="34" PlaceholderText="心血管内科门诊 / 内科一病区"/>
+                                    </StackPanel>
+
+                                    <!-- Prescribe Level -->
+                                    <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,10,0" Spacing="4">
+                                        <TextBlock Text="处方权资质级别 (0-3):" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding NewUserForm.PrescribeLevel}" Height="34"/>
+                                    </StackPanel>
+
+                                    <!-- Emr Sign Level -->
+                                    <StackPanel Grid.Row="3" Grid.Column="1" Margin="10,0,0,0" Spacing="4">
+                                        <TextBlock Text="电子审签资质级别 (0-3):" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding NewUserForm.EmrSignLevel}" Height="34"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="6" Padding="12,8">
+                                    <TextBlock Text="💡 提示: 用户创建后将根据职务角色自动授予四维科室上下文权限与处方/审签安全阈值。" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
+                                </Border>
+
+                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+                                    <Button Grid.Column="1" Content="取消" Height="32" Margin="0,0,10,0" Click="CloseCreateUserModal_Click"/>
+                                    <Button Grid.Column="2" Content="✓ 保存并分配权限" Classes="Primary" Height="32" Click="SaveNewUser_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Border>
+
+            <!-- ======================================================== -->
+            <!-- OVERLAY 9: 新建业务角色对话框 (Create Role Modal)         -->
+            <!-- ======================================================== -->
+            <Border Background="#88000000" IsVisible="{Binding IsCreateRoleModalOpen}">
+                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="12" Width="540" HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 8 32 #40000000">
+                    <StackPanel>
+                        <!-- Modal Title Bar -->
+                        <Border Background="{DynamicResource SemiColorPrimary}" CornerRadius="12,12,0,0" Padding="20,16">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="🛡️" FontSize="20" VerticalAlignment="Center"/>
+                                    <TextBlock Text="新建业务角色 (Role Definition)" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="✕" Classes="Tertiary" Foreground="White" Height="28" Width="28" Padding="0" Click="CloseCreateRoleModal_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Padding="24">
+                            <StackPanel Spacing="14">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="角色唯一代码 (RoleCode):" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBox Text="{Binding NewRoleForm.RoleCode}" Height="34" PlaceholderText="例如: ROLE-ANESTHESIA"/>
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="角色中文名称:" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBox Text="{Binding NewRoleForm.RoleName}" Height="34" PlaceholderText="例如: 麻醉主刀医生"/>
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="数据范围隔离策略 (DataScope):" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBox Text="{Binding NewRoleForm.DataScope}" Height="34" PlaceholderText="DEPT_ONLY / ALL_CAMPUS / WARD_ONLY"/>
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="业务职责说明:" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBox Text="{Binding NewRoleForm.Description}" Height="60" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="描述该角色的执业范围、核心操作与安全权限边界..."/>
+                                </StackPanel>
+
+                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+                                    <Button Grid.Column="1" Content="取消" Height="32" Margin="0,0,10,0" Click="CloseCreateRoleModal_Click"/>
+                                    <Button Grid.Column="2" Content="✓ 建立角色" Classes="Primary" Height="32" Click="SaveNewRole_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Border>
+
+            <!-- ======================================================== -->
+            <!-- OVERLAY 10: 快速切换执业身份 (Switch User Modal)          -->
+            <!-- ======================================================== -->
+            <Border Background="#88000000" IsVisible="{Binding IsSwitchUserModalOpen}">
+                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="12" Width="680" HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 8 32 #40000000">
+                    <StackPanel>
+                        <!-- Modal Title Bar -->
+                        <Border Background="{DynamicResource SemiColorPrimary}" CornerRadius="12,12,0,0" Padding="20,16">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="🔄" FontSize="20" VerticalAlignment="Center"/>
+                                    <TextBlock Text="快速切换执业身份 (Multi-Role User Switcher)" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="✕" Classes="Tertiary" Foreground="White" Height="28" Width="28" Padding="0" Click="CloseSwitchUserModal_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Padding="24">
+                            <StackPanel Spacing="16">
+                                <TextBlock Text="点击选择需要切换登录的医护或管理人员账号，系统将立即重新加载安全令牌、执业科室与功能权限：" FontSize="13" Foreground="{DynamicResource SemiColorText2}"/>
+
+                                <ItemsControl ItemsSource="{Binding SwitchableUsers}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:LoginUserOption">
+                                            <Button Width="190" Height="80" Margin="6" Padding="12" Click="SwitchUserTo_Click" Tag="{Binding UserName}" Classes="Outlined">
+                                                <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Avatar}" FontSize="28" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                        <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="13"/>
+                                                        <TextBlock Text="{Binding RoleName}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                        <TextBlock Text="{Binding UserName}" FontFamily="Consolas,Menlo" FontSize="10" Foreground="{DynamicResource SemiColorText3}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+                                    <TextBlock Grid.Column="0" Text="也可以直接在右上角点击注销返回初始登录页面" FontSize="11" Foreground="{DynamicResource SemiColorText3}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="关闭" Height="32" Click="CloseSwitchUserModal_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
             </Border>
         </Grid>
     </Grid>

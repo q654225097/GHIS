@@ -1,6 +1,10 @@
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media.Imaging;
 using HIS.Client.UrsaShell.ViewModels;
 using HIS.Client.UrsaShell.Views;
 
@@ -17,121 +21,124 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var window = new MainWindow();
-            desktop.MainWindow = window;
+            var loginWindow = new LoginWindow();
+            desktop.MainWindow = loginWindow;
+            loginWindow.Show();
 
-            window.Loaded += async (s, e) =>
+            loginWindow.Loaded += async (s, e) =>
             {
                 try
                 {
-                    await System.Threading.Tasks.Task.Delay(800);
-                    if (window.DataContext is WorkbenchModel vm)
+                    await Task.Delay(500);
+
+                    // 1. Capture Login Window
+                    var lSize = new PixelSize((int)loginWindow.Bounds.Width, (int)loginWindow.Bounds.Height);
+                    if (lSize.Width <= 0 || lSize.Height <= 0) lSize = new PixelSize(900, 600);
+                    loginWindow.Width = lSize.Width;
+                    loginWindow.Height = lSize.Height;
+                    loginWindow.Measure(new Size(lSize.Width, lSize.Height));
+                    loginWindow.Arrange(new Rect(0, 0, lSize.Width, lSize.Height));
+
+                    var loginRtb = new RenderTargetBitmap(lSize, new Vector(96, 96));
+                    loginRtb.Render(loginWindow);
+                    loginRtb.Save(@"d:\GHIS\login_window.png");
+
+                    // 2. Open MainWindow and capture View 7, 8 & Modals
+                    var mainWindow = new MainWindow();
+                    mainWindow.Show();
+
+                    mainWindow.Loaded += async (ms, me) =>
                     {
-                        var size = new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height);
-                        if (size.Width <= 0 || size.Height <= 0) size = new PixelSize(1440, 900);
-                        window.Width = size.Width;
-                        window.Height = size.Height;
-
-                        void Capture(string path)
+                        try
                         {
-                            window.Measure(new Size(size.Width, size.Height));
-                            window.Arrange(new Rect(0, 0, size.Width, size.Height));
-                            var rtb = new Avalonia.Media.Imaging.RenderTargetBitmap(size, new Vector(96, 96));
-                            rtb.Render(window);
-                            rtb.Save(path);
+                            await Task.Delay(500);
+
+                            var mSize = new PixelSize((int)mainWindow.Bounds.Width, (int)mainWindow.Bounds.Height);
+                            if (mSize.Width <= 0 || mSize.Height <= 0) mSize = new PixelSize(1440, 900);
+                            mainWindow.Width = mSize.Width;
+                            mainWindow.Height = mSize.Height;
+
+                            void CaptureMain(string path)
+                            {
+                                mainWindow.Measure(new Size(mSize.Width, mSize.Height));
+                                mainWindow.Arrange(new Rect(0, 0, mSize.Width, mSize.Height));
+                                var rtb = new RenderTargetBitmap(mSize, new Vector(96, 96));
+                                rtb.Render(mainWindow);
+                                rtb.Save(path);
+                            }
+
+                            if (mainWindow.DataContext is WorkbenchModel vm)
+                            {
+                                // View 7: User Administration
+                                vm.SelectedNavIndex = 7;
+                                await Task.Delay(300);
+                                CaptureMain(@"d:\GHIS\view_7_user_admin.png");
+
+                                // View 8: Role & Permission Matrix
+                                vm.SelectedNavIndex = 8;
+                                await Task.Delay(300);
+                                CaptureMain(@"d:\GHIS\view_8_role_matrix.png");
+
+                                // Overlay 8: Create User Modal
+                                vm.IsCreateUserModalOpen = true;
+                                await Task.Delay(250);
+                                CaptureMain(@"d:\GHIS\modal_create_user.png");
+                                vm.IsCreateUserModalOpen = false;
+                                await Task.Delay(100);
+
+                                // Overlay 9: Create Role Modal
+                                vm.IsCreateRoleModalOpen = true;
+                                await Task.Delay(250);
+                                CaptureMain(@"d:\GHIS\modal_create_role.png");
+                                vm.IsCreateRoleModalOpen = false;
+                                await Task.Delay(100);
+
+                                // Overlay 10: Switch User Modal
+                                vm.IsSwitchUserModalOpen = true;
+                                await Task.Delay(250);
+                                CaptureMain(@"d:\GHIS\modal_switch_user.png");
+                                vm.IsSwitchUserModalOpen = false;
+                                await Task.Delay(100);
+
+                                // Reset to View 7
+                                vm.SelectedNavIndex = 7;
+                                await Task.Delay(150);
+                                CaptureMain(@"d:\GHIS\current_window.png");
+                            }
+
+                            // Copy all to artifact directory
+                            var artifactDir = @"C:\Users\admin\.gemini\antigravity\brain\96198005-d71e-489b-8e84-fc6907f3e95c";
+                            if (Directory.Exists(artifactDir))
+                            {
+                                var files = new[]
+                                {
+                                    "login_window.png",
+                                    "view_7_user_admin.png",
+                                    "view_8_role_matrix.png",
+                                    "modal_create_user.png",
+                                    "modal_create_role.png",
+                                    "modal_switch_user.png",
+                                    "current_window.png"
+                                };
+                                foreach (var f in files)
+                                {
+                                    var src = Path.Combine(@"d:\GHIS", f);
+                                    if (File.Exists(src))
+                                    {
+                                        File.Copy(src, Path.Combine(artifactDir, f), true);
+                                    }
+                                }
+                            }
                         }
-
-                        // Capture Default (View 0: OPD)
-                        Capture(@"d:\GHIS\current_window.png");
-                        Capture(@"d:\GHIS\view_0_opd.png");
-
-                        // Capture View 1: Inpatient
-                        vm.SelectedNavIndex = 1;
-                        await System.Threading.Tasks.Task.Delay(250);
-                        Capture(@"d:\GHIS\view_1_ipd.png");
-
-                        // Capture View 2: Ward Bed Matrix
-                        vm.SelectedNavIndex = 2;
-                        await System.Threading.Tasks.Task.Delay(250);
-                        Capture(@"d:\GHIS\view_2_ward.png");
-
-                        // Capture View 3: MedTech
-                        vm.SelectedNavIndex = 3;
-                        await System.Threading.Tasks.Task.Delay(250);
-                        Capture(@"d:\GHIS\view_3_medtech.png");
-
-                        // Capture View 4: Pharmacy
-                        vm.SelectedNavIndex = 4;
-                        await System.Threading.Tasks.Task.Delay(250);
-                        Capture(@"d:\GHIS\view_4_pharmacy.png");
-
-                        // Capture View 5: EMR & OFD
-                        vm.SelectedNavIndex = 5;
-                        await System.Threading.Tasks.Task.Delay(250);
-                        Capture(@"d:\GHIS\view_5_ofd.png");
-
-                        // Capture View 6: Dynamic Form Config
-                        vm.SelectedNavIndex = 6;
-                        await System.Threading.Tasks.Task.Delay(250);
-                        Capture(@"d:\GHIS\view_6_config.png");
-
-                        // Reset back to View 0
-                        vm.SelectedNavIndex = 0;
-                        await System.Threading.Tasks.Task.Delay(150);
-
-                        // Capture Overlay 1: Patient 360 Timeline Drawer
-                        vm.IsTimelineDrawerOpen = true;
-                        await System.Threading.Tasks.Task.Delay(200);
-                        Capture(@"d:\GHIS\drawer_timeline.png");
-                        vm.IsTimelineDrawerOpen = false;
-                        await System.Threading.Tasks.Task.Delay(100);
-
-                        // Capture Overlay 2: Critical Value Alert Modal
-                        vm.IsCriticalValueAlertOpen = true;
-                        await System.Threading.Tasks.Task.Delay(200);
-                        Capture(@"d:\GHIS\modal_critical_value.png");
-                        vm.IsCriticalValueAlertOpen = false;
-                        await System.Threading.Tasks.Task.Delay(100);
-
-                        // Capture Overlay 3: WHO Surgery Check Modal
-                        vm.IsWhoSurgeryCheckOpen = true;
-                        await System.Threading.Tasks.Task.Delay(200);
-                        Capture(@"d:\GHIS\modal_who_surgery.png");
-                        vm.IsWhoSurgeryCheckOpen = false;
-                        await System.Threading.Tasks.Task.Delay(100);
-
-                        // Capture Overlay 4: Add Prescription Dialog
-                        vm.IsAddPrescriptionDialogOpen = true;
-                        await System.Threading.Tasks.Task.Delay(200);
-                        Capture(@"d:\GHIS\modal_add_prescription.png");
-                        vm.IsAddPrescriptionDialogOpen = false;
-                        await System.Threading.Tasks.Task.Delay(100);
-
-                        // Capture Overlay 5: Discharge Six Gates Drawer
-                        vm.IsDischargeCheckDrawerOpen = true;
-                        await System.Threading.Tasks.Task.Delay(200);
-                        Capture(@"d:\GHIS\drawer_discharge_check.png");
-                        vm.IsDischargeCheckDrawerOpen = false;
-                        await System.Threading.Tasks.Task.Delay(100);
-
-                        // Capture Overlay 6: OFD High-Fidelity Viewer
-                        vm.IsOfdViewerDrawerOpen = true;
-                        await System.Threading.Tasks.Task.Delay(200);
-                        Capture(@"d:\GHIS\drawer_ofd_book.png");
-                        vm.IsOfdViewerDrawerOpen = false;
-                        await System.Threading.Tasks.Task.Delay(100);
-
-                        // Capture Overlay 7: Borrow Bed Dialog
-                        vm.IsBorrowBedDialogOpen = true;
-                        await System.Threading.Tasks.Task.Delay(200);
-                        Capture(@"d:\GHIS\modal_borrow_bed.png");
-                        vm.IsBorrowBedDialogOpen = false;
-                        await System.Threading.Tasks.Task.Delay(100);
-                    }
+                        catch (Exception mex)
+                        {
+                            File.WriteAllText(@"d:\GHIS\main_capture_err.log", mex.ToString());
+                        }
+                    };
                 }
                 catch (Exception ex)
                 {
-                    System.IO.File.WriteAllText(@"d:\GHIS\render_err.log", ex.ToString());
+                    File.WriteAllText(@"d:\GHIS\login_capture_err.log", ex.ToString());
                 }
             };
         }

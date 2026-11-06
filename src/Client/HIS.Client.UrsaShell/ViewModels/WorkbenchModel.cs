@@ -26,12 +26,23 @@ public class WorkbenchModel : ClientModelBase
     private bool _isDischargeCheckDrawerOpen;
     private bool _isOfdViewerDrawerOpen;
     private bool _isBorrowBedDialogOpen;
+    private bool _isCreateUserModalOpen;
+    private bool _isCreateRoleModalOpen;
+    private bool _isSwitchUserModalOpen;
 
     // Rich domain models
     private WhoSurgeryCheckModel _whoSurgeryCheck = new();
     private CriticalValueAlertModel _criticalValueAlert = new();
     private DischargeCheckDetailsModel _dischargeCheckDetails = new();
     private DynamicFormTemplateModel? _selectedFormTemplate;
+    private NewUserFormModel _newUserForm = new();
+    private NewRoleFormModel _newRoleForm = new();
+
+    // RBAC Administration Collections
+    public ObservableCollection<UserAdminItemModel> UsersList { get; } = new();
+    public ObservableCollection<RoleAdminItemModel> RolesList { get; } = new();
+    public ObservableCollection<PermissionMatrixItemModel> PermissionMatrixList { get; } = new();
+    public ObservableCollection<LoginUserOption> SwitchableUsers { get; } = new();
 
     public WorkbenchModel()
     {
@@ -133,6 +144,8 @@ public class WorkbenchModel : ClientModelBase
         InitDynamicFormTemplates();
         InitTimelineEvents();
         InitAvailableDrugsCatalog();
+        InitAdminData();
+        SyncWithSession();
 
         _selectedFormTemplate = DynamicFormTemplates.Count > 0 ? DynamicFormTemplates[0] : null;
 
@@ -599,6 +612,237 @@ public class WorkbenchModel : ClientModelBase
     public bool IsDischargeCheckDrawerOpen { get => _isDischargeCheckDrawerOpen; set => SetField(ref _isDischargeCheckDrawerOpen, value); }
     public bool IsOfdViewerDrawerOpen { get => _isOfdViewerDrawerOpen; set => SetField(ref _isOfdViewerDrawerOpen, value); }
     public bool IsBorrowBedDialogOpen { get => _isBorrowBedDialogOpen; set => SetField(ref _isBorrowBedDialogOpen, value); }
+    public bool IsCreateUserModalOpen { get => _isCreateUserModalOpen; set => SetField(ref _isCreateUserModalOpen, value); }
+    public bool IsCreateRoleModalOpen { get => _isCreateRoleModalOpen; set => SetField(ref _isCreateRoleModalOpen, value); }
+    public bool IsSwitchUserModalOpen { get => _isSwitchUserModalOpen; set => SetField(ref _isSwitchUserModalOpen, value); }
+
+    public NewUserFormModel NewUserForm { get => _newUserForm; set => SetField(ref _newUserForm, value); }
+    public NewRoleFormModel NewRoleForm { get => _newRoleForm; set => SetField(ref _newRoleForm, value); }
+
+    // RBAC Session Indicators
+    public string RoleBadgeText => !string.IsNullOrEmpty(SessionContext.Current.RoleName) ? SessionContext.Current.RoleName : "主治医师";
+    public string UserRoleSubtitle => !string.IsNullOrEmpty(SessionContext.Current.EmployeeNo)
+        ? $"工号: {SessionContext.Current.EmployeeNo} | 权限: {SessionContext.Current.RoleName} (处方权{SessionContext.Current.PrescribeLevel}级)"
+        : "工号: EMP001 | 权限: 门诊主治医师/处方权II级";
+    public string CurrentRoleCode => SessionContext.Current.RoleCode;
+    public bool CanPrescribe => SessionContext.Current.CanPrescribe || string.IsNullOrEmpty(SessionContext.Current.RoleCode);
+    public bool CanSignEmr => SessionContext.Current.CanSignEmr || string.IsNullOrEmpty(SessionContext.Current.RoleCode);
+    public bool CanSurgery => SessionContext.Current.CanSurgery || string.IsNullOrEmpty(SessionContext.Current.RoleCode);
+    public bool IsAdmin => SessionContext.Current.IsAdmin || string.IsNullOrEmpty(SessionContext.Current.RoleCode);
+    public bool IsNurse => SessionContext.Current.IsWardNurse;
+
+    public void SyncWithSession()
+    {
+        if (SessionContext.Current.IsLoggedIn)
+        {
+            UserName = $"{SessionContext.Current.DisplayName} ({SessionContext.Current.RoleName})";
+            if (!string.IsNullOrEmpty(SessionContext.Current.ActiveDeptName))
+            {
+                ActiveDeptName = SessionContext.Current.ActiveDeptName;
+            }
+        }
+        OnPropertyChanged(nameof(RoleBadgeText));
+        OnPropertyChanged(nameof(UserRoleSubtitle));
+        OnPropertyChanged(nameof(CurrentRoleCode));
+        OnPropertyChanged(nameof(CanPrescribe));
+        OnPropertyChanged(nameof(CanSignEmr));
+        OnPropertyChanged(nameof(CanSurgery));
+        OnPropertyChanged(nameof(IsAdmin));
+        OnPropertyChanged(nameof(IsNurse));
+    }
+
+    public void SaveNewUser()
+    {
+        if (string.IsNullOrWhiteSpace(NewUserForm.UserName) || string.IsNullOrWhiteSpace(NewUserForm.DisplayName))
+            return;
+
+        var roleMap = new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["ROLE-ADMIN"] = "超级管理员",
+            ["ROLE-OPD-DOC"] = "门诊医生",
+            ["ROLE-IPD-RESIDENT"] = "住院医师",
+            ["ROLE-IPD-ATTENDING"] = "主治医师",
+            ["ROLE-WARD-NURSE"] = "病区护士",
+            ["ROLE-PHARMACIST"] = "药剂师",
+            ["ROLE-CASHIER"] = "收费员"
+        };
+
+        var roleName = roleMap.TryGetValue(NewUserForm.SelectedRole, out var rn) ? rn : "临床医护";
+
+        UsersList.Add(new UserAdminItemModel
+        {
+            UserId = "USR-" + Guid.NewGuid().ToString("N").ToUpper()[..8],
+            UserName = NewUserForm.UserName.Trim(),
+            DisplayName = NewUserForm.DisplayName.Trim(),
+            EmployeeNo = string.IsNullOrWhiteSpace(NewUserForm.EmployeeNo) ? "EMP" + (UsersList.Count + 1).ToString("D3") : NewUserForm.EmployeeNo.Trim(),
+            RoleCode = NewUserForm.SelectedRole,
+            RoleName = roleName,
+            DeptName = NewUserForm.SelectedDept,
+            PrescribeLevel = NewUserForm.PrescribeLevel,
+            SurgeryLevel = NewUserForm.SurgeryLevel,
+            EmrSignLevel = NewUserForm.EmrSignLevel,
+            IsActive = true
+        });
+
+        SwitchableUsers.Add(new LoginUserOption
+        {
+            UserName = NewUserForm.UserName.Trim(),
+            DisplayName = NewUserForm.DisplayName.Trim(),
+            RoleName = roleName,
+            RoleCode = NewUserForm.SelectedRole,
+            Avatar = NewUserForm.SelectedRole.Contains("DOC") ? "👨‍⚕️" : NewUserForm.SelectedRole.Contains("NURSE") ? "👩‍⚕️" : "👤"
+        });
+
+        SystemNotice = $"[RBAC] 成功创建用户 '{NewUserForm.DisplayName}' 并分配角色 [{roleName}] 与上下文权限！";
+        NewUserForm.Reset();
+        IsCreateUserModalOpen = false;
+    }
+
+    public void ToggleUserStatus(UserAdminItemModel user)
+    {
+        user.IsActive = !user.IsActive;
+        SystemNotice = $"[RBAC] 已更新用户 '{user.DisplayName}' 账号状态为: {user.StatusText}";
+    }
+
+    public void SaveNewRole()
+    {
+        if (string.IsNullOrWhiteSpace(NewRoleForm.RoleCode) || string.IsNullOrWhiteSpace(NewRoleForm.RoleName))
+            return;
+
+        var code = NewRoleForm.RoleCode.Trim().ToUpper();
+        if (!code.StartsWith("ROLE-")) code = "ROLE-" + code;
+
+        RolesList.Add(new RoleAdminItemModel
+        {
+            RoleId = code,
+            RoleCode = code,
+            RoleName = NewRoleForm.RoleName.Trim(),
+            DataScope = NewRoleForm.DataScope,
+            Description = string.IsNullOrWhiteSpace(NewRoleForm.Description) ? "全院定制业务角色" : NewRoleForm.Description.Trim(),
+            UserCount = 0,
+            IsActive = true
+        });
+
+        SystemNotice = $"[RBAC] 成功创建新业务角色 [{code}] 并注入系统安全访问控制树！";
+        NewRoleForm.Reset();
+        IsCreateRoleModalOpen = false;
+    }
+
+    public void TogglePermissionPolicy(PermissionMatrixItemModel item, string roleTarget)
+    {
+        string NextPolicy(string curr) => curr switch
+        {
+            "FullAccess" => "ReadOnly",
+            "ReadOnly" => "None",
+            _ => "FullAccess"
+        };
+
+        if (roleTarget == "DOC") item.PolicyDoc = NextPolicy(item.PolicyDoc);
+        else if (roleTarget == "NURSE") item.PolicyNurse = NextPolicy(item.PolicyNurse);
+        else if (roleTarget == "PHARM") item.PolicyPharm = NextPolicy(item.PolicyPharm);
+
+        SystemNotice = $"[RBAC] 动态权限策略已更新: {item.ResourceName} -> {roleTarget} 权限 = { (roleTarget == "DOC" ? item.PolicyDoc : roleTarget == "NURSE" ? item.PolicyNurse : item.PolicyPharm) }";
+    }
+
+    public void SwitchToUser(string userName)
+    {
+        var target = SwitchableUsers.FirstOrDefault(u => u.UserName == userName);
+        if (target == null) return;
+
+        var deptMap = new System.Collections.Generic.Dictionary<string, (string name, string cat)>
+        {
+            ["ROLE-ADMIN"] = ("全院管理部", "ADMIN"),
+            ["ROLE-OPD-DOC"] = ("心血管内科门诊", "OPD"),
+            ["ROLE-IPD-RESIDENT"] = ("心血管内科住院一科", "IPD"),
+            ["ROLE-IPD-ATTENDING"] = ("心血管内科住院一科", "IPD"),
+            ["ROLE-WARD-NURSE"] = ("内科一病区", "WARD"),
+            ["ROLE-PHARMACIST"] = ("药剂科发药室", "PHARMACY"),
+            ["ROLE-CASHIER"] = ("门诊收费处", "FINANCE")
+        };
+
+        var (deptName, deptCat) = deptMap.TryGetValue(target.RoleCode, out var d) ? d : ("心血管内科门诊", "OPD");
+        var (pl, sl, el) = target.RoleCode switch
+        {
+            "ROLE-ADMIN" => (3, 4, 3),
+            "ROLE-IPD-ATTENDING" => (2, 2, 2),
+            "ROLE-OPD-DOC" => (2, 1, 2),
+            "ROLE-IPD-RESIDENT" => (1, 1, 1),
+            _ => (0, 0, 0)
+        };
+
+        SessionContext.Current.SetFromLogin(
+            userId: "USR-" + target.UserName.ToUpper(),
+            userName: target.UserName,
+            displayName: target.DisplayName,
+            roleCode: target.RoleCode,
+            roleName: target.RoleName,
+            accessToken: "session-switch-token",
+            activeDeptId: "DEPT-" + target.RoleCode,
+            activeDeptName: deptName,
+            activeDeptCategory: deptCat,
+            activeWardId: null,
+            prescribeLevel: pl,
+            surgeryLevel: sl,
+            emrSignLevel: el
+        );
+
+        SyncWithSession();
+
+        // Switch to the most relevant view for this role
+        SelectedNavIndex = target.RoleCode switch
+        {
+            "ROLE-OPD-DOC" => 0,
+            "ROLE-IPD-RESIDENT" or "ROLE-IPD-ATTENDING" => 1,
+            "ROLE-WARD-NURSE" => 2,
+            "ROLE-PHARMACIST" => 4,
+            "ROLE-ADMIN" => 7,
+            _ => 0
+        };
+
+        IsSwitchUserModalOpen = false;
+        SystemNotice = $"[RBAC] 已安全切换至用户: {target.DisplayName} [{target.RoleName}]，岗位执业上下文已自动切换为: {deptName}！";
+    }
+
+    private void InitAdminData()
+    {
+        SwitchableUsers.Clear();
+        SwitchableUsers.Add(new LoginUserOption { UserName = "admin", DisplayName = "系统管理员", RoleName = "超级管理员", RoleCode = "ROLE-ADMIN", Avatar = "🛡️" });
+        SwitchableUsers.Add(new LoginUserOption { UserName = "doc_opd", DisplayName = "张建国", RoleName = "门诊医生", RoleCode = "ROLE-OPD-DOC", Avatar = "🩺" });
+        SwitchableUsers.Add(new LoginUserOption { UserName = "doc_res", DisplayName = "李华", RoleName = "住院医师", RoleCode = "ROLE-IPD-RESIDENT", Avatar = "🏥" });
+        SwitchableUsers.Add(new LoginUserOption { UserName = "doc_att", DisplayName = "王磊", RoleName = "主治医师", RoleCode = "ROLE-IPD-ATTENDING", Avatar = "👨‍⚕️" });
+        SwitchableUsers.Add(new LoginUserOption { UserName = "nurse_w1", DisplayName = "陈劳", RoleName = "病区护士", RoleCode = "ROLE-WARD-NURSE", Avatar = "👩‍⚕️" });
+        SwitchableUsers.Add(new LoginUserOption { UserName = "nurse_w2", DisplayName = "赵敏", RoleName = "病区护士", RoleCode = "ROLE-WARD-NURSE", Avatar = "👩‍⚕️" });
+        SwitchableUsers.Add(new LoginUserOption { UserName = "phm_user", DisplayName = "孙杰", RoleName = "药剂师", RoleCode = "ROLE-PHARMACIST", Avatar = "💊" });
+        SwitchableUsers.Add(new LoginUserOption { UserName = "cashier_01", DisplayName = "刘洋", RoleName = "收费员", RoleCode = "ROLE-CASHIER", Avatar = "💰" });
+
+        UsersList.Clear();
+        UsersList.Add(new UserAdminItemModel { UserId = "USR-000", UserName = "admin", DisplayName = "系统管理员", EmployeeNo = "EMP000", RoleCode = "ROLE-ADMIN", RoleName = "超级管理员", DeptName = "全院管理部", PrescribeLevel = 3, SurgeryLevel = 4, EmrSignLevel = 3, IsActive = true });
+        UsersList.Add(new UserAdminItemModel { UserId = "USR-001", UserName = "doc_opd", DisplayName = "张建国", EmployeeNo = "EMP001", RoleCode = "ROLE-OPD-DOC", RoleName = "门诊医生", DeptName = "心血管内科门诊", PrescribeLevel = 2, SurgeryLevel = 1, EmrSignLevel = 2, IsActive = true });
+        UsersList.Add(new UserAdminItemModel { UserId = "USR-002", UserName = "doc_res", DisplayName = "李华", EmployeeNo = "EMP002", RoleCode = "ROLE-IPD-RESIDENT", RoleName = "住院医师", DeptName = "心血管内科住院一科", PrescribeLevel = 1, SurgeryLevel = 1, EmrSignLevel = 1, IsActive = true });
+        UsersList.Add(new UserAdminItemModel { UserId = "USR-003", UserName = "doc_att", DisplayName = "王磊", EmployeeNo = "EMP003", RoleCode = "ROLE-IPD-ATTENDING", RoleName = "主治医师", DeptName = "心血管内科住院一科", PrescribeLevel = 2, SurgeryLevel = 2, EmrSignLevel = 2, IsActive = true });
+        UsersList.Add(new UserAdminItemModel { UserId = "USR-004", UserName = "nurse_w1", DisplayName = "陈劳", EmployeeNo = "EMP004", RoleCode = "ROLE-WARD-NURSE", RoleName = "病区护士", DeptName = "内科一病区", PrescribeLevel = 0, SurgeryLevel = 0, EmrSignLevel = 0, IsActive = true });
+        UsersList.Add(new UserAdminItemModel { UserId = "USR-005", UserName = "nurse_w2", DisplayName = "赵敏", EmployeeNo = "EMP005", RoleCode = "ROLE-WARD-NURSE", RoleName = "病区护士", DeptName = "内科二病区", PrescribeLevel = 0, SurgeryLevel = 0, EmrSignLevel = 0, IsActive = true });
+        UsersList.Add(new UserAdminItemModel { UserId = "USR-006", UserName = "phm_user", DisplayName = "孙杰", EmployeeNo = "EMP006", RoleCode = "ROLE-PHARMACIST", RoleName = "药剂师", DeptName = "药剂科中心药房", PrescribeLevel = 0, SurgeryLevel = 0, EmrSignLevel = 0, IsActive = true });
+        UsersList.Add(new UserAdminItemModel { UserId = "USR-007", UserName = "cashier_01", DisplayName = "刘洋", EmployeeNo = "EMP007", RoleCode = "ROLE-CASHIER", RoleName = "收费员", DeptName = "门急诊财务处", PrescribeLevel = 0, SurgeryLevel = 0, EmrSignLevel = 0, IsActive = true });
+
+        RolesList.Clear();
+        RolesList.Add(new RoleAdminItemModel { RoleId = "ROLE-ADMIN", RoleCode = "ROLE-ADMIN", RoleName = "超级管理员", DataScope = "ALL_CAMPUS", UserCount = 1, IsActive = true, Description = "全院最高管理角色，拥有系统配置、用户角色分配、安全审计及全模块穿透访问权限。" });
+        RolesList.Add(new RoleAdminItemModel { RoleId = "ROLE-OPD-DOC", RoleCode = "ROLE-OPD-DOC", RoleName = "门诊医生", DataScope = "DEPT_ONLY", UserCount = 1, IsActive = true, Description = "门诊专科接诊、处方及检查开立、门诊病历书写及电子签名、危急值核收响应。" });
+        RolesList.Add(new RoleAdminItemModel { RoleId = "ROLE-IPD-RESIDENT", RoleCode = "ROLE-IPD-RESIDENT", RoleName = "住院医师", DataScope = "MED_GROUP", UserCount = 1, IsActive = true, Description = "住院管床日常查房、住院病程录入、下达常规临时医嘱并交主治医师复核审签。" });
+        RolesList.Add(new RoleAdminItemModel { RoleId = "ROLE-IPD-ATTENDING", RoleCode = "ROLE-IPD-ATTENDING", RoleName = "主治医师", DataScope = "DEPT_ONLY", UserCount = 1, IsActive = true, Description = "三级查房终审、高风险药物/限制级抗生素授权、手术双签审批、出院六严关终审放行。" });
+        RolesList.Add(new RoleAdminItemModel { RoleId = "ROLE-WARD-NURSE", RoleCode = "ROLE-WARD-NURSE", RoleName = "病区护士", DataScope = "WARD_ONLY", UserCount = 2, IsActive = true, Description = "病区床位维护、跨病区借床扫码执行、危急值护士端签收、医嘱扫码执行与核销。" });
+        RolesList.Add(new RoleAdminItemModel { RoleId = "ROLE-PHARMACIST", RoleCode = "ROLE-PHARMACIST", RoleName = "药剂师", DataScope = "PHARMACY_ONLY", UserCount = 1, IsActive = true, Description = "处方前置合理用药审查、过敏史/皮试强阻断拦截核验、摆药复核扫码出库。" });
+        RolesList.Add(new RoleAdminItemModel { RoleId = "ROLE-CASHIER", RoleCode = "ROLE-CASHIER", RoleName = "收费员", DataScope = "FINANCE_ONLY", UserCount = 1, IsActive = true, Description = "门急诊收挂号费、住院预交金交退、出院医保结算与财务核算。" });
+
+        PermissionMatrixList.Clear();
+        PermissionMatrixList.Add(new PermissionMatrixItemModel { ResourceKey = "OPD.Prescription.Sign", ResourceName = "处方签名与下达 (GATE-05)", ResourceType = "按钮控件", Category = "门诊临床", PolicyAdmin = "FullAccess", PolicyDoc = "FullAccess", PolicyNurse = "None", PolicyPharm = "ReadOnly" });
+        PermissionMatrixList.Add(new PermissionMatrixItemModel { ResourceKey = "EMR.Export.OfdArchive", ResourceName = "病历GB/T 33190归档导出 (GATE-04)", ResourceType = "功能动作", Category = "电子病历", PolicyAdmin = "FullAccess", PolicyDoc = "FullAccess", PolicyNurse = "None", PolicyPharm = "None" });
+        PermissionMatrixList.Add(new PermissionMatrixItemModel { ResourceKey = "WARD.Bed.BorrowManage", ResourceName = "跨病区借床入科办理 (GATE-02)", ResourceType = "工作流程", Category = "病区护理", PolicyAdmin = "FullAccess", PolicyDoc = "ReadOnly", PolicyNurse = "FullAccess", PolicyPharm = "None" });
+        PermissionMatrixList.Add(new PermissionMatrixItemModel { ResourceKey = "CRITICAL.DualSign.Acknowledge", ResourceName = "危急值医生护士双签收", ResourceType = "安全红线", Category = "医疗质控", PolicyAdmin = "FullAccess", PolicyDoc = "FullAccess", PolicyNurse = "FullAccess", PolicyPharm = "ReadOnly" });
+        PermissionMatrixList.Add(new PermissionMatrixItemModel { ResourceKey = "DISCHARGE.SixGates.Audit", ResourceName = "出院六严关终审放行 (GATE-07)", ResourceType = "终审关卡", Category = "住院结算", PolicyAdmin = "FullAccess", PolicyDoc = "FullAccess", PolicyNurse = "None", PolicyPharm = "None" });
+        PermissionMatrixList.Add(new PermissionMatrixItemModel { ResourceKey = "PHARMACY.Dispense.Confirm", ResourceName = "药房配发扫码核销", ResourceType = "业务执行", Category = "药剂物流", PolicyAdmin = "FullAccess", PolicyDoc = "ReadOnly", PolicyNurse = "ReadOnly", PolicyPharm = "FullAccess" });
+        PermissionMatrixList.Add(new PermissionMatrixItemModel { ResourceKey = "SYS.Security.RbacMaintain", ResourceName = "系统用户与角色权限维护", ResourceType = "管理后台", Category = "系统安全", PolicyAdmin = "FullAccess", PolicyDoc = "None", PolicyNurse = "None", PolicyPharm = "None" });
+    }
 
     public WhoSurgeryCheckModel WhoSurgeryCheck { get => _whoSurgeryCheck; set => SetField(ref _whoSurgeryCheck, value); }
     public CriticalValueAlertModel CriticalValueAlert { get => _criticalValueAlert; set => SetField(ref _criticalValueAlert, value); }
@@ -1118,4 +1362,162 @@ public class DrugCatalogItemModel : ClientModelBase
     public string StockQuantity { get; set; } = string.Empty;
     public bool IsSkinTestRequired { get; set; }
     public bool IsHighRisk { get; set; }
+}
+
+public class UserAdminItemModel : ClientModelBase
+{
+    private bool _isActive = true;
+    private string _displayName = string.Empty;
+    private string _roleName = string.Empty;
+    private string _deptName = string.Empty;
+    private int _prescribeLevel = 1;
+    private int _surgeryLevel = 1;
+    private int _emrSignLevel = 1;
+
+    public string UserId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string DisplayName { get => _displayName; set => SetField(ref _displayName, value); }
+    public string EmployeeNo { get; set; } = string.Empty;
+    public string RoleCode { get; set; } = string.Empty;
+    public string RoleName { get => _roleName; set => SetField(ref _roleName, value); }
+    public string DeptName { get => _deptName; set => SetField(ref _deptName, value); }
+    public int PrescribeLevel { get => _prescribeLevel; set => SetField(ref _prescribeLevel, value); }
+    public int SurgeryLevel { get => _surgeryLevel; set => SetField(ref _surgeryLevel, value); }
+    public int EmrSignLevel { get => _emrSignLevel; set => SetField(ref _emrSignLevel, value); }
+
+    public string PrescribeLevelText => PrescribeLevel switch { 3 => "III级 (特殊抗生素)", 2 => "II级 (限制级)", 1 => "I级 (普通)", _ => "无处方权" };
+    public string SurgeryLevelText => SurgeryLevel switch { 4 => "IV级 (重大手术)", 3 => "III级 (大型手术)", 2 => "II级 (中型手术)", 1 => "I级 (微创/门诊)", _ => "无手术权" };
+    public string EmrSignLevelText => EmrSignLevel switch { 3 => "III级 (终审归档)", 2 => "II级 (主治审签)", 1 => "I级 (住院书写)", _ => "无审签权" };
+
+    public bool IsActive
+    {
+        get => _isActive;
+        set
+        {
+            if (SetField(ref _isActive, value))
+            {
+                OnPropertyChanged(nameof(StatusText));
+                OnPropertyChanged(nameof(StatusClass));
+            }
+        }
+    }
+
+    public string StatusText => IsActive ? "正常" : "已停用";
+    public string StatusClass => IsActive ? "Success" : "Danger";
+}
+
+public class RoleAdminItemModel : ClientModelBase
+{
+    private string _roleName = string.Empty;
+    private string _dataScope = string.Empty;
+    private bool _isActive = true;
+    private int _userCount;
+
+    public string RoleId { get; set; } = string.Empty;
+    public string RoleCode { get; set; } = string.Empty;
+    public string RoleName { get => _roleName; set => SetField(ref _roleName, value); }
+    public string DataScope { get => _dataScope; set => SetField(ref _dataScope, value); }
+    public string Description { get; set; } = string.Empty;
+    public int UserCount { get => _userCount; set => SetField(ref _userCount, value); }
+    public bool IsActive
+    {
+        get => _isActive;
+        set
+        {
+            if (SetField(ref _isActive, value))
+            {
+                OnPropertyChanged(nameof(StatusText));
+                OnPropertyChanged(nameof(StatusClass));
+            }
+        }
+    }
+
+    public string StatusText => IsActive ? "正常启用" : "已禁用";
+    public string StatusClass => IsActive ? "Success" : "Danger";
+    public string ScopeDescription => DataScope switch
+    {
+        "ALL_CAMPUS" => "全院区级 (跨院区穿透)",
+        "CAMPUS_ONLY" => "所属院区级",
+        "DEPT_ONLY" => "所属科室级",
+        "WARD_ONLY" => "所属护理病区",
+        "MED_GROUP" => "所属医疗组",
+        "PHARMACY_ONLY" => "药房库区",
+        "FINANCE_ONLY" => "财务结算中心",
+        _ => DataScope
+    };
+}
+
+public class PermissionMatrixItemModel : ClientModelBase
+{
+    private string _policyAdmin = "FullAccess";
+    private string _policyDoc = "FullAccess";
+    private string _policyNurse = "None";
+    private string _policyPharm = "None";
+
+    public string ResourceKey { get; set; } = string.Empty;
+    public string ResourceName { get; set; } = string.Empty;
+    public string ResourceType { get; set; } = "UI组件";
+    public string Category { get; set; } = "核心门禁";
+
+    public string PolicyAdmin { get => _policyAdmin; set => SetField(ref _policyAdmin, value); }
+    public string PolicyDoc { get => _policyDoc; set => SetField(ref _policyDoc, value); }
+    public string PolicyNurse { get => _policyNurse; set => SetField(ref _policyNurse, value); }
+    public string PolicyPharm { get => _policyPharm; set => SetField(ref _policyPharm, value); }
+}
+
+public class NewUserFormModel : ClientModelBase
+{
+    private string _userName = "";
+    private string _displayName = "";
+    private string _employeeNo = "";
+    private string _password = "123456";
+    private string _selectedRole = "ROLE-OPD-DOC";
+    private string _selectedDept = "心血管内科门诊";
+    private int _prescribeLevel = 2;
+    private int _surgeryLevel = 1;
+    private int _emrSignLevel = 2;
+
+    public string UserName { get => _userName; set => SetField(ref _userName, value); }
+    public string DisplayName { get => _displayName; set => SetField(ref _displayName, value); }
+    public string EmployeeNo { get => _employeeNo; set => SetField(ref _employeeNo, value); }
+    public string Password { get => _password; set => SetField(ref _password, value); }
+    public string SelectedRole { get => _selectedRole; set => SetField(ref _selectedRole, value); }
+    public string SelectedDept { get => _selectedDept; set => SetField(ref _selectedDept, value); }
+    public int PrescribeLevel { get => _prescribeLevel; set => SetField(ref _prescribeLevel, value); }
+    public int SurgeryLevel { get => _surgeryLevel; set => SetField(ref _surgeryLevel, value); }
+    public int EmrSignLevel { get => _emrSignLevel; set => SetField(ref _emrSignLevel, value); }
+
+    public void Reset()
+    {
+        UserName = "";
+        DisplayName = "";
+        EmployeeNo = "";
+        Password = "123456";
+        SelectedRole = "ROLE-OPD-DOC";
+        SelectedDept = "心血管内科门诊";
+        PrescribeLevel = 2;
+        SurgeryLevel = 1;
+        EmrSignLevel = 2;
+    }
+}
+
+public class NewRoleFormModel : ClientModelBase
+{
+    private string _roleCode = "";
+    private string _roleName = "";
+    private string _dataScope = "DEPT_ONLY";
+    private string _description = "";
+
+    public string RoleCode { get => _roleCode; set => SetField(ref _roleCode, value); }
+    public string RoleName { get => _roleName; set => SetField(ref _roleName, value); }
+    public string DataScope { get => _dataScope; set => SetField(ref _dataScope, value); }
+    public string Description { get => _description; set => SetField(ref _description, value); }
+
+    public void Reset()
+    {
+        RoleCode = "";
+        RoleName = "";
+        DataScope = "DEPT_ONLY";
+        Description = "";
+    }
 }
