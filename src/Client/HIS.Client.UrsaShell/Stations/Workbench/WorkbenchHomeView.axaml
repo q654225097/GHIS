@@ -1,0 +1,209 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wb="using:HIS.Client.UrsaShell.Stations.Workbench"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Workbench.WorkbenchHomeView"
+             x:DataType="wb:WorkbenchHomeViewModel">
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Ctrl+Enter" Command="{Binding PrimaryActionCommand}"/>
+        <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}"/>
+    </UserControl.KeyBindings>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel MaxWidth="1200"
+                    Margin="22,18,22,28"
+                    Spacing="16"
+                    HorizontalAlignment="Stretch">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="{Binding GreetingTitle}"
+                               FontSize="20"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource SemiColorText0}"/>
+                    <TextBlock Text="{Binding ContextSubtitle}"
+                               FontSize="12"
+                               Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="刷新 (F5)"
+                        Height="32"
+                        Padding="12,0"
+                        VerticalAlignment="Center"
+                        Command="{Binding RefreshCommand}"/>
+            </Grid>
+
+            <Border IsVisible="{Binding Workbench.HasActiveCriticalValue}"
+                    Background="{DynamicResource SemiColorDangerLight}"
+                    BorderBrush="{DynamicResource SemiColorDanger}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="14,10">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock Text="危急值等待双人签收"
+                                   FontSize="13"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorDanger}"/>
+                        <TextBlock Text="{Binding Workbench.CriticalValueAlert.TestItem, StringFormat='{}检验项目：{0}'}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SemiColorDanger}"/>
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Content="查看并签收"
+                            Classes="Danger"
+                            Height="32"
+                            Padding="12,0"
+                            Command="{Binding OpenCriticalDrawerCommand}"/>
+                </Grid>
+            </Border>
+
+            <Border Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="18,16">
+                <Grid ColumnDefinitions="2*,Auto,Auto"
+                      RowDefinitions="Auto,Auto"
+                      ColumnSpacing="28"
+                      RowSpacing="12">
+                    <StackPanel Grid.Row="0"
+                                Grid.Column="0"
+                                Spacing="5">
+                        <TextBlock Text="{Binding RoleWorkspaceTitle}"
+                                   FontSize="15"
+                                   FontWeight="Bold"/>
+                        <TextBlock Text="{Binding RoleWorkspaceSubtitle}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SemiColorText2}"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding TodoSummary}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SemiColorPrimary}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0"
+                                Grid.Column="1"
+                                MinWidth="118"
+                                Spacing="3">
+                        <TextBlock Text="{Binding PrimaryMetricValue}"
+                                   FontSize="26"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorPrimary}"/>
+                        <TextBlock Text="{Binding PrimaryMetricLabel}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0"
+                                Grid.Column="2"
+                                MinWidth="118"
+                                Spacing="3">
+                        <TextBlock Text="{Binding SecondaryMetricValue}"
+                                   FontSize="26"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorText1}"/>
+                        <TextBlock Text="{Binding SecondaryMetricLabel}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+
+                    <Button Grid.Row="1"
+                            Grid.ColumnSpan="3"
+                            Content="{Binding PrimaryActionLabel}"
+                            Classes="Primary"
+                            Height="34"
+                            MinWidth="190"
+                            Padding="16,0"
+                            HorizontalAlignment="Left"
+                            Command="{Binding PrimaryActionCommand}"/>
+                </Grid>
+            </Border>
+
+            <Border Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="18,16">
+                <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0"
+                                   Text="我的待办"
+                                   FontSize="15"
+                                   FontWeight="Bold"/>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding TodoCount, StringFormat='{}共 {0} 项'}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SemiColorText2}"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <Border IsVisible="{Binding IsAllClear}"
+                            Background="{DynamicResource SemiColorBackground0}"
+                            CornerRadius="8"
+                            Padding="20,24">
+                        <StackPanel Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="当前岗位没有待处理事项"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="新的待办出现时会在这里更新"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SemiColorText2}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <ItemsControl IsVisible="{Binding HasTodos}"
+                                  ItemsSource="{Binding RoleTodoItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="wb:WorkbenchTodoItem">
+                                <Border Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="12,10"
+                                        Margin="0,0,0,6">
+                                    <Grid ColumnDefinitions="116,*,Auto"
+                                          ColumnSpacing="12">
+                                        <StackPanel Grid.Column="0"
+                                                    Spacing="5"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"/>
+                                            <controls:StatusTag Text="{Binding Status}"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1"
+                                                    Spacing="3"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Context}"
+                                                       FontSize="13"
+                                                       FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding Detail}"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource SemiColorText2}"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+
+                                        <Button Grid.Column="2"
+                                                Content="{Binding ActionLabel}"
+                                                MinWidth="76"
+                                                Height="32"
+                                                Padding="10,0"
+                                                VerticalAlignment="Center"
+                                                Command="{Binding $parent[UserControl].((wb:WorkbenchHomeViewModel)DataContext).OpenTodoCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
