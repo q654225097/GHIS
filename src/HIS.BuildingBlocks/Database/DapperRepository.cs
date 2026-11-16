@@ -1,130 +1,165 @@
-using System.Data;
+using System;
+using System.Collections.Generic;
+using System.Data.Common;
+using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Dapper;
 
 namespace HIS.BuildingBlocks.Database;
 
 public class DapperRepository<T> : IRepository<T> where T : BaseEntity
 {
-    static DapperRepository()
-    {
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
-    }
+	protected readonly IDbConnectionFactory ConnectionFactory;
 
-    protected readonly IDbConnectionFactory ConnectionFactory;
-    public string TableName { get; }
+	private static readonly PropertyInfo[] Properties;
 
-    private static readonly PropertyInfo[] Properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-        .Where(p => p.CanRead && p.CanWrite).ToArray();
+	public string TableName { get; }
 
-    public DapperRepository(IDbConnectionFactory connectionFactory, string tableName)
-    {
-        ConnectionFactory = connectionFactory;
-        TableName = tableName;
-    }
+	static DapperRepository()
+	{
+		Properties = (from p in typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public)
+			where p.CanRead && p.CanWrite
+			select p).ToArray();
+		SqliteTypeHandlers.Initialize();
+		DefaultTypeMap.MatchNamesWithUnderscores = true;
+	}
 
-    public static string ToSnakeCase(string input)
-    {
-        if (string.IsNullOrEmpty(input)) return input;
-        var sb = new StringBuilder();
-        for (int i = 0; i < input.Length; i++)
-        {
-            char c = input[i];
-            if (char.IsUpper(c))
-            {
-                if (i > 0) sb.Append('_');
-                sb.Append(char.ToLowerInvariant(c));
-            }
-            else
-            {
-                sb.Append(c);
-            }
-        }
-        return sb.ToString();
-    }
+	public DapperRepository(IDbConnectionFactory connectionFactory, string tableName)
+	{
+		ConnectionFactory = connectionFactory;
+		TableName = tableName;
+	}
 
-    public async Task<T?> GetByIdAsync(string id, CancellationToken ct = default)
-    {
-        using var conn = ConnectionFactory.CreateConnection();
-        var sql = $"SELECT * FROM {TableName} WHERE id = @Id";
-        return await conn.QuerySingleOrDefaultAsync<T>(new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
-    }
+	public static string ToSnakeCase(string input)
+	{
+		if (string.IsNullOrEmpty(input))
+		{
+			return input;
+		}
+		StringBuilder stringBuilder = new StringBuilder();
+		for (int i = 0; i < input.Length; i++)
+		{
+			char c = input[i];
+			if (char.IsUpper(c))
+			{
+				if (i > 0)
+				{
+					stringBuilder.Append('_');
+				}
+				stringBuilder.Append(char.ToLowerInvariant(c));
+			}
+			else
+			{
+				stringBuilder.Append(c);
+			}
+		}
+		return stringBuilder.ToString();
+	}
 
-    public async Task<IReadOnlyList<T>> GetAllAsync(CancellationToken ct = default)
-    {
-        using var conn = ConnectionFactory.CreateConnection();
-        var sql = $"SELECT * FROM {TableName}";
-        var result = await conn.QueryAsync<T>(new CommandDefinition(sql, cancellationToken: ct));
-        return result.ToList();
-    }
+	public async Task<T?> GetByIdAsync(string id, CancellationToken ct = default(CancellationToken))
+	{
+		using DbConnection conn = ConnectionFactory.CreateConnection();
+		string sql = "SELECT * FROM " + TableName + " WHERE id = @Id";
+		return await conn.QuerySingleOrDefaultAsync<T>(new CommandDefinition(sql, new
+		{
+			Id = id
+		}, ConnectionFactory.CurrentTransaction, null, null, CommandFlags.Buffered, ct));
+	}
 
-    public async Task<IReadOnlyList<T>> QueryAsync(string sql, object? param = null, CancellationToken ct = default)
-    {
-        using var conn = ConnectionFactory.CreateConnection();
-        var result = await conn.QueryAsync<T>(new CommandDefinition(sql, param, cancellationToken: ct));
-        return result.ToList();
-    }
+	public async Task<IReadOnlyList<T>> GetAllAsync(CancellationToken ct = default(CancellationToken))
+	{
+		using DbConnection conn = ConnectionFactory.CreateConnection();
+		string sql = "SELECT * FROM " + TableName;
+		return (await conn.QueryAsync<T>(new CommandDefinition(sql, null, ConnectionFactory.CurrentTransaction, null, null, CommandFlags.Buffered, ct))).ToList();
+	}
 
-    public async Task<T?> QuerySingleOrDefaultAsync(string sql, object? param = null, CancellationToken ct = default)
-    {
-        using var conn = ConnectionFactory.CreateConnection();
-        return await conn.QuerySingleOrDefaultAsync<T>(new CommandDefinition(sql, param, cancellationToken: ct));
-    }
+	public async Task<IReadOnlyList<T>> QueryAsync(string sql, object? param = null, CancellationToken ct = default(CancellationToken))
+	{
+		using DbConnection conn = ConnectionFactory.CreateConnection();
+		return (await conn.QueryAsync<T>(new CommandDefinition(sql, param, ConnectionFactory.CurrentTransaction, null, null, CommandFlags.Buffered, ct))).ToList();
+	}
 
-    public async Task<int> ExecuteAsync(string sql, object? param = null, CancellationToken ct = default)
-    {
-        using var conn = ConnectionFactory.CreateConnection();
-        return await conn.ExecuteAsync(new CommandDefinition(sql, param, cancellationToken: ct));
-    }
+	public async Task<T?> QuerySingleOrDefaultAsync(string sql, object? param = null, CancellationToken ct = default(CancellationToken))
+	{
+		using DbConnection conn = ConnectionFactory.CreateConnection();
+		return await conn.QuerySingleOrDefaultAsync<T>(new CommandDefinition(sql, param, ConnectionFactory.CurrentTransaction, null, null, CommandFlags.Buffered, ct));
+	}
 
-    public async Task<int> InsertAsync(T entity, CancellationToken ct = default)
-    {
-        using var conn = ConnectionFactory.CreateConnection();
-        var cols = new List<string>();
-        var paramNames = new List<string>();
-        var dynamicParams = new DynamicParameters();
+	public async Task<int> ExecuteAsync(string sql, object? param = null, CancellationToken ct = default(CancellationToken))
+	{
+		using DbConnection conn = ConnectionFactory.CreateConnection();
+		return await conn.ExecuteAsync(new CommandDefinition(sql, param, ConnectionFactory.CurrentTransaction, null, null, CommandFlags.Buffered, ct));
+	}
 
-        foreach (var prop in Properties)
-        {
-            var col = ToSnakeCase(prop.Name);
-            cols.Add(col);
-            paramNames.Add("@" + prop.Name);
-            dynamicParams.Add(prop.Name, prop.GetValue(entity));
-        }
+	public async Task<int> InsertAsync(T entity, CancellationToken ct = default(CancellationToken))
+	{
+		using DbConnection conn = ConnectionFactory.CreateConnection();
+		List<string> cols = new List<string>();
+		List<string> paramNames = new List<string>();
+		DynamicParameters dynamicParams = new DynamicParameters();
+		PropertyInfo[] properties = Properties;
+		foreach (PropertyInfo prop in properties)
+		{
+			string col = ToSnakeCase(prop.Name);
+			cols.Add(col);
+			paramNames.Add("@" + prop.Name);
+			dynamicParams.Add(prop.Name, prop.GetValue(entity));
+		}
+		string sql = $"INSERT INTO {TableName} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", paramNames)})";
+		return await conn.ExecuteAsync(new CommandDefinition(sql, dynamicParams, ConnectionFactory.CurrentTransaction, null, null, CommandFlags.Buffered, ct));
+	}
 
-        var sql = $"INSERT INTO {TableName} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", paramNames)})";
-        return await conn.ExecuteAsync(new CommandDefinition(sql, dynamicParams, cancellationToken: ct));
-    }
+	public async Task<int> UpdateAsync(T entity, CancellationToken ct = default(CancellationToken))
+	{
+		using DbConnection conn = ConnectionFactory.CreateConnection();
+		List<string> sets = new List<string>();
+		DynamicParameters dynamicParams = new DynamicParameters();
+		entity.UpdatedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		int currentVersion = entity.VersionNo;
+		T val = entity;
+		int versionNo = val.VersionNo;
+		val.VersionNo = versionNo + 1;
+		PropertyInfo[] properties = Properties;
+		foreach (PropertyInfo prop in properties)
+		{
+			if (!(prop.Name == "Id"))
+			{
+				string col = ToSnakeCase(prop.Name);
+				sets.Add(col + " = @" + prop.Name);
+				dynamicParams.Add(prop.Name, prop.GetValue(entity));
+			}
+		}
+		dynamicParams.Add("Id", entity.Id);
+		dynamicParams.Add("ExpectedVersion", currentVersion);
+		string sql = $"UPDATE {TableName} SET {string.Join(", ", sets)} WHERE id = @Id AND version_no = @ExpectedVersion";
+		DbTransaction? currentTransaction = ConnectionFactory.CurrentTransaction;
+		CancellationToken cancellationToken = ct;
+		int affected = await conn.ExecuteAsync(new CommandDefinition(sql, dynamicParams, currentTransaction, null, null, CommandFlags.Buffered, cancellationToken));
+		if (affected == 0)
+		{
+			string commandText = "SELECT count(*) FROM " + TableName + " WHERE id = @Id";
+			var parameters = new { entity.Id };
+			DbTransaction? currentTransaction2 = ConnectionFactory.CurrentTransaction;
+			cancellationToken = ct;
+			if (await conn.ExecuteScalarAsync<int>(new CommandDefinition(commandText, parameters, currentTransaction2, null, null, CommandFlags.Buffered, cancellationToken)) > 0)
+			{
+				entity.VersionNo = currentVersion;
+				throw new DbConcurrencyException(TableName, entity.Id, $"并发乐观锁冲突：表 [{TableName}] 记录 [{entity.Id}] 已被其他事务修改 (期望版本 {currentVersion})");
+			}
+		}
+		return affected;
+	}
 
-    public async Task<int> UpdateAsync(T entity, CancellationToken ct = default)
-    {
-        using var conn = ConnectionFactory.CreateConnection();
-        var sets = new List<string>();
-        var dynamicParams = new DynamicParameters();
-
-        entity.UpdatedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var currentVersion = entity.VersionNo;
-        entity.VersionNo++;
-
-        foreach (var prop in Properties)
-        {
-            if (prop.Name == nameof(BaseEntity.Id)) continue;
-            var col = ToSnakeCase(prop.Name);
-            sets.Add($"{col} = @{prop.Name}");
-            dynamicParams.Add(prop.Name, prop.GetValue(entity));
-        }
-        dynamicParams.Add("Id", entity.Id);
-        dynamicParams.Add("ExpectedVersion", currentVersion);
-
-        var sql = $"UPDATE {TableName} SET {string.Join(", ", sets)} WHERE id = @Id AND version_no = @ExpectedVersion";
-        return await conn.ExecuteAsync(new CommandDefinition(sql, dynamicParams, cancellationToken: ct));
-    }
-
-    public async Task<int> DeleteAsync(string id, CancellationToken ct = default)
-    {
-        using var conn = ConnectionFactory.CreateConnection();
-        var sql = $"DELETE FROM {TableName} WHERE id = @Id";
-        return await conn.ExecuteAsync(new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
-    }
+	public async Task<int> DeleteAsync(string id, CancellationToken ct = default(CancellationToken))
+	{
+		using DbConnection conn = ConnectionFactory.CreateConnection();
+		string sql = "DELETE FROM " + TableName + " WHERE id = @Id";
+		return await conn.ExecuteAsync(new CommandDefinition(sql, new
+		{
+			Id = id
+		}, ConnectionFactory.CurrentTransaction, null, null, CommandFlags.Buffered, ct));
+	}
 }

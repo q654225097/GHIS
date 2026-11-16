@@ -1,0 +1,3 @@
+namespace HIS.BuildingBlocks.OfdEngine;
+
+public sealed record OfdRenderOptions(string DocId, string DocNo, string Title, string Author, string CreationDate, string ContentText, string? StructuredSemanticXml = null, string? SignerName = null, string? WatermarkText = null, string PageSizeCode = "A4", decimal PageWidthMm = 210.0m, decimal PageHeightMm = 297.0m, decimal MarginTopMm = 20.0m, decimal MarginBottomMm = 20.0m, decimal MarginLeftMm = 20.0m, decimal MarginRightMm = 20.0m, string? HospitalHeaderText = null, string? PatientBannerText = null, string? FooterText = null, string? SignSlotsSummary = null);

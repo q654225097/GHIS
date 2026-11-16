@@ -1,3 +1,6 @@
+using System;
+using System.Threading.Tasks;
+using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.BuildingBlocks.OfdEngine;
@@ -6,6 +9,8 @@ using HIS.Contracts;
 using HIS.Modules.Emr.Models;
 using HIS.Modules.Emr.Services;
 using HIS.Modules.Inpatient.Services;
+using HIS.Modules.Operations.Models;
+using HIS.Modules.Operations.Services;
 using Xunit;
 
 namespace HIS.UnitTests;
@@ -22,6 +27,11 @@ public class CoreBusinessGateTests
             return Task.FromResult<PatientSummaryDto?>(new PatientSummaryDto(
                 patientId, "MRN001", "张小明", _genderCode, 19900101, 35, "138****0000",
                 new[] { "青霉素过敏" }, false, true));
+        }
+
+        public Task<bool> AppendPatientAllergyAsync(string patientId, string allergyTag, CancellationToken ct = default)
+        {
+            return Task.FromResult(true);
         }
     }
 
@@ -145,6 +155,10 @@ public class CoreBusinessGateTests
     [Fact]
     public void CryptoHelper_AesGcm_And_BlindIndex_Tests()
     {
+        CryptoHelper.ConfigureKeys(
+            new string('h', 32),
+            new string('a', 32));
+
         var plainIdCard = "110101199003072345";
         var blindIndex = CryptoHelper.ComputeBlindIndex(plainIdCard);
         Assert.NotEmpty(blindIndex);
@@ -185,5 +199,113 @@ public class CoreBusinessGateTests
 
         Assert.False(checkResult.AllPassed);
         Assert.Contains(checkResult.FailedItems, item => item.Contains("未停止的长期医嘱"));
+    }
+
+    [Fact]
+    public void Security_PasswordSecurityHelper_Pbkdf2Hash_And_Verify()
+    {
+        string password = "StrongPassword@2026!";
+        string hash = PasswordSecurityHelper.HashPassword(password);
+        Assert.StartsWith("PBKDF2$10000$", hash);
+
+        var (isValid, needsUpgrade) = PasswordSecurityHelper.VerifyPassword(password, hash);
+        Assert.True(isValid);
+        Assert.False(needsUpgrade);
+
+        var (wrongValid, _) = PasswordSecurityHelper.VerifyPassword("WrongPassword", hash);
+        Assert.False(wrongValid);
+    }
+
+    [Fact]
+    public void Security_PasswordSecurityHelper_LegacySha256_AutoUpgrade()
+    {
+        string rawPassword = "OldPassword123";
+        string legacyHash = CryptoHelper.ComputeSha256(rawPassword);
+
+        var (verify, needsUpgrade) = PasswordSecurityHelper.VerifyPassword(rawPassword, legacyHash);
+        Assert.True(verify);
+        Assert.True(needsUpgrade);
+
+        string upgradedHash = PasswordSecurityHelper.HashPassword(rawPassword);
+        Assert.StartsWith("PBKDF2$10000$", upgradedHash);
+        var (upgradedVerify, upgradedNeedsUpgrade) = PasswordSecurityHelper.VerifyPassword(rawPassword, upgradedHash);
+        Assert.True(upgradedVerify);
+        Assert.False(upgradedNeedsUpgrade);
+    }
+
+    [Fact]
+    public void Security_LoginAttemptLockoutService_Lockout_And_Reset()
+    {
+        var lockout = new LoginAttemptLockoutService
+        {
+            MaxFailedAttempts = 5,
+            LockoutDuration = TimeSpan.FromMinutes(15)
+        };
+        string account = "test_user_lockout";
+
+        for (int i = 1; i <= 4; i++)
+        {
+            var (isLocked, failedCount, _) = lockout.RecordFailedAttempt(account);
+            Assert.False(isLocked);
+            Assert.Equal(i, failedCount);
+        }
+
+        var (lockedOut, countAfter5, lockoutDuration) = lockout.RecordFailedAttempt(account);
+        Assert.True(lockedOut);
+        Assert.Equal(5, countAfter5);
+        Assert.True(lockoutDuration.TotalMinutes > 14);
+
+        var (statusCheck, _) = lockout.CheckLockout(account);
+        Assert.True(statusCheck);
+
+        lockout.ResetAttempts(account);
+        var (clearedStatus, _) = lockout.CheckLockout(account);
+        Assert.False(clearedStatus);
+    }
+
+    [Fact]
+    public async Task Security_AuditLogService_TamperDetection_And_TailTruncationDetection()
+    {
+        var connFactory = new SqliteConnectionFactory("Data Source=:memory:;Mode=Memory;Cache=Shared");
+        await DbSchemaInitializer.InitializeAsync(connFactory);
+        var auditRepo = new DapperRepository<OpsAuditEvent>(connFactory, "ops_audit_events");
+        var anchorRepo = new DapperRepository<OpsAuditAnchor>(connFactory, "ops_audit_anchors");
+        var auditService = new AuditLogService(auditRepo, anchorRepo);
+
+        await auditService.RecordAuditAsync("EVT_1", "Patient", "P01", "Action 1", "USR01", "张三", "DEPT01");
+        await auditService.RecordAuditAsync("EVT_2", "Patient", "P02", "Action 2", "USR02", "李四", "DEPT02");
+        await auditService.RecordAuditAsync("EVT_3", "Patient", "P03", "Action 3", "USR03", "王五", "DEPT03");
+
+        var initialResult = await auditService.VerifyChainIntegrityAsync();
+        Assert.True(initialResult.IsIntact);
+        Assert.Equal(3, initialResult.VerifiedEventCount);
+        Assert.Null(initialResult.BrokenAtEventId);
+
+        // Record security anchor
+        var anchor = await auditService.RecordAnchorAsync("SCHEDULED", "AUDITOR01");
+        Assert.NotNull(anchor);
+
+        // Verify anchor holds
+        var afterAnchorResult = await auditService.VerifyChainIntegrityAsync();
+        Assert.True(afterAnchorResult.IsIntact);
+
+        // Tamper test: modify event 2 operator_name
+        using (var conn = connFactory.CreateConnection())
+        {
+            await conn.ExecuteAsync("UPDATE ops_audit_events SET operator_name = '黑客' WHERE event_type = 'EVT_2'");
+        }
+        var tamperedResult = await auditService.VerifyChainIntegrityAsync();
+        Assert.False(tamperedResult.IsIntact);
+        Assert.Contains("篡改", tamperedResult.Message);
+
+        // Restore event 2 and test tail truncation attack: delete event 3
+        using (var conn = connFactory.CreateConnection())
+        {
+            await conn.ExecuteAsync("UPDATE ops_audit_events SET operator_name = '李四' WHERE event_type = 'EVT_2'");
+            await conn.ExecuteAsync("DELETE FROM ops_audit_events WHERE event_type = 'EVT_3'");
+        }
+        var truncatedResult = await auditService.VerifyChainIntegrityAsync();
+        Assert.False(truncatedResult.IsIntact);
+        Assert.Contains("尾部截断", truncatedResult.Message);
     }
 }

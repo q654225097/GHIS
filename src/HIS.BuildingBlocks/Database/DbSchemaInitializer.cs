@@ -1,1032 +1,218 @@
+using System;
+using System.Data.Common;
+using System.Linq;
+using System.Threading.Tasks;
 using Dapper;
 
 namespace HIS.BuildingBlocks.Database;
 
 public static class DbSchemaInitializer
 {
-    public const string DdlScript = """
-    -- 1. emr_data_elements
-    CREATE TABLE IF NOT EXISTS emr_data_elements (
-        id VARCHAR(36) PRIMARY KEY,
-        element_code VARCHAR(64) NOT NULL UNIQUE,
-        nhc_std_code VARCHAR(64),
-        element_name VARCHAR(128) NOT NULL,
-        data_type VARCHAR(32) NOT NULL,
-        ursa_control_type VARCHAR(64) NOT NULL,
-        dict_code VARCHAR(64),
-        unit_text VARCHAR(32),
-        macro_source VARCHAR(128),
-        gender_exclusive VARCHAR(16) NOT NULL,
-        validation_rule_json VARCHAR(2000),
-        control_key VARCHAR(128),
-        is_indexed SMALLINT NOT NULL,
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
+	private sealed class TableColumnInfo
+	{
+		public string Name { get; set; } = string.Empty;
+	}
 
-    -- 2. emr_ofd_layout_schemas
-    CREATE TABLE IF NOT EXISTS emr_ofd_layout_schemas (
-        id VARCHAR(36) PRIMARY KEY,
-        layout_code VARCHAR(64) NOT NULL UNIQUE,
-        layout_name VARCHAR(128) NOT NULL,
-        page_size_code VARCHAR(16) NOT NULL,
-        page_width_mm DECIMAL(18,4) NOT NULL,
-        page_height_mm DECIMAL(18,4) NOT NULL,
-        margin_top_mm DECIMAL(18,4) NOT NULL,
-        margin_bottom_mm DECIMAL(18,4) NOT NULL,
-        margin_left_mm DECIMAL(18,4) NOT NULL,
-        margin_right_mm DECIMAL(18,4) NOT NULL,
-        is_continuous_flow SMALLINT NOT NULL,
-        header_layout_json TEXT,
-        footer_layout_json TEXT,
-        sign_slots_json VARCHAR(2000),
-        watermark_policy VARCHAR(32),
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
+	public const string DdlScript = "-- 1. emr_data_elements\nCREATE TABLE IF NOT EXISTS emr_data_elements (\n    id VARCHAR(36) PRIMARY KEY,\n    element_code VARCHAR(64) NOT NULL UNIQUE,\n    nhc_std_code VARCHAR(64),\n    element_name VARCHAR(128) NOT NULL,\n    data_type VARCHAR(32) NOT NULL,\n    ursa_control_type VARCHAR(64) NOT NULL,\n    dict_code VARCHAR(64),\n    unit_text VARCHAR(32),\n    macro_source VARCHAR(128),\n    gender_exclusive VARCHAR(16) NOT NULL,\n    validation_rule_json VARCHAR(2000),\n    control_key VARCHAR(128),\n    is_indexed SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 2. emr_ofd_layout_schemas\nCREATE TABLE IF NOT EXISTS emr_ofd_layout_schemas (\n    id VARCHAR(36) PRIMARY KEY,\n    layout_code VARCHAR(64) NOT NULL UNIQUE,\n    layout_name VARCHAR(128) NOT NULL,\n    page_size_code VARCHAR(16) NOT NULL,\n    page_width_mm DECIMAL(18,4) NOT NULL,\n    page_height_mm DECIMAL(18,4) NOT NULL,\n    margin_top_mm DECIMAL(18,4) NOT NULL,\n    margin_bottom_mm DECIMAL(18,4) NOT NULL,\n    margin_left_mm DECIMAL(18,4) NOT NULL,\n    margin_right_mm DECIMAL(18,4) NOT NULL,\n    is_continuous_flow SMALLINT NOT NULL,\n    header_layout_json TEXT,\n    footer_layout_json TEXT,\n    sign_slots_json VARCHAR(2000),\n    watermark_policy VARCHAR(32),\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 3. emr_doc_templates\nCREATE TABLE IF NOT EXISTS emr_doc_templates (\n    id VARCHAR(36) PRIMARY KEY,\n    template_code VARCHAR(64) NOT NULL,\n    template_version INT NOT NULL,\n    template_name VARCHAR(128) NOT NULL,\n    emr_scene VARCHAR(16) NOT NULL,\n    doc_type_code VARCHAR(64) NOT NULL,\n    dept_category VARCHAR(32),\n    target_dept_id VARCHAR(36),\n    disease_icd_prefix VARCHAR(32),\n    time_limit_hours INT NOT NULL,\n    required_sign_levels INT NOT NULL,\n    ofd_layout_id VARCHAR(36),\n    is_published SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 4. emr_section_schemas\nCREATE TABLE IF NOT EXISTS emr_section_schemas (\n    id VARCHAR(36) PRIMARY KEY,\n    template_id VARCHAR(36) NOT NULL,\n    section_code VARCHAR(64) NOT NULL,\n    section_title VARCHAR(128) NOT NULL,\n    render_mode VARCHAR(32) NOT NULL,\n    content_template_json TEXT,\n    section_control_key VARCHAR(128),\n    is_required SMALLINT NOT NULL,\n    visibility_expr VARCHAR(500),\n    sort_order INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 5. emr_documents\nCREATE TABLE IF NOT EXISTS emr_documents (\n    id VARCHAR(36) PRIMARY KEY,\n    doc_no VARCHAR(40) NOT NULL UNIQUE,\n    request_key VARCHAR(100) UNIQUE,\n    campus_id VARCHAR(36),\n    emr_scene VARCHAR(16) NOT NULL,\n    visit_or_encounter_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    dept_id VARCHAR(36) NOT NULL,\n    ward_id VARCHAR(36),\n    template_id VARCHAR(36) NOT NULL,\n    template_version INT NOT NULL,\n    doc_type_code VARCHAR(64) NOT NULL,\n    doc_title VARCHAR(200) NOT NULL,\n    clinical_time_ms BIGINT NOT NULL,\n    structured_ast_json TEXT,\n    plain_text_summary TEXT,\n    track_changes_json TEXT,\n    status INT NOT NULL,\n    author_id VARCHAR(36) NOT NULL,\n    resident_signed_at_ms BIGINT,\n    attending_doctor_id VARCHAR(36),\n    attending_signed_at_ms BIGINT,\n    chief_doctor_id VARCHAR(36),\n    chief_signed_at_ms BIGINT,\n    patient_sign_svg TEXT,\n    latest_ofd_archive_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 6. emr_document_elements\nCREATE TABLE IF NOT EXISTS emr_document_elements (\n    id VARCHAR(36) PRIMARY KEY,\n    document_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    emr_scene VARCHAR(16) NOT NULL,\n    doc_type_code VARCHAR(64) NOT NULL,\n    section_code VARCHAR(64) NOT NULL,\n    element_code VARCHAR(64) NOT NULL,\n    nhc_std_code VARCHAR(64),\n    val_string VARCHAR(1000),\n    val_int BIGINT,\n    val_decimal DECIMAL(18,4),\n    val_time_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 7. emr_ofd_archives\nCREATE TABLE IF NOT EXISTS emr_ofd_archives (\n    id VARCHAR(36) PRIMARY KEY,\n    ofd_no VARCHAR(40) NOT NULL UNIQUE,\n    archive_scope VARCHAR(32) NOT NULL,\n    visit_or_encounter_id VARCHAR(36) NOT NULL,\n    document_id VARCHAR(36),\n    patient_id VARCHAR(36) NOT NULL,\n    ofd_version_standard VARCHAR(32) NOT NULL,\n    page_count INT NOT NULL,\n    file_storage_key VARCHAR(255) NOT NULL,\n    file_size_bytes BIGINT NOT NULL,\n    content_sha256 VARCHAR(64) NOT NULL,\n    sm3_digest VARCHAR(64) NOT NULL,\n    ca_sign_serial_no VARCHAR(128),\n    tsa_timestamp_token VARCHAR(500),\n    has_embedded_semantic_xml SMALLINT NOT NULL,\n    archive_status INT NOT NULL,\n    generated_at_ms BIGINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 8. sys_departments\nCREATE TABLE IF NOT EXISTS sys_departments (\n    id VARCHAR(36) PRIMARY KEY,\n    campus_id VARCHAR(36) NOT NULL,\n    dept_code VARCHAR(64) NOT NULL UNIQUE,\n    dept_name VARCHAR(128) NOT NULL,\n    pinyin_code VARCHAR(64),\n    dept_category VARCHAR(32) NOT NULL,\n    sub_specialty_type VARCHAR(32),\n    parent_admin_id VARCHAR(36),\n    gender_limit VARCHAR(16),\n    min_age_days INT,\n    max_age_years INT,\n    default_pharmacy_id VARCHAR(36),\n    rated_bed_count INT,\n    location_address VARCHAR(255),\n    is_allow_appointment SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 9. sys_dept_ward_relations\nCREATE TABLE IF NOT EXISTS sys_dept_ward_relations (\n    id VARCHAR(36) PRIMARY KEY,\n    ipd_dept_id VARCHAR(36) NOT NULL,\n    ward_dept_id VARCHAR(36) NOT NULL,\n    relation_type VARCHAR(32) NOT NULL,\n    max_borrow_beds INT NOT NULL,\n    priority_order INT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 10. sys_medtech_exec_routings\nCREATE TABLE IF NOT EXISTS sys_medtech_exec_routings (\n    id VARCHAR(36) PRIMARY KEY,\n    campus_id VARCHAR(36) NOT NULL,\n    source_scene VARCHAR(32) NOT NULL,\n    order_dept_id VARCHAR(36),\n    service_item_code VARCHAR(64) NOT NULL,\n    exec_med_tech_dept_id VARCHAR(36) NOT NULL,\n    exec_room_code VARCHAR(64),\n    time_window_type VARCHAR(32) NOT NULL,\n    priority_weight INT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 11. sys_users\nCREATE TABLE IF NOT EXISTS sys_users (\n    id VARCHAR(36) PRIMARY KEY,\n    user_name VARCHAR(64) NOT NULL UNIQUE,\n    display_name VARCHAR(128) NOT NULL,\n    employee_no VARCHAR(64) NOT NULL,\n    password_hash VARCHAR(255) NOT NULL,\n    bound_patient_id VARCHAR(36),\n    prescribe_level INT NOT NULL,\n    surgery_level INT NOT NULL,\n    emr_sign_level INT NOT NULL,\n    ca_cert_id VARCHAR(128),\n    session_version INT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 12. sys_user_dept_posts\nCREATE TABLE IF NOT EXISTS sys_user_dept_posts (\n    id VARCHAR(36) PRIMARY KEY,\n    user_id VARCHAR(36) NOT NULL,\n    dept_id VARCHAR(36) NOT NULL,\n    dept_category VARCHAR(32) NOT NULL,\n    med_group_id VARCHAR(36),\n    role_id VARCHAR(36) NOT NULL,\n    is_default_context SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 13. sys_roles\nCREATE TABLE IF NOT EXISTS sys_roles (\n    id VARCHAR(36) PRIMARY KEY,\n    role_code VARCHAR(64) NOT NULL UNIQUE,\n    role_name VARCHAR(128) NOT NULL,\n    data_scope VARCHAR(32) NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 14. sys_permission_resources\nCREATE TABLE IF NOT EXISTS sys_permission_resources (\n    id VARCHAR(36) PRIMARY KEY,\n    resource_key VARCHAR(128) NOT NULL UNIQUE,\n    parent_key VARCHAR(128),\n    resource_type VARCHAR(32) NOT NULL,\n    resource_name VARCHAR(128) NOT NULL,\n    ursa_control_type VARCHAR(64),\n    api_method_path VARCHAR(255),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 15. sys_role_permissions\nCREATE TABLE IF NOT EXISTS sys_role_permissions (\n    id VARCHAR(36) PRIMARY KEY,\n    role_id VARCHAR(36) NOT NULL,\n    resource_key VARCHAR(128) NOT NULL,\n    access_policy INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 16. cfg_form_schemas\nCREATE TABLE IF NOT EXISTS cfg_form_schemas (\n    id VARCHAR(36) PRIMARY KEY,\n    form_code VARCHAR(64) NOT NULL UNIQUE,\n    form_name VARCHAR(128) NOT NULL,\n    entity_type VARCHAR(64) NOT NULL,\n    dept_category VARCHAR(32),\n    target_dept_id VARCHAR(36),\n    grid_columns INT NOT NULL,\n    is_published SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 17. cfg_field_definitions\nCREATE TABLE IF NOT EXISTS cfg_field_definitions (\n    id VARCHAR(36) PRIMARY KEY,\n    form_schema_id VARCHAR(36) NOT NULL,\n    field_code VARCHAR(64) NOT NULL,\n    field_label VARCHAR(128) NOT NULL,\n    data_type VARCHAR(32) NOT NULL,\n    ursa_control_type VARCHAR(64) NOT NULL,\n    control_key VARCHAR(128),\n    dict_code VARCHAR(64),\n    unit_text VARCHAR(32),\n    validation_rule_json VARCHAR(2000),\n    visibility_expr VARCHAR(500),\n    is_indexed SMALLINT NOT NULL,\n    sort_order INT NOT NULL,\n    is_deleted SMALLINT NOT NULL DEFAULT 0,\n    deleted_at_ms BIGINT,\n    deleted_by VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 18. cfg_entity_field_values\nCREATE TABLE IF NOT EXISTS cfg_entity_field_values (\n    id VARCHAR(36) PRIMARY KEY,\n    entity_type VARCHAR(64) NOT NULL,\n    entity_id VARCHAR(36) NOT NULL,\n    field_code VARCHAR(64) NOT NULL,\n    val_string VARCHAR(500),\n    val_int BIGINT,\n    val_decimal DECIMAL(18,4),\n    val_time_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 19. pat_patients\nCREATE TABLE IF NOT EXISTS pat_patients (\n    id VARCHAR(36) PRIMARY KEY,\n    medical_record_no VARCHAR(32) NOT NULL UNIQUE,\n    full_name VARCHAR(128) NOT NULL,\n    pinyin_code VARCHAR(64),\n    gender_code VARCHAR(16) NOT NULL,\n    birth_date_int INT NOT NULL,\n    id_card_type VARCHAR(32) NOT NULL,\n    id_card_cipher VARCHAR(255),\n    id_card_hash VARCHAR(64) NOT NULL,\n    phone_cipher VARCHAR(255),\n    phone_masked VARCHAR(32),\n    guardian_name VARCHAR(128),\n    guardian_id_hash VARCHAR(64),\n    allergy_tags_json VARCHAR(2000),\n    is_temp_emergency SMALLINT NOT NULL,\n    merged_to_patient_id VARCHAR(36),\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 20. opd_schedule_slots\nCREATE TABLE IF NOT EXISTS opd_schedule_slots (\n    id VARCHAR(36) PRIMARY KEY,\n    campus_id VARCHAR(36) NOT NULL,\n    opd_dept_id VARCHAR(36) NOT NULL,\n    clinic_room_id VARCHAR(36),\n    doctor_id VARCHAR(36) NOT NULL,\n    substitute_doctor_id VARCHAR(36),\n    schedule_date_int INT NOT NULL,\n    slot_period_code VARCHAR(32) NOT NULL,\n    starts_at_ms BIGINT NOT NULL,\n    ends_at_ms BIGINT NOT NULL,\n    reg_level_code VARCHAR(32) NOT NULL,\n    registration_fee DECIMAL(18,4) NOT NULL,\n    total_capacity INT NOT NULL,\n    reserved_count INT NOT NULL,\n    slot_status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 21. opd_appointments\nCREATE TABLE IF NOT EXISTS opd_appointments (\n    id VARCHAR(36) PRIMARY KEY,\n    appointment_no VARCHAR(40) NOT NULL UNIQUE,\n    request_key VARCHAR(100) UNIQUE,\n    patient_id VARCHAR(36) NOT NULL,\n    schedule_id VARCHAR(36) NOT NULL,\n    active_unique_token VARCHAR(36) NOT NULL,\n    queue_no INT NOT NULL,\n    status INT NOT NULL,\n    lock_expires_at_ms BIGINT NOT NULL,\n    visit_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 22. opd_visits\nCREATE TABLE IF NOT EXISTS opd_visits (\n    id VARCHAR(36) PRIMARY KEY,\n    visit_no VARCHAR(40) NOT NULL UNIQUE,\n    request_key VARCHAR(100) UNIQUE,\n    campus_id VARCHAR(36) NOT NULL,\n    opd_dept_id VARCHAR(36) NOT NULL,\n    clinic_room_id VARCHAR(36),\n    patient_id VARCHAR(36) NOT NULL,\n    schedule_id VARCHAR(36),\n    doctor_id VARCHAR(36) NOT NULL,\n    is_emergency SMALLINT NOT NULL,\n    er_triage_level INT,\n    is_green_channel SMALLINT NOT NULL,\n    green_credit_limit DECIMAL(18,4),\n    is_return_visit SMALLINT NOT NULL,\n    status INT NOT NULL,\n    primary_diag_code VARCHAR(32),\n    primary_diag_name VARCHAR(255),\n    emr_document_id VARCHAR(36),\n    ofd_archive_id VARCHAR(36),\n    signed_at_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 23. opd_triage_queues\nCREATE TABLE IF NOT EXISTS opd_triage_queues (\n    id VARCHAR(36) PRIMARY KEY,\n    visit_id VARCHAR(36) NOT NULL UNIQUE,\n    opd_dept_id VARCHAR(36) NOT NULL,\n    clinic_room_id VARCHAR(36),\n    priority_score INT NOT NULL,\n    pass_count INT NOT NULL,\n    queue_status INT NOT NULL,\n    checkin_at_ms BIGINT NOT NULL,\n    called_at_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 24. opd_prescriptions\nCREATE TABLE IF NOT EXISTS opd_prescriptions (\n    id VARCHAR(36) PRIMARY KEY,\n    prescription_no VARCHAR(40) NOT NULL UNIQUE,\n    visit_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    opd_dept_id VARCHAR(36) NOT NULL,\n    doctor_id VARCHAR(36) NOT NULL,\n    target_pharmacy_id VARCHAR(36) NOT NULL,\n    rx_type VARCHAR(32) NOT NULL,\n    herb_doses INT,\n    total_amount DECIMAL(18,4) NOT NULL,\n    status INT NOT NULL,\n    reviewer_pharmacist_id VARCHAR(36),\n    review_remark VARCHAR(500),\n    rx_ofd_archive_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 25. opd_prescription_items\nCREATE TABLE IF NOT EXISTS opd_prescription_items (\n    id VARCHAR(36) PRIMARY KEY,\n    prescription_id VARCHAR(36) NOT NULL,\n    group_no INT NOT NULL,\n    drug_id VARCHAR(36) NOT NULL,\n    drug_name_snapshot VARCHAR(200) NOT NULL,\n    dose_once DECIMAL(18,4) NOT NULL,\n    dose_unit VARCHAR(32) NOT NULL,\n    frequency_code VARCHAR(32) NOT NULL,\n    route_code VARCHAR(32) NOT NULL,\n    days INT NOT NULL,\n    total_quantity INT NOT NULL,\n    unit_price DECIMAL(18,4) NOT NULL,\n    skin_test_flag INT NOT NULL,\n    skin_test_batch_no VARCHAR(80),\n    skin_test_checker_id VARCHAR(36),\n    is_deleted SMALLINT NOT NULL DEFAULT 0,\n    deleted_at_ms BIGINT,\n    deleted_by VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 26. ipd_beds\nCREATE TABLE IF NOT EXISTS ipd_beds (\n    id VARCHAR(36) PRIMARY KEY,\n    campus_id VARCHAR(36) NOT NULL,\n    ward_id VARCHAR(36) NOT NULL,\n    room_code VARCHAR(40) NOT NULL,\n    bed_code VARCHAR(40) NOT NULL,\n    bed_type VARCHAR(32) NOT NULL,\n    daily_fee DECIMAL(18,4) NOT NULL,\n    bed_status INT NOT NULL,\n    current_encounter_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 27. ipd_encounters\nCREATE TABLE IF NOT EXISTS ipd_encounters (\n    id VARCHAR(36) PRIMARY KEY,\n    admission_no VARCHAR(40) NOT NULL UNIQUE,\n    patient_id VARCHAR(36) NOT NULL,\n    campus_id VARCHAR(36) NOT NULL,\n    admit_dept_id VARCHAR(36) NOT NULL,\n    med_group_id VARCHAR(36),\n    admit_ward_id VARCHAR(36) NOT NULL,\n    is_borrowed_bed SMALLINT NOT NULL,\n    bed_code VARCHAR(40),\n    active_bed_token VARCHAR(36) NOT NULL,\n    attending_doctor_id VARCHAR(36),\n    primary_nurse_id VARCHAR(36),\n    nursing_level_code VARCHAR(32),\n    prepayment_balance DECIMAL(18,4) NOT NULL,\n    archive_ofd_id VARCHAR(36),\n    status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 28. ipd_transfer_logs\nCREATE TABLE IF NOT EXISTS ipd_transfer_logs (\n    id VARCHAR(36) PRIMARY KEY,\n    encounter_id VARCHAR(36) NOT NULL,\n    transfer_type VARCHAR(32) NOT NULL,\n    from_dept_id VARCHAR(36) NOT NULL,\n    from_ward_id VARCHAR(36) NOT NULL,\n    from_bed_code VARCHAR(40),\n    to_dept_id VARCHAR(36) NOT NULL,\n    to_ward_id VARCHAR(36) NOT NULL,\n    to_bed_code VARCHAR(40),\n    handover_out_at_ms BIGINT NOT NULL,\n    handover_in_at_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 29. ord_medical_orders\nCREATE TABLE IF NOT EXISTS ord_medical_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    order_no VARCHAR(40) NOT NULL UNIQUE,\n    encounter_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    order_ipd_dept_id VARCHAR(36) NOT NULL,\n    patient_ward_id VARCHAR(36) NOT NULL,\n    exec_target_dept_id VARCHAR(36) NOT NULL,\n    order_term_type INT NOT NULL,\n    group_no INT NOT NULL,\n    order_category VARCHAR(32) NOT NULL,\n    item_code VARCHAR(64) NOT NULL,\n    item_name VARCHAR(200) NOT NULL,\n    dosage DECIMAL(18,4) NOT NULL,\n    frequency_code VARCHAR(32) NOT NULL,\n    route_code VARCHAR(32) NOT NULL,\n    status INT NOT NULL,\n    order_doctor_id VARCHAR(36) NOT NULL,\n    verify_nurse_id VARCHAR(36),\n    plan_start_at_ms BIGINT NOT NULL,\n    plan_stop_at_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 30. ord_execution_plans\nCREATE TABLE IF NOT EXISTS ord_execution_plans (\n    id VARCHAR(36) PRIMARY KEY,\n    order_id VARCHAR(36) NOT NULL,\n    encounter_id VARCHAR(36) NOT NULL,\n    ward_id VARCHAR(36) NOT NULL,\n    planned_time_ms BIGINT NOT NULL,\n    exec_status INT NOT NULL,\n    exec_nurse_id VARCHAR(36),\n    dual_check_nurse_id VARCHAR(36),\n    executed_at_ms BIGINT,\n    pda_scan_token VARCHAR(128),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 31. mtc_service_requests\nCREATE TABLE IF NOT EXISTS mtc_service_requests (\n    id VARCHAR(36) PRIMARY KEY,\n    request_no VARCHAR(40) NOT NULL UNIQUE,\n    source_type VARCHAR(16) NOT NULL,\n    source_visit_id VARCHAR(36),\n    source_order_id VARCHAR(36),\n    patient_id VARCHAR(36) NOT NULL,\n    order_dept_id VARCHAR(36) NOT NULL,\n    order_ward_id VARCHAR(36),\n    exec_med_tech_dept_id VARCHAR(36) NOT NULL,\n    med_tech_sub_type VARCHAR(32) NOT NULL,\n    exec_room_code VARCHAR(64),\n    specimen_tube_code VARCHAR(64),\n    service_item_code VARCHAR(64) NOT NULL,\n    fee_amount DECIMAL(18,4) NOT NULL,\n    is_fee_confirmed SMALLINT NOT NULL,\n    status INT NOT NULL,\n    collected_at_ms BIGINT,\n    received_at_ms BIGINT,\n    executed_at_ms BIGINT,\n    report_summary VARCHAR(2000),\n    report_ofd_archive_id VARCHAR(36),\n    is_critical_value SMALLINT NOT NULL,\n    critical_ack_doc_id VARCHAR(36),\n    critical_ack_nurse_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 32. mtc_surgery_schedules\nCREATE TABLE IF NOT EXISTS mtc_surgery_schedules (\n    id VARCHAR(36) PRIMARY KEY,\n    encounter_id VARCHAR(36) NOT NULL,\n    or_dept_id VARCHAR(36) NOT NULL,\n    or_room_code VARCHAR(64) NOT NULL,\n    table_seq INT NOT NULL,\n    surgery_code VARCHAR(64) NOT NULL,\n    surgery_name VARCHAR(200) NOT NULL,\n    surgery_level INT NOT NULL,\n    main_surgeon_id VARCHAR(36) NOT NULL,\n    anesthesiologist_id VARCHAR(36) NOT NULL,\n    circulating_nurse_id VARCHAR(36) NOT NULL,\n    sign_in_ok SMALLINT NOT NULL,\n    time_out_ok SMALLINT NOT NULL,\n    sign_out_ok SMALLINT NOT NULL,\n    instrument_count_balanced SMALLINT NOT NULL,\n    status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 33. mtc_blood_requests\nCREATE TABLE IF NOT EXISTS mtc_blood_requests (\n    id VARCHAR(36) PRIMARY KEY,\n    encounter_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    abo_type VARCHAR(16) NOT NULL,\n    rh_type VARCHAR(16) NOT NULL,\n    blood_product_code VARCHAR(64) NOT NULL,\n    volume_ml INT NOT NULL,\n    cross_match_result VARCHAR(32),\n    bag_barcode VARCHAR(80),\n    dispensed_by_id VARCHAR(36),\n    dual_check_dispenser_id VARCHAR(36),\n    empty_bag_returned SMALLINT NOT NULL,\n    status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 34. inv_drugs\nCREATE TABLE IF NOT EXISTS inv_drugs (\n    id VARCHAR(36) PRIMARY KEY,\n    drug_code VARCHAR(64) NOT NULL UNIQUE,\n    drug_name VARCHAR(200) NOT NULL,\n    spec VARCHAR(100) NOT NULL,\n    unit_name VARCHAR(32) NOT NULL,\n    price DECIMAL(18,4) NOT NULL,\n    cost_price DECIMAL(18,4) NOT NULL,\n    antibiotic_level INT NOT NULL,\n    is_narcotic SMALLINT NOT NULL,\n    is_skin_test_required SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 35. inv_drug_batches\nCREATE TABLE IF NOT EXISTS inv_drug_batches (\n    id VARCHAR(36) PRIMARY KEY,\n    warehouse_or_pharmacy_id VARCHAR(36) NOT NULL,\n    drug_id VARCHAR(36) NOT NULL,\n    batch_no VARCHAR(80) NOT NULL,\n    expiry_date_int INT NOT NULL,\n    invoice_no VARCHAR(80),\n    cold_chain_temp_celsius DECIMAL(18,4),\n    quantity INT NOT NULL,\n    is_frozen SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 36. inv_stock_ledgers\nCREATE TABLE IF NOT EXISTS inv_stock_ledgers (\n    id VARCHAR(36) PRIMARY KEY,\n    warehouse_or_pharmacy_id VARCHAR(36) NOT NULL,\n    drug_id VARCHAR(36) NOT NULL,\n    batch_id VARCHAR(36) NOT NULL,\n    change_type VARCHAR(32) NOT NULL,\n    change_quantity INT NOT NULL,\n    balance_after INT NOT NULL,\n    reference_doc_no VARCHAR(80),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 37. phm_dispense_orders\nCREATE TABLE IF NOT EXISTS phm_dispense_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    dispense_no VARCHAR(40) NOT NULL UNIQUE,\n    pharmacy_id VARCHAR(36) NOT NULL,\n    prescription_id VARCHAR(36),\n    ward_summary_id VARCHAR(36),\n    patient_id VARCHAR(36) NOT NULL,\n    status INT NOT NULL,\n    dispensed_by_id VARCHAR(36),\n    dispensed_at_ms BIGINT,\n    drug_return_confirmed SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 38. fin_payment_orders\nCREATE TABLE IF NOT EXISTS fin_payment_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    payment_no VARCHAR(40) NOT NULL UNIQUE,\n    request_key VARCHAR(100) UNIQUE,\n    scene VARCHAR(16) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    visit_or_encounter_id VARCHAR(36) NOT NULL,\n    total_amount DECIMAL(18,4) NOT NULL,\n    insurance_amount DECIMAL(18,4) NOT NULL,\n    prepayment_deduct DECIMAL(18,4) NOT NULL,\n    self_pay_amount DECIMAL(18,4) NOT NULL,\n    payment_channel VARCHAR(32) NOT NULL,\n    status INT NOT NULL,\n    paid_at_ms BIGINT,\n    invoice_ofd_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 39. fin_refund_orders\nCREATE TABLE IF NOT EXISTS fin_refund_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    refund_no VARCHAR(40) NOT NULL UNIQUE,\n    original_payment_id VARCHAR(36) NOT NULL,\n    refund_amount DECIMAL(18,4) NOT NULL,\n    reason VARCHAR(500) NOT NULL,\n    drug_return_confirmed SMALLINT NOT NULL,\n    approved_by VARCHAR(36),\n    refunded_at_ms BIGINT,\n    status INT NOT NULL,\n    reissued_invoice_ofd_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 40. fin_charge_ledgers\nCREATE TABLE IF NOT EXISTS fin_charge_ledgers (\n    id VARCHAR(36) PRIMARY KEY,\n    patient_id VARCHAR(36) NOT NULL,\n    visit_or_encounter_id VARCHAR(36) NOT NULL,\n    order_dept_id VARCHAR(36) NOT NULL,\n    patient_ward_id VARCHAR(36),\n    exec_dept_id VARCHAR(36) NOT NULL,\n    item_code VARCHAR(64) NOT NULL,\n    item_name VARCHAR(200) NOT NULL,\n    quantity DECIMAL(18,4) NOT NULL,\n    unit_price DECIMAL(18,4) NOT NULL,\n    total_amount DECIMAL(18,4) NOT NULL,\n    status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 41. fin_daily_closings\nCREATE TABLE IF NOT EXISTS fin_daily_closings (\n    id VARCHAR(36) PRIMARY KEY,\n    closing_no VARCHAR(40) NOT NULL UNIQUE,\n    cashier_user_id VARCHAR(36) NOT NULL,\n    closing_date_int INT NOT NULL,\n    total_income DECIMAL(18,4) NOT NULL,\n    total_refund DECIMAL(18,4) NOT NULL,\n    net_amount DECIMAL(18,4) NOT NULL,\n    reconciled_status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 42. ops_audit_events\nCREATE TABLE IF NOT EXISTS ops_audit_events (\n    id VARCHAR(36) PRIMARY KEY,\n    event_type VARCHAR(64) NOT NULL,\n    user_id VARCHAR(36),\n    operator_name VARCHAR(128),\n    dept_id VARCHAR(36),\n    target_entity VARCHAR(64) NOT NULL,\n    target_id VARCHAR(36) NOT NULL,\n    action_detail VARCHAR(2000),\n    prev_hash VARCHAR(64) NOT NULL,\n    curr_hash VARCHAR(64) NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 43. ops_idempotency_keys\nCREATE TABLE IF NOT EXISTS ops_idempotency_keys (\n    id VARCHAR(36) PRIMARY KEY,\n    request_key VARCHAR(100) NOT NULL UNIQUE,\n    request_sha256 VARCHAR(64) NOT NULL,\n    response_json TEXT,\n    expires_at_ms BIGINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 44. ops_outbox_messages\nCREATE TABLE IF NOT EXISTS ops_outbox_messages (\n    id VARCHAR(36) PRIMARY KEY,\n    event_type VARCHAR(128) NOT NULL,\n    payload_json TEXT NOT NULL,\n    status INT NOT NULL,\n    retry_count INT NOT NULL,\n    last_error VARCHAR(1000),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 45. cfg_icd10_diagnoses\nCREATE TABLE IF NOT EXISTS cfg_icd10_diagnoses (\n    id VARCHAR(36) PRIMARY KEY,\n    icd_code VARCHAR(32) NOT NULL UNIQUE,\n    disease_name VARCHAR(200) NOT NULL,\n    pinyin_code VARCHAR(64),\n    category_name VARCHAR(64) NOT NULL,\n    gender_exclusive VARCHAR(16) NOT NULL,\n    is_chronic_special SMALLINT NOT NULL,\n    is_infectious_report SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 46. cfg_price_items\nCREATE TABLE IF NOT EXISTS cfg_price_items (\n    id VARCHAR(36) PRIMARY KEY,\n    item_code VARCHAR(64) NOT NULL UNIQUE,\n    national_ins_code VARCHAR(64),\n    item_name VARCHAR(200) NOT NULL,\n    pinyin_code VARCHAR(64),\n    fee_category VARCHAR(32) NOT NULL,\n    spec VARCHAR(100),\n    unit_name VARCHAR(32) NOT NULL,\n    unit_price DECIMAL(18,4) NOT NULL,\n    reimburse_type VARCHAR(16) NOT NULL,\n    default_exec_dept_id VARCHAR(36),\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 47. cfg_order_frequencies\nCREATE TABLE IF NOT EXISTS cfg_order_frequencies (\n    id VARCHAR(36) PRIMARY KEY,\n    freq_code VARCHAR(32) NOT NULL UNIQUE,\n    freq_name VARCHAR(64) NOT NULL,\n    daily_times INT NOT NULL,\n    time_points_text VARCHAR(255) NOT NULL,\n    applicable_term VARCHAR(32) NOT NULL,\n    description VARCHAR(500),\n    sort_order INT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 48. cfg_clinical_dictionaries\nCREATE TABLE IF NOT EXISTS cfg_clinical_dictionaries (\n    id VARCHAR(36) PRIMARY KEY,\n    dict_type VARCHAR(64) NOT NULL,\n    item_code VARCHAR(64) NOT NULL,\n    item_name VARCHAR(128) NOT NULL,\n    pinyin_code VARCHAR(64),\n    parent_code VARCHAR(64),\n    sort_order INT NOT NULL,\n    is_default SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 49. inv_drug_price_logs\nCREATE TABLE IF NOT EXISTS inv_drug_price_logs (\n    id VARCHAR(36) PRIMARY KEY,\n    adjust_no VARCHAR(40) NOT NULL UNIQUE,\n    drug_id VARCHAR(36) NOT NULL,\n    drug_code VARCHAR(64) NOT NULL,\n    drug_name VARCHAR(200) NOT NULL,\n    old_retail_price DECIMAL(18,4) NOT NULL,\n    new_retail_price DECIMAL(18,4) NOT NULL,\n    old_cost_price DECIMAL(18,4) NOT NULL,\n    new_cost_price DECIMAL(18,4) NOT NULL,\n    affected_stock_quantity INT NOT NULL,\n    price_diff_amount DECIMAL(18,4) NOT NULL,\n    adjust_reason VARCHAR(500) NOT NULL,\n    effective_at_ms BIGINT NOT NULL,\n    operator_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 50. inv_transfer_orders\nCREATE TABLE IF NOT EXISTS inv_transfer_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    transfer_no VARCHAR(40) NOT NULL UNIQUE,\n    transfer_type VARCHAR(32) NOT NULL,\n    source_warehouse_id VARCHAR(36) NOT NULL,\n    target_warehouse_id VARCHAR(36) NOT NULL,\n    drug_id VARCHAR(36) NOT NULL,\n    drug_name_snapshot VARCHAR(200) NOT NULL,\n    batch_id VARCHAR(36) NOT NULL,\n    batch_no VARCHAR(80) NOT NULL,\n    expiry_date_int INT NOT NULL,\n    quantity INT NOT NULL,\n    unit_cost_price DECIMAL(18,4) NOT NULL,\n    unit_retail_price DECIMAL(18,4) NOT NULL,\n    total_retail_amount DECIMAL(18,4) NOT NULL,\n    status INT NOT NULL,\n    applicant_id VARCHAR(36),\n    dispatched_by_id VARCHAR(36),\n    dispatched_at_ms BIGINT,\n    received_by_id VARCHAR(36),\n    received_at_ms BIGINT,\n    remark VARCHAR(500),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);";
 
-    -- 3. emr_doc_templates
-    CREATE TABLE IF NOT EXISTS emr_doc_templates (
-        id VARCHAR(36) PRIMARY KEY,
-        template_code VARCHAR(64) NOT NULL,
-        template_version INT NOT NULL,
-        template_name VARCHAR(128) NOT NULL,
-        emr_scene VARCHAR(16) NOT NULL,
-        doc_type_code VARCHAR(64) NOT NULL,
-        dept_category VARCHAR(32),
-        target_dept_id VARCHAR(36),
-        disease_icd_prefix VARCHAR(32),
-        time_limit_hours INT NOT NULL,
-        required_sign_levels INT NOT NULL,
-        ofd_layout_id VARCHAR(36),
-        is_published SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
+	public static async Task InitializeAsync(IDbConnectionFactory connectionFactory)
+	{
+		using DbConnection conn = connectionFactory.CreateConnection();
+		string[] statements = "-- 1. emr_data_elements\nCREATE TABLE IF NOT EXISTS emr_data_elements (\n    id VARCHAR(36) PRIMARY KEY,\n    element_code VARCHAR(64) NOT NULL UNIQUE,\n    nhc_std_code VARCHAR(64),\n    element_name VARCHAR(128) NOT NULL,\n    data_type VARCHAR(32) NOT NULL,\n    ursa_control_type VARCHAR(64) NOT NULL,\n    dict_code VARCHAR(64),\n    unit_text VARCHAR(32),\n    macro_source VARCHAR(128),\n    gender_exclusive VARCHAR(16) NOT NULL,\n    validation_rule_json VARCHAR(2000),\n    control_key VARCHAR(128),\n    is_indexed SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 2. emr_ofd_layout_schemas\nCREATE TABLE IF NOT EXISTS emr_ofd_layout_schemas (\n    id VARCHAR(36) PRIMARY KEY,\n    layout_code VARCHAR(64) NOT NULL UNIQUE,\n    layout_name VARCHAR(128) NOT NULL,\n    page_size_code VARCHAR(16) NOT NULL,\n    page_width_mm DECIMAL(18,4) NOT NULL,\n    page_height_mm DECIMAL(18,4) NOT NULL,\n    margin_top_mm DECIMAL(18,4) NOT NULL,\n    margin_bottom_mm DECIMAL(18,4) NOT NULL,\n    margin_left_mm DECIMAL(18,4) NOT NULL,\n    margin_right_mm DECIMAL(18,4) NOT NULL,\n    is_continuous_flow SMALLINT NOT NULL,\n    header_layout_json TEXT,\n    footer_layout_json TEXT,\n    sign_slots_json VARCHAR(2000),\n    watermark_policy VARCHAR(32),\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 3. emr_doc_templates\nCREATE TABLE IF NOT EXISTS emr_doc_templates (\n    id VARCHAR(36) PRIMARY KEY,\n    template_code VARCHAR(64) NOT NULL,\n    template_version INT NOT NULL,\n    template_name VARCHAR(128) NOT NULL,\n    emr_scene VARCHAR(16) NOT NULL,\n    doc_type_code VARCHAR(64) NOT NULL,\n    dept_category VARCHAR(32),\n    target_dept_id VARCHAR(36),\n    disease_icd_prefix VARCHAR(32),\n    time_limit_hours INT NOT NULL,\n    required_sign_levels INT NOT NULL,\n    ofd_layout_id VARCHAR(36),\n    is_published SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 4. emr_section_schemas\nCREATE TABLE IF NOT EXISTS emr_section_schemas (\n    id VARCHAR(36) PRIMARY KEY,\n    template_id VARCHAR(36) NOT NULL,\n    section_code VARCHAR(64) NOT NULL,\n    section_title VARCHAR(128) NOT NULL,\n    render_mode VARCHAR(32) NOT NULL,\n    content_template_json TEXT,\n    section_control_key VARCHAR(128),\n    is_required SMALLINT NOT NULL,\n    visibility_expr VARCHAR(500),\n    sort_order INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 5. emr_documents\nCREATE TABLE IF NOT EXISTS emr_documents (\n    id VARCHAR(36) PRIMARY KEY,\n    doc_no VARCHAR(40) NOT NULL UNIQUE,\n    request_key VARCHAR(100) UNIQUE,\n    campus_id VARCHAR(36),\n    emr_scene VARCHAR(16) NOT NULL,\n    visit_or_encounter_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    dept_id VARCHAR(36) NOT NULL,\n    ward_id VARCHAR(36),\n    template_id VARCHAR(36) NOT NULL,\n    template_version INT NOT NULL,\n    doc_type_code VARCHAR(64) NOT NULL,\n    doc_title VARCHAR(200) NOT NULL,\n    clinical_time_ms BIGINT NOT NULL,\n    structured_ast_json TEXT,\n    plain_text_summary TEXT,\n    track_changes_json TEXT,\n    status INT NOT NULL,\n    author_id VARCHAR(36) NOT NULL,\n    resident_signed_at_ms BIGINT,\n    attending_doctor_id VARCHAR(36),\n    attending_signed_at_ms BIGINT,\n    chief_doctor_id VARCHAR(36),\n    chief_signed_at_ms BIGINT,\n    patient_sign_svg TEXT,\n    latest_ofd_archive_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 6. emr_document_elements\nCREATE TABLE IF NOT EXISTS emr_document_elements (\n    id VARCHAR(36) PRIMARY KEY,\n    document_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    emr_scene VARCHAR(16) NOT NULL,\n    doc_type_code VARCHAR(64) NOT NULL,\n    section_code VARCHAR(64) NOT NULL,\n    element_code VARCHAR(64) NOT NULL,\n    nhc_std_code VARCHAR(64),\n    val_string VARCHAR(1000),\n    val_int BIGINT,\n    val_decimal DECIMAL(18,4),\n    val_time_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 7. emr_ofd_archives\nCREATE TABLE IF NOT EXISTS emr_ofd_archives (\n    id VARCHAR(36) PRIMARY KEY,\n    ofd_no VARCHAR(40) NOT NULL UNIQUE,\n    archive_scope VARCHAR(32) NOT NULL,\n    visit_or_encounter_id VARCHAR(36) NOT NULL,\n    document_id VARCHAR(36),\n    patient_id VARCHAR(36) NOT NULL,\n    ofd_version_standard VARCHAR(32) NOT NULL,\n    page_count INT NOT NULL,\n    file_storage_key VARCHAR(255) NOT NULL,\n    file_size_bytes BIGINT NOT NULL,\n    content_sha256 VARCHAR(64) NOT NULL,\n    sm3_digest VARCHAR(64) NOT NULL,\n    ca_sign_serial_no VARCHAR(128),\n    tsa_timestamp_token VARCHAR(500),\n    has_embedded_semantic_xml SMALLINT NOT NULL,\n    archive_status INT NOT NULL,\n    generated_at_ms BIGINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 8. sys_departments\nCREATE TABLE IF NOT EXISTS sys_departments (\n    id VARCHAR(36) PRIMARY KEY,\n    campus_id VARCHAR(36) NOT NULL,\n    dept_code VARCHAR(64) NOT NULL UNIQUE,\n    dept_name VARCHAR(128) NOT NULL,\n    pinyin_code VARCHAR(64),\n    dept_category VARCHAR(32) NOT NULL,\n    sub_specialty_type VARCHAR(32),\n    parent_admin_id VARCHAR(36),\n    gender_limit VARCHAR(16),\n    min_age_days INT,\n    max_age_years INT,\n    default_pharmacy_id VARCHAR(36),\n    rated_bed_count INT,\n    location_address VARCHAR(255),\n    is_allow_appointment SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 9. sys_dept_ward_relations\nCREATE TABLE IF NOT EXISTS sys_dept_ward_relations (\n    id VARCHAR(36) PRIMARY KEY,\n    ipd_dept_id VARCHAR(36) NOT NULL,\n    ward_dept_id VARCHAR(36) NOT NULL,\n    relation_type VARCHAR(32) NOT NULL,\n    max_borrow_beds INT NOT NULL,\n    priority_order INT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 10. sys_medtech_exec_routings\nCREATE TABLE IF NOT EXISTS sys_medtech_exec_routings (\n    id VARCHAR(36) PRIMARY KEY,\n    campus_id VARCHAR(36) NOT NULL,\n    source_scene VARCHAR(32) NOT NULL,\n    order_dept_id VARCHAR(36),\n    service_item_code VARCHAR(64) NOT NULL,\n    exec_med_tech_dept_id VARCHAR(36) NOT NULL,\n    exec_room_code VARCHAR(64),\n    time_window_type VARCHAR(32) NOT NULL,\n    priority_weight INT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 11. sys_users\nCREATE TABLE IF NOT EXISTS sys_users (\n    id VARCHAR(36) PRIMARY KEY,\n    user_name VARCHAR(64) NOT NULL UNIQUE,\n    display_name VARCHAR(128) NOT NULL,\n    employee_no VARCHAR(64) NOT NULL,\n    password_hash VARCHAR(255) NOT NULL,\n    bound_patient_id VARCHAR(36),\n    prescribe_level INT NOT NULL,\n    surgery_level INT NOT NULL,\n    emr_sign_level INT NOT NULL,\n    ca_cert_id VARCHAR(128),\n    session_version INT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 12. sys_user_dept_posts\nCREATE TABLE IF NOT EXISTS sys_user_dept_posts (\n    id VARCHAR(36) PRIMARY KEY,\n    user_id VARCHAR(36) NOT NULL,\n    dept_id VARCHAR(36) NOT NULL,\n    dept_category VARCHAR(32) NOT NULL,\n    med_group_id VARCHAR(36),\n    role_id VARCHAR(36) NOT NULL,\n    is_default_context SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 13. sys_roles\nCREATE TABLE IF NOT EXISTS sys_roles (\n    id VARCHAR(36) PRIMARY KEY,\n    role_code VARCHAR(64) NOT NULL UNIQUE,\n    role_name VARCHAR(128) NOT NULL,\n    data_scope VARCHAR(32) NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 14. sys_permission_resources\nCREATE TABLE IF NOT EXISTS sys_permission_resources (\n    id VARCHAR(36) PRIMARY KEY,\n    resource_key VARCHAR(128) NOT NULL UNIQUE,\n    parent_key VARCHAR(128),\n    resource_type VARCHAR(32) NOT NULL,\n    resource_name VARCHAR(128) NOT NULL,\n    ursa_control_type VARCHAR(64),\n    api_method_path VARCHAR(255),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 15. sys_role_permissions\nCREATE TABLE IF NOT EXISTS sys_role_permissions (\n    id VARCHAR(36) PRIMARY KEY,\n    role_id VARCHAR(36) NOT NULL,\n    resource_key VARCHAR(128) NOT NULL,\n    access_policy INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 16. cfg_form_schemas\nCREATE TABLE IF NOT EXISTS cfg_form_schemas (\n    id VARCHAR(36) PRIMARY KEY,\n    form_code VARCHAR(64) NOT NULL UNIQUE,\n    form_name VARCHAR(128) NOT NULL,\n    entity_type VARCHAR(64) NOT NULL,\n    dept_category VARCHAR(32),\n    target_dept_id VARCHAR(36),\n    grid_columns INT NOT NULL,\n    is_published SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 17. cfg_field_definitions\nCREATE TABLE IF NOT EXISTS cfg_field_definitions (\n    id VARCHAR(36) PRIMARY KEY,\n    form_schema_id VARCHAR(36) NOT NULL,\n    field_code VARCHAR(64) NOT NULL,\n    field_label VARCHAR(128) NOT NULL,\n    data_type VARCHAR(32) NOT NULL,\n    ursa_control_type VARCHAR(64) NOT NULL,\n    control_key VARCHAR(128),\n    dict_code VARCHAR(64),\n    unit_text VARCHAR(32),\n    validation_rule_json VARCHAR(2000),\n    visibility_expr VARCHAR(500),\n    is_indexed SMALLINT NOT NULL,\n    sort_order INT NOT NULL,\n    is_deleted SMALLINT NOT NULL DEFAULT 0,\n    deleted_at_ms BIGINT,\n    deleted_by VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 18. cfg_entity_field_values\nCREATE TABLE IF NOT EXISTS cfg_entity_field_values (\n    id VARCHAR(36) PRIMARY KEY,\n    entity_type VARCHAR(64) NOT NULL,\n    entity_id VARCHAR(36) NOT NULL,\n    field_code VARCHAR(64) NOT NULL,\n    val_string VARCHAR(500),\n    val_int BIGINT,\n    val_decimal DECIMAL(18,4),\n    val_time_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 19. pat_patients\nCREATE TABLE IF NOT EXISTS pat_patients (\n    id VARCHAR(36) PRIMARY KEY,\n    medical_record_no VARCHAR(32) NOT NULL UNIQUE,\n    full_name VARCHAR(128) NOT NULL,\n    pinyin_code VARCHAR(64),\n    gender_code VARCHAR(16) NOT NULL,\n    birth_date_int INT NOT NULL,\n    id_card_type VARCHAR(32) NOT NULL,\n    id_card_cipher VARCHAR(255),\n    id_card_hash VARCHAR(64) NOT NULL,\n    phone_cipher VARCHAR(255),\n    phone_masked VARCHAR(32),\n    guardian_name VARCHAR(128),\n    guardian_id_hash VARCHAR(64),\n    allergy_tags_json VARCHAR(2000),\n    is_temp_emergency SMALLINT NOT NULL,\n    merged_to_patient_id VARCHAR(36),\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 20. opd_schedule_slots\nCREATE TABLE IF NOT EXISTS opd_schedule_slots (\n    id VARCHAR(36) PRIMARY KEY,\n    campus_id VARCHAR(36) NOT NULL,\n    opd_dept_id VARCHAR(36) NOT NULL,\n    clinic_room_id VARCHAR(36),\n    doctor_id VARCHAR(36) NOT NULL,\n    substitute_doctor_id VARCHAR(36),\n    schedule_date_int INT NOT NULL,\n    slot_period_code VARCHAR(32) NOT NULL,\n    starts_at_ms BIGINT NOT NULL,\n    ends_at_ms BIGINT NOT NULL,\n    reg_level_code VARCHAR(32) NOT NULL,\n    registration_fee DECIMAL(18,4) NOT NULL,\n    total_capacity INT NOT NULL,\n    reserved_count INT NOT NULL,\n    slot_status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 21. opd_appointments\nCREATE TABLE IF NOT EXISTS opd_appointments (\n    id VARCHAR(36) PRIMARY KEY,\n    appointment_no VARCHAR(40) NOT NULL UNIQUE,\n    request_key VARCHAR(100) UNIQUE,\n    patient_id VARCHAR(36) NOT NULL,\n    schedule_id VARCHAR(36) NOT NULL,\n    active_unique_token VARCHAR(36) NOT NULL,\n    queue_no INT NOT NULL,\n    status INT NOT NULL,\n    lock_expires_at_ms BIGINT NOT NULL,\n    visit_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 22. opd_visits\nCREATE TABLE IF NOT EXISTS opd_visits (\n    id VARCHAR(36) PRIMARY KEY,\n    visit_no VARCHAR(40) NOT NULL UNIQUE,\n    request_key VARCHAR(100) UNIQUE,\n    campus_id VARCHAR(36) NOT NULL,\n    opd_dept_id VARCHAR(36) NOT NULL,\n    clinic_room_id VARCHAR(36),\n    patient_id VARCHAR(36) NOT NULL,\n    schedule_id VARCHAR(36),\n    doctor_id VARCHAR(36) NOT NULL,\n    is_emergency SMALLINT NOT NULL,\n    er_triage_level INT,\n    is_green_channel SMALLINT NOT NULL,\n    green_credit_limit DECIMAL(18,4),\n    is_return_visit SMALLINT NOT NULL,\n    status INT NOT NULL,\n    primary_diag_code VARCHAR(32),\n    primary_diag_name VARCHAR(255),\n    emr_document_id VARCHAR(36),\n    ofd_archive_id VARCHAR(36),\n    signed_at_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 23. opd_triage_queues\nCREATE TABLE IF NOT EXISTS opd_triage_queues (\n    id VARCHAR(36) PRIMARY KEY,\n    visit_id VARCHAR(36) NOT NULL UNIQUE,\n    opd_dept_id VARCHAR(36) NOT NULL,\n    clinic_room_id VARCHAR(36),\n    priority_score INT NOT NULL,\n    pass_count INT NOT NULL,\n    queue_status INT NOT NULL,\n    checkin_at_ms BIGINT NOT NULL,\n    called_at_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 24. opd_prescriptions\nCREATE TABLE IF NOT EXISTS opd_prescriptions (\n    id VARCHAR(36) PRIMARY KEY,\n    prescription_no VARCHAR(40) NOT NULL UNIQUE,\n    visit_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    opd_dept_id VARCHAR(36) NOT NULL,\n    doctor_id VARCHAR(36) NOT NULL,\n    target_pharmacy_id VARCHAR(36) NOT NULL,\n    rx_type VARCHAR(32) NOT NULL,\n    herb_doses INT,\n    total_amount DECIMAL(18,4) NOT NULL,\n    status INT NOT NULL,\n    reviewer_pharmacist_id VARCHAR(36),\n    review_remark VARCHAR(500),\n    rx_ofd_archive_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 25. opd_prescription_items\nCREATE TABLE IF NOT EXISTS opd_prescription_items (\n    id VARCHAR(36) PRIMARY KEY,\n    prescription_id VARCHAR(36) NOT NULL,\n    group_no INT NOT NULL,\n    drug_id VARCHAR(36) NOT NULL,\n    drug_name_snapshot VARCHAR(200) NOT NULL,\n    dose_once DECIMAL(18,4) NOT NULL,\n    dose_unit VARCHAR(32) NOT NULL,\n    frequency_code VARCHAR(32) NOT NULL,\n    route_code VARCHAR(32) NOT NULL,\n    days INT NOT NULL,\n    total_quantity INT NOT NULL,\n    unit_price DECIMAL(18,4) NOT NULL,\n    skin_test_flag INT NOT NULL,\n    skin_test_batch_no VARCHAR(80),\n    skin_test_checker_id VARCHAR(36),\n    is_deleted SMALLINT NOT NULL DEFAULT 0,\n    deleted_at_ms BIGINT,\n    deleted_by VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 26. ipd_beds\nCREATE TABLE IF NOT EXISTS ipd_beds (\n    id VARCHAR(36) PRIMARY KEY,\n    campus_id VARCHAR(36) NOT NULL,\n    ward_id VARCHAR(36) NOT NULL,\n    room_code VARCHAR(40) NOT NULL,\n    bed_code VARCHAR(40) NOT NULL,\n    bed_type VARCHAR(32) NOT NULL,\n    daily_fee DECIMAL(18,4) NOT NULL,\n    bed_status INT NOT NULL,\n    current_encounter_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 27. ipd_encounters\nCREATE TABLE IF NOT EXISTS ipd_encounters (\n    id VARCHAR(36) PRIMARY KEY,\n    admission_no VARCHAR(40) NOT NULL UNIQUE,\n    patient_id VARCHAR(36) NOT NULL,\n    campus_id VARCHAR(36) NOT NULL,\n    admit_dept_id VARCHAR(36) NOT NULL,\n    med_group_id VARCHAR(36),\n    admit_ward_id VARCHAR(36) NOT NULL,\n    is_borrowed_bed SMALLINT NOT NULL,\n    bed_code VARCHAR(40),\n    active_bed_token VARCHAR(36) NOT NULL,\n    attending_doctor_id VARCHAR(36),\n    primary_nurse_id VARCHAR(36),\n    nursing_level_code VARCHAR(32),\n    prepayment_balance DECIMAL(18,4) NOT NULL,\n    archive_ofd_id VARCHAR(36),\n    status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 28. ipd_transfer_logs\nCREATE TABLE IF NOT EXISTS ipd_transfer_logs (\n    id VARCHAR(36) PRIMARY KEY,\n    encounter_id VARCHAR(36) NOT NULL,\n    transfer_type VARCHAR(32) NOT NULL,\n    from_dept_id VARCHAR(36) NOT NULL,\n    from_ward_id VARCHAR(36) NOT NULL,\n    from_bed_code VARCHAR(40),\n    to_dept_id VARCHAR(36) NOT NULL,\n    to_ward_id VARCHAR(36) NOT NULL,\n    to_bed_code VARCHAR(40),\n    handover_out_at_ms BIGINT NOT NULL,\n    handover_in_at_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 29. ord_medical_orders\nCREATE TABLE IF NOT EXISTS ord_medical_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    order_no VARCHAR(40) NOT NULL UNIQUE,\n    encounter_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    order_ipd_dept_id VARCHAR(36) NOT NULL,\n    patient_ward_id VARCHAR(36) NOT NULL,\n    exec_target_dept_id VARCHAR(36) NOT NULL,\n    order_term_type INT NOT NULL,\n    group_no INT NOT NULL,\n    order_category VARCHAR(32) NOT NULL,\n    item_code VARCHAR(64) NOT NULL,\n    item_name VARCHAR(200) NOT NULL,\n    dosage DECIMAL(18,4) NOT NULL,\n    frequency_code VARCHAR(32) NOT NULL,\n    route_code VARCHAR(32) NOT NULL,\n    status INT NOT NULL,\n    order_doctor_id VARCHAR(36) NOT NULL,\n    verify_nurse_id VARCHAR(36),\n    plan_start_at_ms BIGINT NOT NULL,\n    plan_stop_at_ms BIGINT,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 30. ord_execution_plans\nCREATE TABLE IF NOT EXISTS ord_execution_plans (\n    id VARCHAR(36) PRIMARY KEY,\n    order_id VARCHAR(36) NOT NULL,\n    encounter_id VARCHAR(36) NOT NULL,\n    ward_id VARCHAR(36) NOT NULL,\n    planned_time_ms BIGINT NOT NULL,\n    exec_status INT NOT NULL,\n    exec_nurse_id VARCHAR(36),\n    dual_check_nurse_id VARCHAR(36),\n    executed_at_ms BIGINT,\n    pda_scan_token VARCHAR(128),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 31. mtc_service_requests\nCREATE TABLE IF NOT EXISTS mtc_service_requests (\n    id VARCHAR(36) PRIMARY KEY,\n    request_no VARCHAR(40) NOT NULL UNIQUE,\n    source_type VARCHAR(16) NOT NULL,\n    source_visit_id VARCHAR(36),\n    source_order_id VARCHAR(36),\n    patient_id VARCHAR(36) NOT NULL,\n    order_dept_id VARCHAR(36) NOT NULL,\n    order_ward_id VARCHAR(36),\n    exec_med_tech_dept_id VARCHAR(36) NOT NULL,\n    med_tech_sub_type VARCHAR(32) NOT NULL,\n    exec_room_code VARCHAR(64),\n    specimen_tube_code VARCHAR(64),\n    service_item_code VARCHAR(64) NOT NULL,\n    fee_amount DECIMAL(18,4) NOT NULL,\n    is_fee_confirmed SMALLINT NOT NULL,\n    status INT NOT NULL,\n    collected_at_ms BIGINT,\n    received_at_ms BIGINT,\n    executed_at_ms BIGINT,\n    report_summary VARCHAR(2000),\n    report_ofd_archive_id VARCHAR(36),\n    is_critical_value SMALLINT NOT NULL,\n    critical_ack_doc_id VARCHAR(36),\n    critical_ack_nurse_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 32. mtc_surgery_schedules\nCREATE TABLE IF NOT EXISTS mtc_surgery_schedules (\n    id VARCHAR(36) PRIMARY KEY,\n    encounter_id VARCHAR(36) NOT NULL,\n    or_dept_id VARCHAR(36) NOT NULL,\n    or_room_code VARCHAR(64) NOT NULL,\n    table_seq INT NOT NULL,\n    surgery_code VARCHAR(64) NOT NULL,\n    surgery_name VARCHAR(200) NOT NULL,\n    surgery_level INT NOT NULL,\n    main_surgeon_id VARCHAR(36) NOT NULL,\n    anesthesiologist_id VARCHAR(36) NOT NULL,\n    circulating_nurse_id VARCHAR(36) NOT NULL,\n    sign_in_ok SMALLINT NOT NULL,\n    time_out_ok SMALLINT NOT NULL,\n    sign_out_ok SMALLINT NOT NULL,\n    instrument_count_balanced SMALLINT NOT NULL,\n    status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 33. mtc_blood_requests\nCREATE TABLE IF NOT EXISTS mtc_blood_requests (\n    id VARCHAR(36) PRIMARY KEY,\n    encounter_id VARCHAR(36) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    abo_type VARCHAR(16) NOT NULL,\n    rh_type VARCHAR(16) NOT NULL,\n    blood_product_code VARCHAR(64) NOT NULL,\n    volume_ml INT NOT NULL,\n    cross_match_result VARCHAR(32),\n    bag_barcode VARCHAR(80),\n    dispensed_by_id VARCHAR(36),\n    dual_check_dispenser_id VARCHAR(36),\n    empty_bag_returned SMALLINT NOT NULL,\n    status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 34. inv_drugs\nCREATE TABLE IF NOT EXISTS inv_drugs (\n    id VARCHAR(36) PRIMARY KEY,\n    drug_code VARCHAR(64) NOT NULL UNIQUE,\n    drug_name VARCHAR(200) NOT NULL,\n    spec VARCHAR(100) NOT NULL,\n    unit_name VARCHAR(32) NOT NULL,\n    price DECIMAL(18,4) NOT NULL,\n    cost_price DECIMAL(18,4) NOT NULL,\n    antibiotic_level INT NOT NULL,\n    is_narcotic SMALLINT NOT NULL,\n    is_skin_test_required SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 35. inv_drug_batches\nCREATE TABLE IF NOT EXISTS inv_drug_batches (\n    id VARCHAR(36) PRIMARY KEY,\n    warehouse_or_pharmacy_id VARCHAR(36) NOT NULL,\n    drug_id VARCHAR(36) NOT NULL,\n    batch_no VARCHAR(80) NOT NULL,\n    expiry_date_int INT NOT NULL,\n    invoice_no VARCHAR(80),\n    cold_chain_temp_celsius DECIMAL(18,4),\n    quantity INT NOT NULL,\n    is_frozen SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 36. inv_stock_ledgers\nCREATE TABLE IF NOT EXISTS inv_stock_ledgers (\n    id VARCHAR(36) PRIMARY KEY,\n    warehouse_or_pharmacy_id VARCHAR(36) NOT NULL,\n    drug_id VARCHAR(36) NOT NULL,\n    batch_id VARCHAR(36) NOT NULL,\n    change_type VARCHAR(32) NOT NULL,\n    change_quantity INT NOT NULL,\n    balance_after INT NOT NULL,\n    reference_doc_no VARCHAR(80),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 37. phm_dispense_orders\nCREATE TABLE IF NOT EXISTS phm_dispense_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    dispense_no VARCHAR(40) NOT NULL UNIQUE,\n    pharmacy_id VARCHAR(36) NOT NULL,\n    prescription_id VARCHAR(36),\n    ward_summary_id VARCHAR(36),\n    patient_id VARCHAR(36) NOT NULL,\n    status INT NOT NULL,\n    dispensed_by_id VARCHAR(36),\n    dispensed_at_ms BIGINT,\n    drug_return_confirmed SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 38. fin_payment_orders\nCREATE TABLE IF NOT EXISTS fin_payment_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    payment_no VARCHAR(40) NOT NULL UNIQUE,\n    request_key VARCHAR(100) UNIQUE,\n    scene VARCHAR(16) NOT NULL,\n    patient_id VARCHAR(36) NOT NULL,\n    visit_or_encounter_id VARCHAR(36) NOT NULL,\n    total_amount DECIMAL(18,4) NOT NULL,\n    insurance_amount DECIMAL(18,4) NOT NULL,\n    prepayment_deduct DECIMAL(18,4) NOT NULL,\n    self_pay_amount DECIMAL(18,4) NOT NULL,\n    payment_channel VARCHAR(32) NOT NULL,\n    status INT NOT NULL,\n    paid_at_ms BIGINT,\n    invoice_ofd_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 39. fin_refund_orders\nCREATE TABLE IF NOT EXISTS fin_refund_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    refund_no VARCHAR(40) NOT NULL UNIQUE,\n    original_payment_id VARCHAR(36) NOT NULL,\n    refund_amount DECIMAL(18,4) NOT NULL,\n    reason VARCHAR(500) NOT NULL,\n    drug_return_confirmed SMALLINT NOT NULL,\n    approved_by VARCHAR(36),\n    refunded_at_ms BIGINT,\n    status INT NOT NULL,\n    reissued_invoice_ofd_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 40. fin_charge_ledgers\nCREATE TABLE IF NOT EXISTS fin_charge_ledgers (\n    id VARCHAR(36) PRIMARY KEY,\n    patient_id VARCHAR(36) NOT NULL,\n    visit_or_encounter_id VARCHAR(36) NOT NULL,\n    order_dept_id VARCHAR(36) NOT NULL,\n    patient_ward_id VARCHAR(36),\n    exec_dept_id VARCHAR(36) NOT NULL,\n    item_code VARCHAR(64) NOT NULL,\n    item_name VARCHAR(200) NOT NULL,\n    quantity DECIMAL(18,4) NOT NULL,\n    unit_price DECIMAL(18,4) NOT NULL,\n    total_amount DECIMAL(18,4) NOT NULL,\n    status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 41. fin_daily_closings\nCREATE TABLE IF NOT EXISTS fin_daily_closings (\n    id VARCHAR(36) PRIMARY KEY,\n    closing_no VARCHAR(40) NOT NULL UNIQUE,\n    cashier_user_id VARCHAR(36) NOT NULL,\n    closing_date_int INT NOT NULL,\n    total_income DECIMAL(18,4) NOT NULL,\n    total_refund DECIMAL(18,4) NOT NULL,\n    net_amount DECIMAL(18,4) NOT NULL,\n    reconciled_status INT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 42. ops_audit_events\nCREATE TABLE IF NOT EXISTS ops_audit_events (\n    id VARCHAR(36) PRIMARY KEY,\n    event_type VARCHAR(64) NOT NULL,\n    user_id VARCHAR(36),\n    operator_name VARCHAR(128),\n    dept_id VARCHAR(36),\n    target_entity VARCHAR(64) NOT NULL,\n    target_id VARCHAR(36) NOT NULL,\n    action_detail VARCHAR(2000),\n    prev_hash VARCHAR(64) NOT NULL,\n    curr_hash VARCHAR(64) NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 43. ops_idempotency_keys\nCREATE TABLE IF NOT EXISTS ops_idempotency_keys (\n    id VARCHAR(36) PRIMARY KEY,\n    request_key VARCHAR(100) NOT NULL UNIQUE,\n    request_sha256 VARCHAR(64) NOT NULL,\n    response_json TEXT,\n    expires_at_ms BIGINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 44. ops_outbox_messages\nCREATE TABLE IF NOT EXISTS ops_outbox_messages (\n    id VARCHAR(36) PRIMARY KEY,\n    event_type VARCHAR(128) NOT NULL,\n    payload_json TEXT NOT NULL,\n    status INT NOT NULL,\n    retry_count INT NOT NULL,\n    last_error VARCHAR(1000),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 45. cfg_icd10_diagnoses\nCREATE TABLE IF NOT EXISTS cfg_icd10_diagnoses (\n    id VARCHAR(36) PRIMARY KEY,\n    icd_code VARCHAR(32) NOT NULL UNIQUE,\n    disease_name VARCHAR(200) NOT NULL,\n    pinyin_code VARCHAR(64),\n    category_name VARCHAR(64) NOT NULL,\n    gender_exclusive VARCHAR(16) NOT NULL,\n    is_chronic_special SMALLINT NOT NULL,\n    is_infectious_report SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 46. cfg_price_items\nCREATE TABLE IF NOT EXISTS cfg_price_items (\n    id VARCHAR(36) PRIMARY KEY,\n    item_code VARCHAR(64) NOT NULL UNIQUE,\n    national_ins_code VARCHAR(64),\n    item_name VARCHAR(200) NOT NULL,\n    pinyin_code VARCHAR(64),\n    fee_category VARCHAR(32) NOT NULL,\n    spec VARCHAR(100),\n    unit_name VARCHAR(32) NOT NULL,\n    unit_price DECIMAL(18,4) NOT NULL,\n    reimburse_type VARCHAR(16) NOT NULL,\n    default_exec_dept_id VARCHAR(36),\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 47. cfg_order_frequencies\nCREATE TABLE IF NOT EXISTS cfg_order_frequencies (\n    id VARCHAR(36) PRIMARY KEY,\n    freq_code VARCHAR(32) NOT NULL UNIQUE,\n    freq_name VARCHAR(64) NOT NULL,\n    daily_times INT NOT NULL,\n    time_points_text VARCHAR(255) NOT NULL,\n    applicable_term VARCHAR(32) NOT NULL,\n    description VARCHAR(500),\n    sort_order INT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 48. cfg_clinical_dictionaries\nCREATE TABLE IF NOT EXISTS cfg_clinical_dictionaries (\n    id VARCHAR(36) PRIMARY KEY,\n    dict_type VARCHAR(64) NOT NULL,\n    item_code VARCHAR(64) NOT NULL,\n    item_name VARCHAR(128) NOT NULL,\n    pinyin_code VARCHAR(64),\n    parent_code VARCHAR(64),\n    sort_order INT NOT NULL,\n    is_default SMALLINT NOT NULL,\n    is_active SMALLINT NOT NULL,\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 49. inv_drug_price_logs\nCREATE TABLE IF NOT EXISTS inv_drug_price_logs (\n    id VARCHAR(36) PRIMARY KEY,\n    adjust_no VARCHAR(40) NOT NULL UNIQUE,\n    drug_id VARCHAR(36) NOT NULL,\n    drug_code VARCHAR(64) NOT NULL,\n    drug_name VARCHAR(200) NOT NULL,\n    old_retail_price DECIMAL(18,4) NOT NULL,\n    new_retail_price DECIMAL(18,4) NOT NULL,\n    old_cost_price DECIMAL(18,4) NOT NULL,\n    new_cost_price DECIMAL(18,4) NOT NULL,\n    affected_stock_quantity INT NOT NULL,\n    price_diff_amount DECIMAL(18,4) NOT NULL,\n    adjust_reason VARCHAR(500) NOT NULL,\n    effective_at_ms BIGINT NOT NULL,\n    operator_id VARCHAR(36),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);\n\n-- 50. inv_transfer_orders\nCREATE TABLE IF NOT EXISTS inv_transfer_orders (\n    id VARCHAR(36) PRIMARY KEY,\n    transfer_no VARCHAR(40) NOT NULL UNIQUE,\n    transfer_type VARCHAR(32) NOT NULL,\n    source_warehouse_id VARCHAR(36) NOT NULL,\n    target_warehouse_id VARCHAR(36) NOT NULL,\n    drug_id VARCHAR(36) NOT NULL,\n    drug_name_snapshot VARCHAR(200) NOT NULL,\n    batch_id VARCHAR(36) NOT NULL,\n    batch_no VARCHAR(80) NOT NULL,\n    expiry_date_int INT NOT NULL,\n    quantity INT NOT NULL,\n    unit_cost_price DECIMAL(18,4) NOT NULL,\n    unit_retail_price DECIMAL(18,4) NOT NULL,\n    total_retail_amount DECIMAL(18,4) NOT NULL,\n    status INT NOT NULL,\n    applicant_id VARCHAR(36),\n    dispatched_by_id VARCHAR(36),\n    dispatched_at_ms BIGINT,\n    received_by_id VARCHAR(36),\n    received_at_ms BIGINT,\n    remark VARCHAR(500),\n    ext_data_json VARCHAR(4000),\n    schema_version INT NOT NULL,\n    created_at_ms BIGINT NOT NULL,\n    created_by VARCHAR(36),\n    updated_at_ms BIGINT NOT NULL,\n    updated_by VARCHAR(36),\n    version_no INT NOT NULL\n);".Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		string[] array = statements;
+		foreach (string stmt in array)
+		{
+			if (!string.IsNullOrWhiteSpace(stmt))
+			{
+				await conn.ExecuteAsync(stmt);
+			}
+		}
+		await EnsureColumnAsync(conn, "opd_prescription_items", "is_deleted", "SMALLINT NOT NULL DEFAULT 0");
+		await EnsureColumnAsync(conn, "opd_prescription_items", "deleted_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "opd_prescription_items", "deleted_by", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "opd_prescriptions", "payment_order_id", "VARCHAR(36)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_opd_prescriptions_payment ON opd_prescriptions (payment_order_id)");
+		await EnsureColumnAsync(conn, "fin_payment_orders", "prepayment_id", "VARCHAR(36)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_fin_payment_orders_prepayment ON fin_payment_orders (prepayment_id)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_fin_payment_orders_paid ON fin_payment_orders (paid_at_ms, created_by)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_fin_refund_orders_created ON fin_refund_orders (created_at_ms, created_by, original_payment_id)");
+		await EnsureColumnAsync(conn, "fin_charge_ledgers", "refund_amount", "DECIMAL(18,4) NOT NULL DEFAULT 0");
+		await conn.ExecuteAsync("CREATE UNIQUE INDEX IF NOT EXISTS ux_fin_daily_closings_cashier_date ON fin_daily_closings (cashier_user_id, closing_date_int)");
+		await EnsureColumnAsync(conn, "cfg_field_definitions", "is_deleted", "SMALLINT NOT NULL DEFAULT 0");
+		await EnsureColumnAsync(conn, "cfg_field_definitions", "deleted_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "cfg_field_definitions", "deleted_by", "VARCHAR(36)");
+		await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS ops_audit_anchors (id VARCHAR(36) PRIMARY KEY, checkpoint_type VARCHAR(32) NOT NULL, last_event_id VARCHAR(36) NOT NULL, last_event_hash VARCHAR(64) NOT NULL, total_events_count INT NOT NULL, created_at_ms BIGINT NOT NULL, created_by VARCHAR(36), ext_data_json VARCHAR(4000), schema_version INT NOT NULL DEFAULT 1, updated_at_ms BIGINT NOT NULL DEFAULT 0, updated_by VARCHAR(36), version_no INT NOT NULL DEFAULT 1)");
+		await conn.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS sys_refresh_tokens (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    post_id VARCHAR(36) NOT NULL,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    session_version INT NOT NULL,
+    expires_at_ms BIGINT NOT NULL,
+    rotated_at_ms BIGINT,
+    revoked_at_ms BIGINT,
+    replaced_by_token_hash VARCHAR(64),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_user ON sys_refresh_tokens (user_id, session_version);
+CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (expires_at_ms);");
+		await EnsureInpatientFlowSchemaAsync(conn);
+		await EnsurePharmacyDispenseSchemaAsync(conn);
+		await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS opd_schedule_templates (id VARCHAR(36) PRIMARY KEY, campus_id VARCHAR(36) NOT NULL, opd_dept_id VARCHAR(36) NOT NULL, clinic_room_id VARCHAR(36), doctor_id VARCHAR(36) NOT NULL, template_name VARCHAR(128) NOT NULL, weekday_codes VARCHAR(20) NOT NULL, slot_period_code VARCHAR(32) NOT NULL, start_minute INT NOT NULL, end_minute INT NOT NULL, reg_level_code VARCHAR(32) NOT NULL, registration_fee DECIMAL(18,4) NOT NULL, total_capacity INT NOT NULL, is_active SMALLINT NOT NULL, ext_data_json VARCHAR(4000), schema_version INT NOT NULL, created_at_ms BIGINT NOT NULL, created_by VARCHAR(36), updated_at_ms BIGINT NOT NULL, updated_by VARCHAR(36), version_no INT NOT NULL)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_opd_schedule_slots_date_dept ON opd_schedule_slots (schedule_date_int, opd_dept_id)");
+		await EnsureRegistrationColumnsAsync(conn);
+	}
 
-    -- 4. emr_section_schemas
-    CREATE TABLE IF NOT EXISTS emr_section_schemas (
-        id VARCHAR(36) PRIMARY KEY,
-        template_id VARCHAR(36) NOT NULL,
-        section_code VARCHAR(64) NOT NULL,
-        section_title VARCHAR(128) NOT NULL,
-        render_mode VARCHAR(32) NOT NULL,
-        content_template_json TEXT,
-        section_control_key VARCHAR(128),
-        is_required SMALLINT NOT NULL,
-        visibility_expr VARCHAR(500),
-        sort_order INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
+	private static async Task EnsureColumnAsync(DbConnection conn, string table, string column, string definition)
+	{
+		if (!(await conn.QueryAsync<TableColumnInfo>("PRAGMA table_info(" + table + ")")).Any((TableColumnInfo row) => string.Equals(row.Name, column, StringComparison.OrdinalIgnoreCase)))
+		{
+			await conn.ExecuteAsync($"ALTER TABLE {table} ADD COLUMN {column} {definition}");
+		}
+	}
 
-    -- 5. emr_documents
-    CREATE TABLE IF NOT EXISTS emr_documents (
-        id VARCHAR(36) PRIMARY KEY,
-        doc_no VARCHAR(40) NOT NULL UNIQUE,
-        request_key VARCHAR(100) UNIQUE,
-        campus_id VARCHAR(36),
-        emr_scene VARCHAR(16) NOT NULL,
-        visit_or_encounter_id VARCHAR(36) NOT NULL,
-        patient_id VARCHAR(36) NOT NULL,
-        dept_id VARCHAR(36) NOT NULL,
-        ward_id VARCHAR(36),
-        template_id VARCHAR(36) NOT NULL,
-        template_version INT NOT NULL,
-        doc_type_code VARCHAR(64) NOT NULL,
-        doc_title VARCHAR(200) NOT NULL,
-        clinical_time_ms BIGINT NOT NULL,
-        structured_ast_json TEXT,
-        plain_text_summary TEXT,
-        track_changes_json TEXT,
-        status INT NOT NULL,
-        author_id VARCHAR(36) NOT NULL,
-        resident_signed_at_ms BIGINT,
-        attending_doctor_id VARCHAR(36),
-        attending_signed_at_ms BIGINT,
-        chief_doctor_id VARCHAR(36),
-        chief_signed_at_ms BIGINT,
-        patient_sign_svg TEXT,
-        latest_ofd_archive_id VARCHAR(36),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
+	private static async Task EnsureRegistrationColumnsAsync(DbConnection conn)
+	{
+		await EnsureColumnAsync(conn, "opd_appointments", "payment_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "opd_appointments", "paid_amount", "DECIMAL(18,4) NOT NULL DEFAULT 0");
+		await EnsureColumnAsync(conn, "opd_appointments", "payment_channel", "VARCHAR(32)");
+		await EnsureColumnAsync(conn, "opd_appointments", "paid_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "opd_appointments", "refund_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "opd_appointments", "refund_reason", "VARCHAR(500)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_opd_appointments_run_status ON opd_appointments (schedule_id, status)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_fin_charge_ledgers_visit ON fin_charge_ledgers (visit_or_encounter_id)");
+		await EnsureColumnAsync(conn, "fin_charge_ledgers", "payment_order_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "fin_charge_ledgers", "source_service_request_id", "VARCHAR(36)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_fin_charge_ledgers_payment ON fin_charge_ledgers (payment_order_id)");
+		await EnsureColumnAsync(conn, "inv_stock_ledgers", "payment_order_id", "VARCHAR(36)");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_inv_stock_ledgers_payment ON inv_stock_ledgers (payment_order_id)");
+                await EnsureColumnAsync(conn, "inv_stock_ledgers", "unit_cost_price", "DECIMAL(18,4)");
+                await EnsureColumnAsync(conn, "inv_stock_ledgers", "unit_retail_price", "DECIMAL(18,4)");
+		await conn.ExecuteAsync("CREATE UNIQUE INDEX IF NOT EXISTS ux_fin_charge_ledgers_source_service ON fin_charge_ledgers (source_service_request_id) WHERE source_service_request_id IS NOT NULL");
+		await conn.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS ipd_discharge_requests (
+    id VARCHAR(36) PRIMARY KEY,
+    request_no VARCHAR(40) NOT NULL UNIQUE,
+    encounter_id VARCHAR(36) NOT NULL UNIQUE,
+    patient_id VARCHAR(36) NOT NULL,
+    discharge_diagnosis VARCHAR(1000),
+    discharge_instructions VARCHAR(2000),
+    requested_at_ms BIGINT NOT NULL,
+    settled_at_ms BIGINT,
+    settled_by VARCHAR(36),
+    status VARCHAR(20) NOT NULL,
+    settlement_payment_id VARCHAR(36),
+    settlement_total_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    insurance_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    prepayment_deduct DECIMAL(18,4) NOT NULL DEFAULT 0,
+    self_pay_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    refund_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL
+);");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_ipd_discharge_requests_status ON ipd_discharge_requests (status, requested_at_ms)");
+		await EnsureColumnAsync(conn, "ipd_discharge_requests", "settlement_request_key", "VARCHAR(100)");
+		await conn.ExecuteAsync("CREATE UNIQUE INDEX IF NOT EXISTS ux_ipd_discharge_requests_settlement_key ON ipd_discharge_requests (settlement_request_key) WHERE settlement_request_key IS NOT NULL");
+	}
 
-    -- 6. emr_document_elements
-    CREATE TABLE IF NOT EXISTS emr_document_elements (
-        id VARCHAR(36) PRIMARY KEY,
-        document_id VARCHAR(36) NOT NULL,
-        patient_id VARCHAR(36) NOT NULL,
-        emr_scene VARCHAR(16) NOT NULL,
-        doc_type_code VARCHAR(64) NOT NULL,
-        section_code VARCHAR(64) NOT NULL,
-        element_code VARCHAR(64) NOT NULL,
-        nhc_std_code VARCHAR(64),
-        val_string VARCHAR(1000),
-        val_int BIGINT,
-        val_decimal DECIMAL(18,4),
-        val_time_ms BIGINT,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
+	private static async Task EnsureInpatientFlowSchemaAsync(DbConnection conn)
+	{
+		await EnsureColumnAsync(conn, "ipd_encounters", "triage_status", "INT NOT NULL DEFAULT 0");
+		await EnsureColumnAsync(conn, "ipd_encounters", "accepted_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "ipd_encounters", "accepted_by", "VARCHAR(36)");
+		await conn.ExecuteAsync(@"
+CREATE TABLE IF NOT EXISTS ipd_admission_cards (
+    id VARCHAR(36) PRIMARY KEY,
+    card_no VARCHAR(40) NOT NULL UNIQUE,
+    request_key VARCHAR(100) NOT NULL UNIQUE,
+    patient_id VARCHAR(36) NOT NULL,
+    visit_id VARCHAR(36),
+    source_doctor_id VARCHAR(36) NOT NULL,
+    source_dept_id VARCHAR(36) NOT NULL,
+    suggested_ipd_dept_id VARCHAR(36) NOT NULL,
+    suggested_ward_id VARCHAR(36),
+    admission_diagnosis VARCHAR(500),
+    contact_phone VARCHAR(32),
+    remark VARCHAR(500),
+    status VARCHAR(20) NOT NULL,
+    encounter_id VARCHAR(36),
+    registered_by VARCHAR(36),
+    registered_at_ms BIGINT,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_ipd_admission_cards_patient_pending
+    ON ipd_admission_cards (patient_id) WHERE status = 'PENDING';
+CREATE INDEX IF NOT EXISTS ix_ipd_admission_cards_status_created
+    ON ipd_admission_cards (status, created_at_ms);
+CREATE TABLE IF NOT EXISTS ipd_prepayments (
+    id VARCHAR(36) PRIMARY KEY,
+    prepayment_no VARCHAR(40) NOT NULL UNIQUE,
+    request_key VARCHAR(100) NOT NULL UNIQUE,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    amount DECIMAL(18,4) NOT NULL,
+    balance_after DECIMAL(18,4) NOT NULL,
+    payment_channel VARCHAR(32) NOT NULL,
+    cashier_id VARCHAR(36) NOT NULL,
+    paid_at_ms BIGINT NOT NULL,
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_ipd_prepayments_encounter_paid
+    ON ipd_prepayments (encounter_id, paid_at_ms);
+");
+	}
 
-    -- 7. emr_ofd_archives
-    CREATE TABLE IF NOT EXISTS emr_ofd_archives (
-        id VARCHAR(36) PRIMARY KEY,
-        ofd_no VARCHAR(40) NOT NULL UNIQUE,
-        archive_scope VARCHAR(32) NOT NULL,
-        visit_or_encounter_id VARCHAR(36) NOT NULL,
-        document_id VARCHAR(36),
-        patient_id VARCHAR(36) NOT NULL,
-        ofd_version_standard VARCHAR(32) NOT NULL,
-        page_count INT NOT NULL,
-        file_storage_key VARCHAR(255) NOT NULL,
-        file_size_bytes BIGINT NOT NULL,
-        content_sha256 VARCHAR(64) NOT NULL,
-        sm3_digest VARCHAR(64) NOT NULL,
-        ca_sign_serial_no VARCHAR(128),
-        tsa_timestamp_token VARCHAR(500),
-        has_embedded_semantic_xml SMALLINT NOT NULL,
-        archive_status INT NOT NULL,
-        generated_at_ms BIGINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 8. sys_departments
-    CREATE TABLE IF NOT EXISTS sys_departments (
-        id VARCHAR(36) PRIMARY KEY,
-        campus_id VARCHAR(36) NOT NULL,
-        dept_code VARCHAR(64) NOT NULL UNIQUE,
-        dept_name VARCHAR(128) NOT NULL,
-        pinyin_code VARCHAR(64),
-        dept_category VARCHAR(32) NOT NULL,
-        sub_specialty_type VARCHAR(32),
-        parent_admin_id VARCHAR(36),
-        gender_limit VARCHAR(16),
-        min_age_days INT,
-        max_age_years INT,
-        default_pharmacy_id VARCHAR(36),
-        rated_bed_count INT,
-        location_address VARCHAR(255),
-        is_allow_appointment SMALLINT NOT NULL,
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 9. sys_dept_ward_relations
-    CREATE TABLE IF NOT EXISTS sys_dept_ward_relations (
-        id VARCHAR(36) PRIMARY KEY,
-        ipd_dept_id VARCHAR(36) NOT NULL,
-        ward_dept_id VARCHAR(36) NOT NULL,
-        relation_type VARCHAR(32) NOT NULL,
-        max_borrow_beds INT NOT NULL,
-        priority_order INT NOT NULL,
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 10. sys_medtech_exec_routings
-    CREATE TABLE IF NOT EXISTS sys_medtech_exec_routings (
-        id VARCHAR(36) PRIMARY KEY,
-        campus_id VARCHAR(36) NOT NULL,
-        source_scene VARCHAR(32) NOT NULL,
-        order_dept_id VARCHAR(36),
-        service_item_code VARCHAR(64) NOT NULL,
-        exec_med_tech_dept_id VARCHAR(36) NOT NULL,
-        exec_room_code VARCHAR(64),
-        time_window_type VARCHAR(32) NOT NULL,
-        priority_weight INT NOT NULL,
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 11. sys_users
-    CREATE TABLE IF NOT EXISTS sys_users (
-        id VARCHAR(36) PRIMARY KEY,
-        user_name VARCHAR(64) NOT NULL UNIQUE,
-        display_name VARCHAR(128) NOT NULL,
-        employee_no VARCHAR(64) NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        bound_patient_id VARCHAR(36),
-        prescribe_level INT NOT NULL,
-        surgery_level INT NOT NULL,
-        emr_sign_level INT NOT NULL,
-        ca_cert_id VARCHAR(128),
-        session_version INT NOT NULL,
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 12. sys_user_dept_posts
-    CREATE TABLE IF NOT EXISTS sys_user_dept_posts (
-        id VARCHAR(36) PRIMARY KEY,
-        user_id VARCHAR(36) NOT NULL,
-        dept_id VARCHAR(36) NOT NULL,
-        dept_category VARCHAR(32) NOT NULL,
-        med_group_id VARCHAR(36),
-        role_id VARCHAR(36) NOT NULL,
-        is_default_context SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 13. sys_roles
-    CREATE TABLE IF NOT EXISTS sys_roles (
-        id VARCHAR(36) PRIMARY KEY,
-        role_code VARCHAR(64) NOT NULL UNIQUE,
-        role_name VARCHAR(128) NOT NULL,
-        data_scope VARCHAR(32) NOT NULL,
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 14. sys_permission_resources
-    CREATE TABLE IF NOT EXISTS sys_permission_resources (
-        id VARCHAR(36) PRIMARY KEY,
-        resource_key VARCHAR(128) NOT NULL UNIQUE,
-        parent_key VARCHAR(128),
-        resource_type VARCHAR(32) NOT NULL,
-        resource_name VARCHAR(128) NOT NULL,
-        ursa_control_type VARCHAR(64),
-        api_method_path VARCHAR(255),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 15. sys_role_permissions
-    CREATE TABLE IF NOT EXISTS sys_role_permissions (
-        id VARCHAR(36) PRIMARY KEY,
-        role_id VARCHAR(36) NOT NULL,
-        resource_key VARCHAR(128) NOT NULL,
-        access_policy INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 16. cfg_form_schemas
-    CREATE TABLE IF NOT EXISTS cfg_form_schemas (
-        id VARCHAR(36) PRIMARY KEY,
-        form_code VARCHAR(64) NOT NULL UNIQUE,
-        form_name VARCHAR(128) NOT NULL,
-        entity_type VARCHAR(64) NOT NULL,
-        dept_category VARCHAR(32),
-        target_dept_id VARCHAR(36),
-        grid_columns INT NOT NULL,
-        is_published SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 17. cfg_field_definitions
-    CREATE TABLE IF NOT EXISTS cfg_field_definitions (
-        id VARCHAR(36) PRIMARY KEY,
-        form_schema_id VARCHAR(36) NOT NULL,
-        field_code VARCHAR(64) NOT NULL,
-        field_label VARCHAR(128) NOT NULL,
-        data_type VARCHAR(32) NOT NULL,
-        ursa_control_type VARCHAR(64) NOT NULL,
-        control_key VARCHAR(128),
-        dict_code VARCHAR(64),
-        unit_text VARCHAR(32),
-        validation_rule_json VARCHAR(2000),
-        visibility_expr VARCHAR(500),
-        is_indexed SMALLINT NOT NULL,
-        sort_order INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 18. cfg_entity_field_values
-    CREATE TABLE IF NOT EXISTS cfg_entity_field_values (
-        id VARCHAR(36) PRIMARY KEY,
-        entity_type VARCHAR(64) NOT NULL,
-        entity_id VARCHAR(36) NOT NULL,
-        field_code VARCHAR(64) NOT NULL,
-        val_string VARCHAR(500),
-        val_int BIGINT,
-        val_decimal DECIMAL(18,4),
-        val_time_ms BIGINT,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 19. pat_patients
-    CREATE TABLE IF NOT EXISTS pat_patients (
-        id VARCHAR(36) PRIMARY KEY,
-        medical_record_no VARCHAR(32) NOT NULL UNIQUE,
-        full_name VARCHAR(128) NOT NULL,
-        pinyin_code VARCHAR(64),
-        gender_code VARCHAR(16) NOT NULL,
-        birth_date_int INT NOT NULL,
-        id_card_type VARCHAR(32) NOT NULL,
-        id_card_cipher VARCHAR(255),
-        id_card_hash VARCHAR(64) NOT NULL,
-        phone_cipher VARCHAR(255),
-        phone_masked VARCHAR(32),
-        guardian_name VARCHAR(128),
-        guardian_id_hash VARCHAR(64),
-        allergy_tags_json VARCHAR(2000),
-        is_temp_emergency SMALLINT NOT NULL,
-        merged_to_patient_id VARCHAR(36),
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 20. opd_schedule_slots
-    CREATE TABLE IF NOT EXISTS opd_schedule_slots (
-        id VARCHAR(36) PRIMARY KEY,
-        campus_id VARCHAR(36) NOT NULL,
-        opd_dept_id VARCHAR(36) NOT NULL,
-        clinic_room_id VARCHAR(36),
-        doctor_id VARCHAR(36) NOT NULL,
-        substitute_doctor_id VARCHAR(36),
-        schedule_date_int INT NOT NULL,
-        slot_period_code VARCHAR(32) NOT NULL,
-        starts_at_ms BIGINT NOT NULL,
-        ends_at_ms BIGINT NOT NULL,
-        reg_level_code VARCHAR(32) NOT NULL,
-        registration_fee DECIMAL(18,4) NOT NULL,
-        total_capacity INT NOT NULL,
-        reserved_count INT NOT NULL,
-        slot_status INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 21. opd_appointments
-    CREATE TABLE IF NOT EXISTS opd_appointments (
-        id VARCHAR(36) PRIMARY KEY,
-        appointment_no VARCHAR(40) NOT NULL UNIQUE,
-        request_key VARCHAR(100) UNIQUE,
-        patient_id VARCHAR(36) NOT NULL,
-        schedule_id VARCHAR(36) NOT NULL,
-        active_unique_token VARCHAR(36) NOT NULL,
-        queue_no INT NOT NULL,
-        status INT NOT NULL,
-        lock_expires_at_ms BIGINT NOT NULL,
-        visit_id VARCHAR(36),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 22. opd_visits
-    CREATE TABLE IF NOT EXISTS opd_visits (
-        id VARCHAR(36) PRIMARY KEY,
-        visit_no VARCHAR(40) NOT NULL UNIQUE,
-        request_key VARCHAR(100) UNIQUE,
-        campus_id VARCHAR(36) NOT NULL,
-        opd_dept_id VARCHAR(36) NOT NULL,
-        clinic_room_id VARCHAR(36),
-        patient_id VARCHAR(36) NOT NULL,
-        schedule_id VARCHAR(36),
-        doctor_id VARCHAR(36) NOT NULL,
-        is_emergency SMALLINT NOT NULL,
-        er_triage_level INT,
-        is_green_channel SMALLINT NOT NULL,
-        green_credit_limit DECIMAL(18,4),
-        is_return_visit SMALLINT NOT NULL,
-        status INT NOT NULL,
-        primary_diag_code VARCHAR(32),
-        primary_diag_name VARCHAR(255),
-        emr_document_id VARCHAR(36),
-        ofd_archive_id VARCHAR(36),
-        signed_at_ms BIGINT,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 23. opd_triage_queues
-    CREATE TABLE IF NOT EXISTS opd_triage_queues (
-        id VARCHAR(36) PRIMARY KEY,
-        visit_id VARCHAR(36) NOT NULL UNIQUE,
-        opd_dept_id VARCHAR(36) NOT NULL,
-        clinic_room_id VARCHAR(36),
-        priority_score INT NOT NULL,
-        pass_count INT NOT NULL,
-        queue_status INT NOT NULL,
-        checkin_at_ms BIGINT NOT NULL,
-        called_at_ms BIGINT,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 24. opd_prescriptions
-    CREATE TABLE IF NOT EXISTS opd_prescriptions (
-        id VARCHAR(36) PRIMARY KEY,
-        prescription_no VARCHAR(40) NOT NULL UNIQUE,
-        visit_id VARCHAR(36) NOT NULL,
-        patient_id VARCHAR(36) NOT NULL,
-        opd_dept_id VARCHAR(36) NOT NULL,
-        doctor_id VARCHAR(36) NOT NULL,
-        target_pharmacy_id VARCHAR(36) NOT NULL,
-        rx_type VARCHAR(32) NOT NULL,
-        herb_doses INT,
-        total_amount DECIMAL(18,4) NOT NULL,
-        status INT NOT NULL,
-        reviewer_pharmacist_id VARCHAR(36),
-        review_remark VARCHAR(500),
-        rx_ofd_archive_id VARCHAR(36),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 25. opd_prescription_items
-    CREATE TABLE IF NOT EXISTS opd_prescription_items (
-        id VARCHAR(36) PRIMARY KEY,
-        prescription_id VARCHAR(36) NOT NULL,
-        group_no INT NOT NULL,
-        drug_id VARCHAR(36) NOT NULL,
-        drug_name_snapshot VARCHAR(200) NOT NULL,
-        dose_once DECIMAL(18,4) NOT NULL,
-        dose_unit VARCHAR(32) NOT NULL,
-        frequency_code VARCHAR(32) NOT NULL,
-        route_code VARCHAR(32) NOT NULL,
-        days INT NOT NULL,
-        total_quantity INT NOT NULL,
-        unit_price DECIMAL(18,4) NOT NULL,
-        skin_test_flag INT NOT NULL,
-        skin_test_batch_no VARCHAR(80),
-        skin_test_checker_id VARCHAR(36),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 26. ipd_beds
-    CREATE TABLE IF NOT EXISTS ipd_beds (
-        id VARCHAR(36) PRIMARY KEY,
-        campus_id VARCHAR(36) NOT NULL,
-        ward_id VARCHAR(36) NOT NULL,
-        room_code VARCHAR(40) NOT NULL,
-        bed_code VARCHAR(40) NOT NULL,
-        bed_type VARCHAR(32) NOT NULL,
-        daily_fee DECIMAL(18,4) NOT NULL,
-        bed_status INT NOT NULL,
-        current_encounter_id VARCHAR(36),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 27. ipd_encounters
-    CREATE TABLE IF NOT EXISTS ipd_encounters (
-        id VARCHAR(36) PRIMARY KEY,
-        admission_no VARCHAR(40) NOT NULL UNIQUE,
-        patient_id VARCHAR(36) NOT NULL,
-        campus_id VARCHAR(36) NOT NULL,
-        admit_dept_id VARCHAR(36) NOT NULL,
-        med_group_id VARCHAR(36),
-        admit_ward_id VARCHAR(36) NOT NULL,
-        is_borrowed_bed SMALLINT NOT NULL,
-        bed_code VARCHAR(40),
-        active_bed_token VARCHAR(36) NOT NULL,
-        attending_doctor_id VARCHAR(36),
-        primary_nurse_id VARCHAR(36),
-        nursing_level_code VARCHAR(32),
-        prepayment_balance DECIMAL(18,4) NOT NULL,
-        archive_ofd_id VARCHAR(36),
-        status INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 28. ipd_transfer_logs
-    CREATE TABLE IF NOT EXISTS ipd_transfer_logs (
-        id VARCHAR(36) PRIMARY KEY,
-        encounter_id VARCHAR(36) NOT NULL,
-        transfer_type VARCHAR(32) NOT NULL,
-        from_dept_id VARCHAR(36) NOT NULL,
-        from_ward_id VARCHAR(36) NOT NULL,
-        from_bed_code VARCHAR(40),
-        to_dept_id VARCHAR(36) NOT NULL,
-        to_ward_id VARCHAR(36) NOT NULL,
-        to_bed_code VARCHAR(40),
-        handover_out_at_ms BIGINT NOT NULL,
-        handover_in_at_ms BIGINT,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 29. ord_medical_orders
-    CREATE TABLE IF NOT EXISTS ord_medical_orders (
-        id VARCHAR(36) PRIMARY KEY,
-        order_no VARCHAR(40) NOT NULL UNIQUE,
-        encounter_id VARCHAR(36) NOT NULL,
-        patient_id VARCHAR(36) NOT NULL,
-        order_ipd_dept_id VARCHAR(36) NOT NULL,
-        patient_ward_id VARCHAR(36) NOT NULL,
-        exec_target_dept_id VARCHAR(36) NOT NULL,
-        order_term_type INT NOT NULL,
-        group_no INT NOT NULL,
-        order_category VARCHAR(32) NOT NULL,
-        item_code VARCHAR(64) NOT NULL,
-        item_name VARCHAR(200) NOT NULL,
-        dosage DECIMAL(18,4) NOT NULL,
-        frequency_code VARCHAR(32) NOT NULL,
-        route_code VARCHAR(32) NOT NULL,
-        status INT NOT NULL,
-        order_doctor_id VARCHAR(36) NOT NULL,
-        verify_nurse_id VARCHAR(36),
-        plan_start_at_ms BIGINT NOT NULL,
-        plan_stop_at_ms BIGINT,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 30. ord_execution_plans
-    CREATE TABLE IF NOT EXISTS ord_execution_plans (
-        id VARCHAR(36) PRIMARY KEY,
-        order_id VARCHAR(36) NOT NULL,
-        encounter_id VARCHAR(36) NOT NULL,
-        ward_id VARCHAR(36) NOT NULL,
-        planned_time_ms BIGINT NOT NULL,
-        exec_status INT NOT NULL,
-        exec_nurse_id VARCHAR(36),
-        dual_check_nurse_id VARCHAR(36),
-        executed_at_ms BIGINT,
-        pda_scan_token VARCHAR(128),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 31. mtc_service_requests
-    CREATE TABLE IF NOT EXISTS mtc_service_requests (
-        id VARCHAR(36) PRIMARY KEY,
-        request_no VARCHAR(40) NOT NULL UNIQUE,
-        source_type VARCHAR(16) NOT NULL,
-        source_visit_id VARCHAR(36),
-        source_order_id VARCHAR(36),
-        patient_id VARCHAR(36) NOT NULL,
-        order_dept_id VARCHAR(36) NOT NULL,
-        order_ward_id VARCHAR(36),
-        exec_med_tech_dept_id VARCHAR(36) NOT NULL,
-        med_tech_sub_type VARCHAR(32) NOT NULL,
-        exec_room_code VARCHAR(64),
-        specimen_tube_code VARCHAR(64),
-        service_item_code VARCHAR(64) NOT NULL,
-        fee_amount DECIMAL(18,4) NOT NULL,
-        is_fee_confirmed SMALLINT NOT NULL,
-        status INT NOT NULL,
-        collected_at_ms BIGINT,
-        received_at_ms BIGINT,
-        executed_at_ms BIGINT,
-        report_summary VARCHAR(2000),
-        report_ofd_archive_id VARCHAR(36),
-        is_critical_value SMALLINT NOT NULL,
-        critical_ack_doc_id VARCHAR(36),
-        critical_ack_nurse_id VARCHAR(36),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 32. mtc_surgery_schedules
-    CREATE TABLE IF NOT EXISTS mtc_surgery_schedules (
-        id VARCHAR(36) PRIMARY KEY,
-        encounter_id VARCHAR(36) NOT NULL,
-        or_dept_id VARCHAR(36) NOT NULL,
-        or_room_code VARCHAR(64) NOT NULL,
-        table_seq INT NOT NULL,
-        surgery_code VARCHAR(64) NOT NULL,
-        surgery_name VARCHAR(200) NOT NULL,
-        surgery_level INT NOT NULL,
-        main_surgeon_id VARCHAR(36) NOT NULL,
-        anesthesiologist_id VARCHAR(36) NOT NULL,
-        circulating_nurse_id VARCHAR(36) NOT NULL,
-        sign_in_ok SMALLINT NOT NULL,
-        time_out_ok SMALLINT NOT NULL,
-        sign_out_ok SMALLINT NOT NULL,
-        instrument_count_balanced SMALLINT NOT NULL,
-        status INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 33. mtc_blood_requests
-    CREATE TABLE IF NOT EXISTS mtc_blood_requests (
-        id VARCHAR(36) PRIMARY KEY,
-        encounter_id VARCHAR(36) NOT NULL,
-        patient_id VARCHAR(36) NOT NULL,
-        abo_type VARCHAR(16) NOT NULL,
-        rh_type VARCHAR(16) NOT NULL,
-        blood_product_code VARCHAR(64) NOT NULL,
-        volume_ml INT NOT NULL,
-        cross_match_result VARCHAR(32),
-        bag_barcode VARCHAR(80),
-        dispensed_by_id VARCHAR(36),
-        dual_check_dispenser_id VARCHAR(36),
-        empty_bag_returned SMALLINT NOT NULL,
-        status INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 34. inv_drugs
-    CREATE TABLE IF NOT EXISTS inv_drugs (
-        id VARCHAR(36) PRIMARY KEY,
-        drug_code VARCHAR(64) NOT NULL UNIQUE,
-        drug_name VARCHAR(200) NOT NULL,
-        spec VARCHAR(100) NOT NULL,
-        unit_name VARCHAR(32) NOT NULL,
-        price DECIMAL(18,4) NOT NULL,
-        cost_price DECIMAL(18,4) NOT NULL,
-        antibiotic_level INT NOT NULL,
-        is_narcotic SMALLINT NOT NULL,
-        is_skin_test_required SMALLINT NOT NULL,
-        is_active SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 35. inv_drug_batches
-    CREATE TABLE IF NOT EXISTS inv_drug_batches (
-        id VARCHAR(36) PRIMARY KEY,
-        warehouse_or_pharmacy_id VARCHAR(36) NOT NULL,
-        drug_id VARCHAR(36) NOT NULL,
-        batch_no VARCHAR(80) NOT NULL,
-        expiry_date_int INT NOT NULL,
-        invoice_no VARCHAR(80),
-        cold_chain_temp_celsius DECIMAL(18,4),
-        quantity INT NOT NULL,
-        is_frozen SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 36. inv_stock_ledgers
-    CREATE TABLE IF NOT EXISTS inv_stock_ledgers (
-        id VARCHAR(36) PRIMARY KEY,
-        warehouse_or_pharmacy_id VARCHAR(36) NOT NULL,
-        drug_id VARCHAR(36) NOT NULL,
-        batch_id VARCHAR(36) NOT NULL,
-        change_type VARCHAR(32) NOT NULL,
-        change_quantity INT NOT NULL,
-        balance_after INT NOT NULL,
-        reference_doc_no VARCHAR(80),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 37. phm_dispense_orders
-    CREATE TABLE IF NOT EXISTS phm_dispense_orders (
-        id VARCHAR(36) PRIMARY KEY,
-        dispense_no VARCHAR(40) NOT NULL UNIQUE,
-        pharmacy_id VARCHAR(36) NOT NULL,
-        prescription_id VARCHAR(36),
-        ward_summary_id VARCHAR(36),
-        patient_id VARCHAR(36) NOT NULL,
-        status INT NOT NULL,
-        dispensed_by_id VARCHAR(36),
-        dispensed_at_ms BIGINT,
-        drug_return_confirmed SMALLINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 38. fin_payment_orders
-    CREATE TABLE IF NOT EXISTS fin_payment_orders (
-        id VARCHAR(36) PRIMARY KEY,
-        payment_no VARCHAR(40) NOT NULL UNIQUE,
-        request_key VARCHAR(100) UNIQUE,
-        scene VARCHAR(16) NOT NULL,
-        patient_id VARCHAR(36) NOT NULL,
-        visit_or_encounter_id VARCHAR(36) NOT NULL,
-        total_amount DECIMAL(18,4) NOT NULL,
-        insurance_amount DECIMAL(18,4) NOT NULL,
-        prepayment_deduct DECIMAL(18,4) NOT NULL,
-        self_pay_amount DECIMAL(18,4) NOT NULL,
-        payment_channel VARCHAR(32) NOT NULL,
-        status INT NOT NULL,
-        paid_at_ms BIGINT,
-        invoice_ofd_id VARCHAR(36),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 39. fin_refund_orders
-    CREATE TABLE IF NOT EXISTS fin_refund_orders (
-        id VARCHAR(36) PRIMARY KEY,
-        refund_no VARCHAR(40) NOT NULL UNIQUE,
-        original_payment_id VARCHAR(36) NOT NULL,
-        refund_amount DECIMAL(18,4) NOT NULL,
-        reason VARCHAR(500) NOT NULL,
-        drug_return_confirmed SMALLINT NOT NULL,
-        approved_by VARCHAR(36),
-        refunded_at_ms BIGINT,
-        status INT NOT NULL,
-        reissued_invoice_ofd_id VARCHAR(36),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 40. fin_charge_ledgers
-    CREATE TABLE IF NOT EXISTS fin_charge_ledgers (
-        id VARCHAR(36) PRIMARY KEY,
-        patient_id VARCHAR(36) NOT NULL,
-        visit_or_encounter_id VARCHAR(36) NOT NULL,
-        order_dept_id VARCHAR(36) NOT NULL,
-        patient_ward_id VARCHAR(36),
-        exec_dept_id VARCHAR(36) NOT NULL,
-        item_code VARCHAR(64) NOT NULL,
-        item_name VARCHAR(200) NOT NULL,
-        quantity DECIMAL(18,4) NOT NULL,
-        unit_price DECIMAL(18,4) NOT NULL,
-        total_amount DECIMAL(18,4) NOT NULL,
-        status INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 41. fin_daily_closings
-    CREATE TABLE IF NOT EXISTS fin_daily_closings (
-        id VARCHAR(36) PRIMARY KEY,
-        closing_no VARCHAR(40) NOT NULL UNIQUE,
-        cashier_user_id VARCHAR(36) NOT NULL,
-        closing_date_int INT NOT NULL,
-        total_income DECIMAL(18,4) NOT NULL,
-        total_refund DECIMAL(18,4) NOT NULL,
-        net_amount DECIMAL(18,4) NOT NULL,
-        reconciled_status INT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 42. ops_audit_events
-    CREATE TABLE IF NOT EXISTS ops_audit_events (
-        id VARCHAR(36) PRIMARY KEY,
-        event_type VARCHAR(64) NOT NULL,
-        user_id VARCHAR(36),
-        operator_name VARCHAR(128),
-        dept_id VARCHAR(36),
-        target_entity VARCHAR(64) NOT NULL,
-        target_id VARCHAR(36) NOT NULL,
-        action_detail VARCHAR(2000),
-        prev_hash VARCHAR(64) NOT NULL,
-        curr_hash VARCHAR(64) NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 43. ops_idempotency_keys
-    CREATE TABLE IF NOT EXISTS ops_idempotency_keys (
-        id VARCHAR(36) PRIMARY KEY,
-        request_key VARCHAR(100) NOT NULL UNIQUE,
-        request_sha256 VARCHAR(64) NOT NULL,
-        response_json TEXT,
-        expires_at_ms BIGINT NOT NULL,
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-
-    -- 44. ops_outbox_messages
-    CREATE TABLE IF NOT EXISTS ops_outbox_messages (
-        id VARCHAR(36) PRIMARY KEY,
-        event_type VARCHAR(128) NOT NULL,
-        payload_json TEXT NOT NULL,
-        status INT NOT NULL,
-        retry_count INT NOT NULL,
-        last_error VARCHAR(1000),
-        ext_data_json VARCHAR(4000),
-        schema_version INT NOT NULL,
-        created_at_ms BIGINT NOT NULL,
-        created_by VARCHAR(36),
-        updated_at_ms BIGINT NOT NULL,
-        updated_by VARCHAR(36),
-        version_no INT NOT NULL
-    );
-    """;
-
-    public static async Task InitializeAsync(IDbConnectionFactory connectionFactory)
-    {
-        using var conn = connectionFactory.CreateConnection();
-        // Execute DDL statement by statement or as whole block
-        var statements = DdlScript.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        foreach (var stmt in statements)
-        {
-            if (string.IsNullOrWhiteSpace(stmt)) continue;
-            await conn.ExecuteAsync(stmt);
-        }
-    }
+	private static async Task EnsurePharmacyDispenseSchemaAsync(DbConnection conn)
+	{
+		await conn.ExecuteAsync(@"
+CREATE TABLE IF NOT EXISTS phm_dispense_order_lines (
+    id VARCHAR(36) PRIMARY KEY,
+    dispense_order_id VARCHAR(36) NOT NULL,
+    medical_order_id VARCHAR(36),
+    drug_id VARCHAR(36) NOT NULL,
+    drug_code VARCHAR(64) NOT NULL,
+    drug_name VARCHAR(200) NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(18,4) NOT NULL,
+    unit_cost_price DECIMAL(18,4) NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_phm_dispense_order_lines_order
+    ON phm_dispense_order_lines (dispense_order_id);
+CREATE INDEX IF NOT EXISTS ix_phm_dispense_order_lines_drug
+    ON phm_dispense_order_lines (drug_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_phm_dispense_order_lines_medical_order
+    ON phm_dispense_order_lines (medical_order_id)
+    WHERE medical_order_id IS NOT NULL;
+");
+	}
 }
-

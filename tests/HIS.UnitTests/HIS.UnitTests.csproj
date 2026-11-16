@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
@@ -14,6 +14,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\HIS.Contracts\HIS.Contracts.csproj" />
     <ProjectReference Include="..\..\src\HIS.BuildingBlocks\HIS.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\src\Client\HIS.Client.Core\HIS.Client.Core.csproj" />
+    <ProjectReference Include="..\..\src\Client\HIS.Client.UrsaShell\HIS.Client.UrsaShell.csproj" />
     <ProjectReference Include="..\..\src\Server\HIS.Modules.Emr\HIS.Modules.Emr.csproj" />
     <ProjectReference Include="..\..\src\Server\HIS.Modules.Outpatient\HIS.Modules.Outpatient.csproj" />
     <ProjectReference Include="..\..\src\Server\HIS.Modules.Inpatient\HIS.Modules.Inpatient.csproj" />
@@ -21,6 +23,9 @@
     <ProjectReference Include="..\..\src\Server\HIS.Modules.MedTech\HIS.Modules.MedTech.csproj" />
     <ProjectReference Include="..\..\src\Server\HIS.Modules.Pharmacy\HIS.Modules.Pharmacy.csproj" />
     <ProjectReference Include="..\..\src\Server\HIS.Modules.Finance\HIS.Modules.Finance.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.Inventory\HIS.Modules.Inventory.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.Operations\HIS.Modules.Operations.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.Patient\HIS.Modules.Patient.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Server.Host\HIS.Server.Host.csproj" />
   </ItemGroup>
 </Project>
-
