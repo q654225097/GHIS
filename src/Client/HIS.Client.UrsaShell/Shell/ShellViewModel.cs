@@ -149,12 +149,15 @@ public sealed class ShellViewModel : ClientModelBase
             if (_activeNavItem != null) _activeNavItem.IsSelected = true;
             OnPropertyChanged(nameof(IsClinicalStation));
             OnPropertyChanged(nameof(ActiveStationTitle));
+            OnPropertyChanged(nameof(IsAdminSupervisionMode));
         }
     }
 
     public string ActiveStationTitle => ActiveNavItem?.Title ?? "工作台";
 
     public bool IsClinicalStation => ActiveNavItem?.IsClinical ?? false;
+
+    public bool IsAdminSupervisionMode => SessionContext.Current.IsAdmin && (ActiveNavItem?.IsClinical == true);
 
     public object? CurrentStationView
     {
@@ -375,25 +378,31 @@ public sealed class ShellViewModel : ClientModelBase
         if (ctx.CanSeePharmacy)
         {
             var med = new ShellNavGroup("medication", "药事管理", isExpanded: true);
-            med.Items.Add(new ShellNavItem
+            if (ctx.CanSeePharmacyWindow)
             {
-                Key = "pharmacy_window",
-                LegacyNavIndex = 4,
-                Title = "窗口发药",
-                Icon = "💊",
-                IsClinical = false,
-                Description = "门诊收费处方核验发药、住院发药与退药质检"
-            });
-            med.Items.Add(new ShellNavItem
+                med.Items.Add(new ShellNavItem
+                {
+                    Key = "pharmacy_window",
+                    LegacyNavIndex = 4,
+                    Title = "窗口发药",
+                    Icon = "💊",
+                    IsClinical = false,
+                    Description = "门诊收费处方核验发药、住院发药与退药质检"
+                });
+            }
+            if (ctx.CanSeeWarehouse)
             {
-                Key = "pharmacy_warehouse",
-                LegacyNavIndex = 4,
-                Title = "药库与目录",
-                Icon = "📦",
-                IsClinical = false,
-                Description = "采购入库、效期批次、跨库调拨与药品主目录维护"
-            });
-            NavGroups.Add(med);
+                med.Items.Add(new ShellNavItem
+                {
+                    Key = "pharmacy_warehouse",
+                    LegacyNavIndex = 4,
+                    Title = "药库与目录",
+                    Icon = "📦",
+                    IsClinical = false,
+                    Description = "采购入库、效期批次、跨库调拨与药品主目录维护"
+                });
+            }
+            if (med.Items.Count > 0) NavGroups.Add(med);
         }
 
         var finance = new ShellNavGroup("finance", "挂号与结算", isExpanded: true);

@@ -31,6 +31,9 @@
                     </Border>
                     <TextBlock Text="{Binding ActiveStationTitle}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}" VerticalAlignment="Center"/>
                     <controls:StatusTag Text="{Binding Workbench.CurrentRoleDisplayName}" Kind="Info"/>
+                    <controls:StatusTag Text="管理员监督审计模式" Kind="Warning"
+                                        ToolTip.Tip="系统管理员拥有全院全局监督权限；所有操作将按管理员身份独立审计记录"
+                                        IsVisible="{Binding IsAdminSupervisionMode}"/>
                 </StackPanel>
 
                 <!-- Center Global Patient Search (Ctrl+K) -->

@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using HIS.Client.Core;
 using HIS.Client.UrsaShell.Services;
+using HIS.Client.UrsaShell.Shell;
 
 namespace HIS.Client.UrsaShell.ViewModels;
 
@@ -51,7 +52,17 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         PaymentChannels.Add(new("INSURANCE", "医保"));
         _selectedPaymentChannel = PaymentChannels[0];
         _additionalPaymentChannel = PaymentChannels[0];
+
+        RefreshCommand = new AsyncRelayCommand(LoadAllAsync);
+        SearchCommand = new AsyncRelayCommand(LoadAllAsync);
+        RegisterCommand = new AsyncRelayCommand(RegisterAsync, () => CanRegister);
+        AddPrepaymentCommand = new AsyncRelayCommand(AddPrepaymentAsync, () => CanTakePrepayment);
     }
+
+    public AsyncRelayCommand RefreshCommand { get; }
+    public AsyncRelayCommand SearchCommand { get; }
+    public AsyncRelayCommand RegisterCommand { get; }
+    public AsyncRelayCommand AddPrepaymentCommand { get; }
 
     public ObservableCollection<AdmissionCardItem> Cards { get; } = new();
     public ObservableCollection<InpatientRecordItem> Encounters { get; } = new();
@@ -245,6 +256,8 @@ public sealed class InpatientCashierViewModel : ClientModelBase
                 OnPropertyChanged(nameof(IsNotBusy));
                 OnPropertyChanged(nameof(CanRegister));
                 OnPropertyChanged(nameof(CanTakePrepayment));
+                RegisterCommand.RaiseCanExecuteChanged();
+                AddPrepaymentCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -612,6 +625,8 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         OnPropertyChanged(nameof(NewBalanceText));
         OnPropertyChanged(nameof(CanRegister));
         OnPropertyChanged(nameof(CanTakePrepayment));
+        RegisterCommand.RaiseCanExecuteChanged();
+        AddPrepaymentCommand.RaiseCanExecuteChanged();
     }
 
     private void SetValidation(string message)

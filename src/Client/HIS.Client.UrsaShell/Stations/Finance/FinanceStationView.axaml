@@ -134,8 +134,13 @@
                 </Border>
             </TabItem>
 
-            <!-- Tab 2: 住院结算 -->
-            <TabItem Header="住院结算">
+            <!-- Tab 2: 入院登记与预交金 -->
+            <TabItem Header="入院登记与预交金">
+                <views:InpatientCashierView/>
+            </TabItem>
+
+            <!-- Tab 3: 住院出院结算 -->
+            <TabItem Header="住院出院结算">
                 <views:InpatientSettlementView/>
             </TabItem>
 

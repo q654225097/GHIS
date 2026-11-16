@@ -1,0 +1,379 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Views.InpatientCashierView"
+             x:DataType="vm:InpatientCashierViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.InpLabel">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource SemiColorText2}"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style Selector="TextBlock.InpValue">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource SemiColorText0}"/>
+        </Style>
+        <Style Selector="Border.InpCard">
+            <Setter Property="Background" Value="{DynamicResource SemiColorBackground1}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="Padding" Value="14"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*" Margin="0,8,0,0" MinHeight="0">
+        <!-- Top Metrics & Action Bar -->
+        <Border Grid.Row="0" Classes="InpCard" Margin="0,0,0,10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="住院登记与预交金管理" FontSize="18" FontWeight="Bold"
+                               Foreground="{DynamicResource SemiColorText0}"/>
+                    <TextBlock Text="办理拟入院患者的病区/床位分配与首次押金收取，或为在院患者办理预交金追加充值。"
+                               FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="待登记入院卡" Classes="InpLabel"/>
+                        <TextBlock Text="{Binding PendingCountText}" Classes="InpValue" Foreground="{DynamicResource SemiColorPrimary}"/>
+                    </StackPanel>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="今日已登记" Classes="InpLabel"/>
+                        <TextBlock Text="{Binding RegisteredCountText}" Classes="InpValue"/>
+                    </StackPanel>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="今日收取预交金" Classes="InpLabel"/>
+                        <TextBlock Text="{Binding TodayPrepaymentText}" Classes="InpValue" Foreground="{DynamicResource SemiColorSuccess}"/>
+                    </StackPanel>
+                    <Button Content="刷新全部" Height="32" Padding="14,0" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Body: Tabs for Admission Registration & Additional Prepayment -->
+        <TabControl Grid.Row="1">
+            <!-- 1. 办理入院登记 -->
+            <TabItem Header="办理入院登记">
+                <Grid ColumnDefinitions="320,*" ColumnSpacing="10" Margin="0,8,0,0" MinHeight="0">
+                    <!-- Left: Pending Admission Cards -->
+                    <Border Grid.Column="0" Classes="InpCard" Padding="12" MinHeight="0">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8" MinHeight="0">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,72" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding Keyword}" Height="30"
+                                         PlaceholderText="姓名 / 病历号 / 卡号" ToolTip.Tip="搜索待登记住院卡"/>
+                                <Button Grid.Column="1" Content="搜索" Height="30" Padding="8,0"
+                                        Command="{Binding SearchCommand}"/>
+                            </Grid>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="待办入院卡" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource SemiColorText0}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding CardCountText}" FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <ListBox Grid.Row="2" ItemsSource="{Binding Cards}"
+                                     SelectedItem="{Binding SelectedCard, Mode=TwoWay}"
+                                     Background="Transparent" BorderThickness="0">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:InpatientCashierViewModel+AdmissionCardItem">
+                                        <Border Margin="0,2" Padding="10,8" CornerRadius="6"
+                                                BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}">
+                                            <StackPanel Spacing="3">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding PatientName}" FontWeight="Bold" FontSize="13"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding StatusLabel}" FontSize="11"
+                                                               Foreground="{Binding StatusForeground}"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding PatientLine}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{Binding SuggestedLine}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <TextBlock Text="{Binding RegistrationLine}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{Binding CreatedAtText}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- Right: Admission Registration Form -->
+                    <Border Grid.Column="1" Classes="InpCard" MinHeight="0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="14" IsVisible="{Binding HasSelectedCard}">
+                                <!-- Patient Info Summary -->
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,*,*" RowSpacing="8" ColumnSpacing="12">
+                                        <StackPanel Grid.Row="0" Grid.Column="0">
+                                            <TextBlock Text="患者姓名与病历号" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding SelectedCardPatient}" Classes="InpValue"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="1">
+                                            <TextBlock Text="开立医生" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding SelectedCardDoctor}" Classes="InpValue"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="2">
+                                            <TextBlock Text="联系电话" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding SelectedCardPhone}" Classes="InpValue"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="0">
+                                            <TextBlock Text="建议科室 / 病区" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding SelectedCardDepartment}" Classes="InpValue"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2">
+                                            <TextBlock Text="入院初步诊断" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding SelectedCardDiagnosis}" Classes="InpValue"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Bed Allocation -->
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="1. 分配住院科室、病区与床位" FontSize="14" FontWeight="Bold"/>
+                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="住院科室 *" Classes="InpLabel"/>
+                                                <ComboBox ItemsSource="{Binding Departments}"
+                                                          SelectedItem="{Binding SelectedDept, Mode=TwoWay}"
+                                                          DisplayMemberBinding="{Binding Name}"
+                                                          HorizontalAlignment="Stretch" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="住院病区 *" Classes="InpLabel"/>
+                                                <ComboBox ItemsSource="{Binding Wards}"
+                                                          SelectedItem="{Binding SelectedWard, Mode=TwoWay}"
+                                                          DisplayMemberBinding="{Binding Name}"
+                                                          HorizontalAlignment="Stretch" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="床位选择 *" Classes="InpLabel"/>
+                                                <ComboBox ItemsSource="{Binding Beds}"
+                                                          SelectedItem="{Binding SelectedBed, Mode=TwoWay}"
+                                                          DisplayMemberBinding="{Binding Label}"
+                                                          HorizontalAlignment="Stretch" Height="32"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Text="{Binding SelectedBedSummary}" FontSize="12"
+                                                   Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Prepayment & Settle -->
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="2. 首次住院押金收取" FontSize="14" FontWeight="Bold"/>
+                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="首次押金金额 (元) *" Classes="InpLabel"/>
+                                                <NumericUpDown Value="{Binding InitialPrepayment, Mode=TwoWay}"
+                                                               Minimum="0" Maximum="100000" Increment="500"
+                                                               FormatString="C2" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="支付渠道 *" Classes="InpLabel"/>
+                                                <ComboBox ItemsSource="{Binding PaymentChannels}"
+                                                          SelectedItem="{Binding SelectedPaymentChannel, Mode=TwoWay}"
+                                                          DisplayMemberBinding="{Binding Name}"
+                                                          HorizontalAlignment="Stretch" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="登记备注" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding RegistrationRemark, Mode=TwoWay}" Height="32"
+                                                         PlaceholderText="选填登记说明"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Inline Feedback Message -->
+                                <Border Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="10"
+                                        IsVisible="{Binding HasError}">
+                                    <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource SemiColorDanger}" FontSize="12"/>
+                                </Border>
+
+                                <!-- Submit Button -->
+                                <Button Content="办理入院登记并收取押金"
+                                        Classes="Primary"
+                                        Height="38"
+                                        HorizontalAlignment="Left"
+                                        Padding="20,0"
+                                        Command="{Binding RegisterCommand}"
+                                        IsEnabled="{Binding CanRegister}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- 2. 在院押金追缴 -->
+            <TabItem Header="在院押金追缴">
+                <Grid ColumnDefinitions="320,*" ColumnSpacing="10" Margin="0,8,0,0" MinHeight="0">
+                    <!-- Left: Inpatient Records -->
+                    <Border Grid.Column="0" Classes="InpCard" Padding="12" MinHeight="0">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8" MinHeight="0">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,72" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding Keyword}" Height="30"
+                                         PlaceholderText="姓名 / 住院号 / 床号" ToolTip.Tip="搜索在院患者"/>
+                                <Button Grid.Column="1" Content="搜索" Height="30" Padding="8,0"
+                                        Command="{Binding SearchCommand}"/>
+                            </Grid>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="在院患者列表" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource SemiColorText0}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding EncounterCountText}" FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <ListBox Grid.Row="2" ItemsSource="{Binding Encounters}"
+                                     SelectedItem="{Binding SelectedEncounter, Mode=TwoWay}"
+                                     Background="Transparent" BorderThickness="0">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:InpatientCashierViewModel+InpatientRecordItem">
+                                        <Border Margin="0,2" Padding="10,8" CornerRadius="6"
+                                                BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}">
+                                            <StackPanel Spacing="3">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding PatientName}" FontWeight="Bold" FontSize="13"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding AdmissionNo}" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding BedLine}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding BalanceText}" FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding TriageText}" FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorWarning}"/>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- Right: Add Prepayment Form & Records -->
+                    <Border Grid.Column="1" Classes="InpCard" MinHeight="0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="14" IsVisible="{Binding HasSelectedEncounter}">
+                                <!-- Patient Info Summary -->
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="患者姓名" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding EncounterPatientName}" Classes="InpValue"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="住院号" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding EncounterAdmissionNo}" Classes="InpValue"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="床位与科室" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding EncounterBedLine}" Classes="InpValue"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3">
+                                            <TextBlock Text="当前押金余额" Classes="InpLabel"/>
+                                            <TextBlock Text="{Binding EncounterBalanceText}" Classes="InpValue"
+                                                       Foreground="{DynamicResource SemiColorSuccess}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Prepayment Input -->
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="追缴住院预交金押金" FontSize="14" FontWeight="Bold"/>
+                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="追加缴款金额 (元) *" Classes="InpLabel"/>
+                                                <NumericUpDown Value="{Binding AdditionalPrepayment, Mode=TwoWay}"
+                                                               Minimum="1" Maximum="100000" Increment="500"
+                                                               FormatString="C2" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="交款渠道 *" Classes="InpLabel"/>
+                                                <ComboBox ItemsSource="{Binding PaymentChannels}"
+                                                          SelectedItem="{Binding AdditionalPaymentChannel, Mode=TwoWay}"
+                                                          DisplayMemberBinding="{Binding Name}"
+                                                          HorizontalAlignment="Stretch" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="缴款备注" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding PrepaymentRemark, Mode=TwoWay}" Height="32"
+                                                         PlaceholderText="选填缴款备注"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Text="{Binding NewBalanceText}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Button Content="收取押金并打印收据"
+                                        Classes="Primary"
+                                        Height="38"
+                                        HorizontalAlignment="Left"
+                                        Padding="20,0"
+                                        Command="{Binding AddPrepaymentCommand}"
+                                        IsEnabled="{Binding CanTakePrepayment}"/>
+
+                                <!-- Prepayment History Table -->
+                                <StackPanel Spacing="8" Margin="0,10,0,0">
+                                    <TextBlock Text="患者押金历史缴纳明细" FontSize="13" FontWeight="Bold"/>
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                                            Padding="10,8">
+                                        <StackPanel Spacing="6">
+                                            <!-- Table Header -->
+                                            <Grid ColumnDefinitions="160,110,100,140,110,*">
+                                                <TextBlock Grid.Column="0" Text="收据凭证号" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="1" Text="缴款金额" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="2" Text="支付渠道" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="3" Text="交款时间" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="4" Text="收费员" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="5" Text="备注" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                            </Grid>
+                                            <!-- Table Rows -->
+                                            <ItemsControl ItemsSource="{Binding Prepayments}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:InpatientCashierViewModel+PrepaymentRecordItem">
+                                                        <Grid ColumnDefinitions="160,110,100,140,110,*" Margin="0,3">
+                                                            <TextBlock Grid.Column="0" Text="{Binding PrepaymentNo}" FontSize="11"
+                                                                       Foreground="{DynamicResource SemiColorText0}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding AmountText}" FontSize="11"
+                                                                       FontWeight="SemiBold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding PaymentChannelLabel}" FontSize="11"
+                                                                       Foreground="{DynamicResource SemiColorText1}"/>
+                                                            <TextBlock Grid.Column="3" Text="{Binding PaidAtText}" FontSize="11"
+                                                                       Foreground="{DynamicResource SemiColorText2}"/>
+                                                            <TextBlock Grid.Column="4" Text="{Binding CashierName}" FontSize="11"
+                                                                       Foreground="{DynamicResource SemiColorText0}"/>
+                                                            <TextBlock Grid.Column="5" Text="{Binding Remark}" FontSize="11"
+                                                                       Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Text="暂无押金缴纳明细" FontSize="11" Foreground="{DynamicResource SemiColorText2}"
+                                                       IsVisible="{Binding !HasPrepaymentRecords}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

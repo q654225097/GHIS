@@ -9,6 +9,7 @@
 | 2 | 收费并通知药房 (`CashierSettleAndNotifyPharmacy` / 单行 `收费`) | Toolbar 快捷执行 + Tab 0 (`门急诊收费`) 行级操作 | 无权限时显示明确原因文案 |
 | 3 | 原路退费冲红 (`ExecuteFinancialRefundForOrder` / 单行 `审核入库并退费`) | Toolbar 快捷执行 + Tab 1 (`退药退费`) 行级操作 | 增加 `ConfirmDialog` 二次确认防误退款 |
 | 4 | 收费员日结 (`GenerateCashierDailyClosing`) | Toolbar 日结按钮 | 增加 `ConfirmDialog` 二次确认防误轧账 |
-| 5 | 住院出院结算 (`InpatientSettlementView`) | Tab 2 (`住院结算`) 直接嵌入 | 复用现有六项核查、医保统筹与预交金抵扣模型 |
-| 6 | 药品进销存与收支汇总 (`DrugFinanceBreakdownList` + 成本/净销售/退药/调价损益) | Tab 3 (`药品对账`) | 全量字段对等保留 |
+| 5 | 入院登记与预交金管理 (`InpatientCashierView` / `InpatientCashierViewModel`) | Tab 2 (`入院登记与预交金`) 直接嵌入 | **【D1 已闭环】** 支持拟入院患者床位分配、首次押金收取与在院患者押金追加充值 |
+| 6 | 住院出院结算 (`InpatientSettlementView`) | Tab 3 (`住院出院结算`) 直接嵌入 | 复用现有六项核查、医保统筹与预交金抵扣模型 |
+| 7 | 药品进销存与收支汇总 (`DrugFinanceBreakdownList` + 成本/净销售/退药/调价损益) | Tab 4 (`药品对账`) | 全量字段对等保留 |
 

@@ -6121,43 +6121,7 @@ public partial class WorkbenchModel : ClientModelBase
 
 	public void CompleteCurrentPatientVisit()
 	{
-		if (SelectedPatient == null)
-		{
-			return;
-		}
-		if (SelectedPatient.IsWaiting)
-		{
-			SystemNotice = "⚠\ufe0f [A➔B➔C➔D 闭环门禁拦截] 当前患者尚处于【候诊中】，未执行【步骤A：开始接诊】，严禁直接点击完成诊疗！";
-			return;
-		}
-		if (!SelectedPatient.IsEmrSigned)
-		{
-			SystemNotice = "⚠\ufe0f [A➔B➔C➔D 闭环门禁拦截] 当前患者尚未完成【步骤B：门诊病历三级审签并生成国标 OFD】，严禁跳过病历审签直接完成诊疗！";
-			return;
-		}
-		if (!SelectedPatient.IsOrdersPushed)
-		{
-			SystemNotice = "⚠\ufe0f [A➔B➔C➔D 闭环门禁拦截] 当前患者尚未完成【步骤C：签署处方并推送收费/药房】，请先在「2. 处方与安全用药」完成签署推送后再完成诊疗！";
-			return;
-		}
-		string patientName = SelectedPatient.PatientName;
-		string visitNo = SelectedPatient.VisitNo;
-		SelectedPatient.SetStatus(3, 3);
-		PatientQueueItemModel patientQueueItemModel = PatientQueue.FirstOrDefault((PatientQueueItemModel x) => x.IsWaiting);
-		if (patientQueueItemModel != null)
-		{
-			patientQueueItemModel.SetStatus(2, 2);
-			SelectedPatient = patientQueueItemModel;
-			ApplyPatientQueueFilter();
-			NotifyOpdWorkflowStateChanged();
-			SystemNotice = $"✓ [步骤D：门诊接诊四步闭环完成] 患者 [{patientName}] ({visitNo}) 已完成 A➔B➔C➔D 全流程！系统已自动呼叫下一位患者：{patientQueueItemModel.PatientName} (#{patientQueueItemModel.QueueNo}) 进入【步骤A：就诊中】。";
-		}
-		else
-		{
-			ApplyPatientQueueFilter();
-			NotifyOpdWorkflowStateChanged();
-			SystemNotice = $"✓ [步骤D：门诊接诊四步闭环完成] 患者 [{patientName}] ({visitNo}) 已完成 A➔B➔C➔D 全流程！当前候诊队列已全部接诊完毕。";
-		}
+		_ = CompleteCurrentOpdVisitAsync(noPrescription: false);
 	}
 
 	public void SubmitPrescriptionToPharmacy(bool jumpToPharmacy = false)

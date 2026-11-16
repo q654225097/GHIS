@@ -304,7 +304,7 @@ public sealed class SessionContext : INotifyPropertyChanged
 
 	public bool IsAdmin => IsRole("ADMIN");
 
-	public bool IsOpdDoctor => IsActiveOpdClinical && !IsWardNurse && !IsPharmacist && !IsCashier;
+	public bool IsOpdDoctor => IsActiveOpdClinical && !IsWardNurse && !IsPharmacist && !IsCashier && !IsMedTech && !IsWarehouseKeeper;
 
 	public bool IsIpdResident => IsRole("IPD-RESIDENT");
 
@@ -315,6 +315,10 @@ public sealed class SessionContext : INotifyPropertyChanged
 	public bool IsPharmacist => IsRole("PHARMACIST");
 
 	public bool IsCashier => IsRole("CASHIER");
+
+	public bool IsMedTech => IsRole("MEDTECH") || IsRole("ROLE-MEDTECH") || IsRole("MEDTECH-STAFF") || IsRole("ROLE-MEDTECH-STAFF");
+
+	public bool IsWarehouseKeeper => IsRole("WAREHOUSE-KEEPER") || IsRole("WAREHOUSE_KEEPER") || IsRole("ROLE-WAREHOUSE") || IsRole("PHARM-WAREHOUSE") || IsRole("WAREHOUSE");
 
 	public bool CanPrescribe => PrescribeLevel >= 1 && (IsOpdDoctor || IsIpdResident || IsIpdAttending || IsAdmin);
 
@@ -330,9 +334,13 @@ public sealed class SessionContext : INotifyPropertyChanged
 
 	public bool CanSeeWardStation => IsAdmin || IsWardNurse || IsIpdResident || IsIpdAttending;
 
-	public bool CanSeeMedTech => IsAdmin || IsOpdDoctor || IsIpdResident || IsIpdAttending;
+	public bool CanSeeMedTech => IsAdmin || IsOpdDoctor || IsIpdResident || IsIpdAttending || IsMedTech;
 
-	public bool CanSeePharmacy => IsAdmin || IsPharmacist;
+	public bool CanSeePharmacy => IsAdmin || IsPharmacist || IsWarehouseKeeper;
+
+	public bool CanSeeWarehouse => IsAdmin || IsWarehouseKeeper;
+
+	public bool CanSeePharmacyWindow => IsAdmin || IsPharmacist;
 
 	public bool CanSeeFinance => IsAdmin || IsCashier;
 
@@ -422,10 +430,12 @@ public sealed class SessionContext : INotifyPropertyChanged
 
 	private void NotifyRoleFlags()
 	{
-		string[] array = new string[20]
+		string[] array = new string[]
 		{
-			"IsAdmin", "IsOpdDoctor", "IsIpdResident", "IsIpdAttending", "IsWardNurse", "IsPharmacist", "IsCashier", "CanPrescribe", "CanSignEmr", "CanSurgery",
-			"CanManageUsers", "CanSeeOpdStation", "CanSeeIpdStation", "CanSeeWardStation", "CanSeeMedTech", "CanSeePharmacy", "CanSeeFinance", "CanSeeEmrOfd", "CanSeeDynFormConfig", "CanSeeAdminPanel"
+			"IsAdmin", "IsOpdDoctor", "IsIpdResident", "IsIpdAttending", "IsWardNurse", "IsPharmacist", "IsCashier",
+			"IsMedTech", "IsWarehouseKeeper", "CanPrescribe", "CanSignEmr", "CanSurgery",
+			"CanManageUsers", "CanSeeOpdStation", "CanSeeIpdStation", "CanSeeWardStation", "CanSeeMedTech",
+			"CanSeePharmacy", "CanSeeWarehouse", "CanSeePharmacyWindow", "CanSeeFinance", "CanSeeEmrOfd", "CanSeeDynFormConfig", "CanSeeAdminPanel"
 		};
 		string[] array2 = array;
 		foreach (string propertyName in array2)

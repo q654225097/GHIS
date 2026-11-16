@@ -20,6 +20,8 @@ public static class RoleCode
 	public const string DoctorIpd = "IPD-ATTENDING";
 	public const string WardNurse = "WARD-NURSE";
 	public const string NurseIpd = "WARD-NURSE";
+	public const string MedTech = "MEDTECH";
+	public const string WarehouseKeeper = "WAREHOUSE-KEEPER";
 
 	public static string Normalize(string? role)
 	{
@@ -38,12 +40,25 @@ public static class RoleCode
 		{
 			"SUPER-ADMIN" => Admin,
 			"SYSTEM-ADMIN" => Admin,
+			"MEDTECH" => MedTech,
+			"MEDTECH-STAFF" => MedTech,
+			"ROLE-MEDTECH" => MedTech,
+			"WAREHOUSE-KEEPER" => WarehouseKeeper,
+			"WAREHOUSE_KEEPER" => WarehouseKeeper,
+			"PHARM-WAREHOUSE" => WarehouseKeeper,
+			"WAREHOUSE" => WarehouseKeeper,
 			_ => value
 		};
 	}
 
 	public static bool IsAdmin(string? role) =>
 		string.Equals(Normalize(role), Admin, StringComparison.Ordinal);
+
+	public static bool IsMedTech(string? role) =>
+		string.Equals(Normalize(role), MedTech, StringComparison.Ordinal);
+
+	public static bool IsWarehouseKeeper(string? role) =>
+		string.Equals(Normalize(role), WarehouseKeeper, StringComparison.Ordinal);
 
 	public static bool HasRole(IEnumerable<string>? roles, string expected)
 	{

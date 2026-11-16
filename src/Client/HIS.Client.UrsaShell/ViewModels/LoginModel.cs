@@ -453,6 +453,22 @@ public sealed class LoginModel : ClientModelBase
 			RoleCode = "CASHIER",
 			EmployeeNo = "C001"
 		});
+		KnownUsers.Add(new LoginUserOption
+		{
+			UserName = "tech_user",
+			DisplayName = "李建",
+			RoleName = "医技技师",
+			RoleCode = "MEDTECH",
+			EmployeeNo = "M001"
+		});
+		KnownUsers.Add(new LoginUserOption
+		{
+			UserName = "warehouse_01",
+			DisplayName = "周强",
+			RoleName = "药库管理员",
+			RoleCode = "WAREHOUSE_KEEPER",
+			EmployeeNo = "W001"
+		});
 		SelectedUser = KnownUsers[1];
 	}
 
