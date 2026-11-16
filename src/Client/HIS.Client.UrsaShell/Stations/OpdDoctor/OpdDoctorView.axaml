@@ -493,32 +493,6 @@
                     </Grid>
                 </TabItem>
 
-                <!-- D3 (待确认): 暂留作床位参考副页 -->
-                <TabItem Header="床位参考">
-                    <ScrollViewer Padding="10">
-                        <ItemsControl ItemsSource="{Binding Workbench.BedCards}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <UniformGrid Columns="3"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:BedCardModel">
-                                    <Border Margin="6" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                        <StackPanel Spacing="6">
-                                            <Grid ColumnDefinitions="*,Auto">
-                                                <TextBlock Grid.Column="0" Text="{Binding BedCode}" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                <controls:StatusTag Grid.Column="1" Text="{Binding NursingLevel}" Kind="Info"/>
-                                            </Grid>
-                                            <TextBlock Text="{Binding PatientName, StringFormat='{}患者: {0}'}" FontWeight="Bold" FontSize="13"/>
-                                            <TextBlock Text="{Binding Diagnosis, StringFormat='{}诊断: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </TabItem>
             </TabControl>
         </Grid>
     </Grid>

@@ -65,6 +65,24 @@ public partial class App : Application
             var outputDir = ResolveCaptureOutputDir();
             try
             {
+                try
+                {
+                    var loginWin = new LoginWindow();
+                    loginWin.Width = 960;
+                    loginWin.Height = 600;
+                    loginWin.Measure(new Size(960, 600));
+                    loginWin.Arrange(new Rect(0, 0, 960, 600));
+                    var loginRtb = new RenderTargetBitmap(new PixelSize(960, 600), new Vector(96, 96));
+                    loginRtb.Render(loginWin);
+                    var loginPath = Path.Combine(outputDir, "view_00_login.png");
+                    loginRtb.Save(loginPath);
+                    if (Directory.Exists(ArtifactDir))
+                    {
+                        File.Copy(loginPath, Path.Combine(ArtifactDir, "view_00_login.png"), true);
+                    }
+                }
+                catch { }
+
                 await Task.Delay(1000);
                 if (SessionContext.Current.IsLoggedIn || main.IsLoaded)
                 {
@@ -90,82 +108,94 @@ public partial class App : Application
                         catch { }
                     }
 
-                    // 1. Outpatient prescription station.
-                    shell.NavigateByKey("opd");
-                    workbench.SelectedOpdTabIndex = 1;
-                    await Task.Delay(500);
-                    Capture("view_opd_prescription.png");
-                    Capture("current_window.png");
-
-                    // 1b. Prescription search demonstration.
-                    workbench.PrescriptionSearchQuery = "阿司匹林";
-                    await Task.Delay(300);
-                    Capture("view_opd_search.png");
-                    workbench.PrescriptionSearchQuery = string.Empty;
-
-                    // 2. Inpatient doctor.
-                    shell.NavigateByKey("ipd_doctor");
-                    if (workbench.SelectedInpatient != null)
-                    {
-                        workbench.SelectedInpatient.ApplyOrderFilter();
-                    }
-                    await Task.Delay(500);
-                    Capture("view_ipd_doctor.png");
-
-                    // 2b. Long-term orders only.
-                    if (workbench.SelectedInpatient != null)
-                    {
-                        workbench.SelectedInpatient.SelectedOrderFilter = "LONG";
-                    }
-                    await Task.Delay(300);
-                    Capture("view_ipd_long_orders.png");
-
-                    // 2c. Temporary orders only.
-                    if (workbench.SelectedInpatient != null)
-                    {
-                        workbench.SelectedInpatient.SelectedOrderFilter = "TEMP";
-                    }
-                    await Task.Delay(300);
-                    Capture("view_ipd_temp_orders.png");
-
-                    if (workbench.SelectedInpatient != null)
-                    {
-                        workbench.SelectedInpatient.SelectedOrderFilter = "ALL";
-                    }
-
-                    // 3. Inpatient nurse.
-                    shell.NavigateByKey("ipd_nurse");
-                    workbench.SelectedNurseTabIndex = 0;
-                    await Task.Delay(400);
-                    Capture("view_ipd_nurse.png");
-
-                    // 3b. Nursing execution.
-                    workbench.SelectedNurseTabIndex = 1;
-                    await Task.Delay(400);
-                    Capture("view_ipd_nurse_tasks.png");
-
-                    // 4. Admin stations.
+                    // Ensure Admin context with full permissions for comprehensive capture
                     SessionContext.Current.IsLoggedIn = true;
                     SessionContext.Current.RoleCode = "ROLE-ADMIN";
                     SessionContext.Current.RoleName = "超级管理员";
                     workbench.SyncWithSession();
                     shell.RebuildNavigation();
 
+                    // 1. Workbench (我的待办)
+                    shell.NavigateByKey("workbench");
+                    await Task.Delay(400);
+                    Capture("view_01_workbench.png");
+
+                    // 2. Outpatient doctor (门诊医生站)
+                    shell.NavigateByKey("opd");
+                    workbench.SelectedOpdTabIndex = 1;
+                    await Task.Delay(400);
+                    Capture("view_02_opd_doctor.png");
+                    Capture("current_window.png");
+
+                    // 3. Inpatient doctor (住院医生站)
+                    shell.NavigateByKey("ipd_doctor");
+                    await Task.Delay(400);
+                    Capture("view_03_ipd_doctor.png");
+
+                    // 4. Inpatient nurse (病区护士站)
+                    shell.NavigateByKey("ipd_nurse");
+                    await Task.Delay(400);
+                    Capture("view_04_ipd_nurse.png");
+
+                    // 5. MedTech station (医技与检查 D2)
+                    shell.NavigateByKey("medtech");
+                    await Task.Delay(400);
+                    Capture("view_05_medtech.png");
+
+                    // 6. Pharmacy Window (窗口发药)
+                    shell.NavigateByKey("pharmacy_window");
+                    await Task.Delay(400);
+                    Capture("view_06_pharmacy_window.png");
+
+                    // 7. Pharmacy Warehouse (药库与目录 D6)
+                    shell.NavigateByKey("pharmacy_warehouse");
+                    await Task.Delay(400);
+                    Capture("view_07_pharmacy_warehouse.png");
+
+                    // 8. Outpatient Registration (门诊挂号 D1)
+                    shell.NavigateByKey("registration");
+                    await Task.Delay(400);
+                    Capture("view_08_registration.png");
+
+                    // 9. Finance Outpatient Billing (收费结算)
+                    shell.NavigateByKey("finance");
+                    workbench.SelectedFinanceTabIndex = 0;
+                    await Task.Delay(400);
+                    Capture("view_09_finance_settle.png");
+
+                    // 10. Inpatient Admission & Prepayment Cashier (住院登记与预交金 D1)
+                    workbench.SelectedFinanceTabIndex = 2;
+                    await Task.Delay(500);
+                    Capture("view_10_inpatient_cashier.png");
+
+                    // 11. EMR Archive (病历归档)
+                    shell.NavigateByKey("emr_archive");
+                    await Task.Delay(400);
+                    Capture("view_11_emr_archive.png");
+
+                    // 12. Dynamic Form (动态表单配置 D3)
                     shell.NavigateByKey("dynamic_form");
-                    await Task.Delay(300);
-                    Capture("view_dynamic_form.png");
+                    await Task.Delay(400);
+                    Capture("view_12_dynamic_form.png");
 
+                    // 13. User Administration (用户账号维护)
                     shell.NavigateByKey("user_admin");
-                    await Task.Delay(300);
-                    Capture("view_user_admin.png");
+                    await Task.Delay(400);
+                    Capture("view_13_user_admin.png");
 
+                    // 14. Role & Permissions (角色与权限)
                     shell.NavigateByKey("role_admin");
-                    await Task.Delay(300);
-                    Capture("view_role_admin.png");
+                    await Task.Delay(400);
+                    Capture("view_14_role_admin.png");
+
+                    // 15. Audit Log (安全审计日志)
+                    shell.NavigateByKey("audit_log");
+                    await Task.Delay(400);
+                    Capture("view_15_audit_log.png");
 
                     // Done capturing, write success flag and shutdown
                     File.WriteAllText(Path.Combine(outputDir, "capture_done.txt"), DateTime.Now.ToString("o"));
-                    await Task.Delay(500);
+                    await Task.Delay(300);
                     desktop.Shutdown();
                 }
             }
