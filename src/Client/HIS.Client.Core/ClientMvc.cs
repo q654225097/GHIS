@@ -117,7 +117,11 @@ public sealed class ClientContextModel : ClientModelBase
 
     public ControlAccessPolicy GetPolicy(string controlKey)
     {
-        return _permissions.TryGetValue(controlKey, out var p) ? p : ControlAccessPolicy.FullAccess;
+        if (string.IsNullOrWhiteSpace(SessionContext.Current.UserId))
+        {
+            return ControlAccessPolicy.Hidden;
+        }
+        return _permissions.TryGetValue(controlKey, out var p) ? p : ControlAccessPolicy.Hidden;
     }
 }
 

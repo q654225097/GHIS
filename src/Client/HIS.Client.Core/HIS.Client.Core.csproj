@@ -5,5 +5,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\HIS.Contracts\HIS.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="HIS.UnitTests" />
+  </ItemGroup>
 </Project>
 
