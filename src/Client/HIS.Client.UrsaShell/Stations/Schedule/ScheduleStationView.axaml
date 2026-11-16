@@ -1,0 +1,263 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Schedule"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Schedule.ScheduleStationView"
+             x:DataType="local:ScheduleStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="16" RowSpacing="12">
+        <!-- 顶部筛选与状态条 -->
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,200,150,Auto,Auto">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="门诊医生排班模板与号源池管理" FontSize="17" FontWeight="Bold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="{Binding Schedule.CurrentFilterSummary}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Schedule.TemplateCountText}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        <TextBlock Text="{Binding Schedule.SlotCountText, StringFormat=号源 {0} 条}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <ComboBox Grid.Column="1" Margin="0,0,8,0"
+                          ItemsSource="{Binding Schedule.AllDepartmentOptions}"
+                          SelectedItem="{Binding SelectedFilterDepartment, Mode=TwoWay}"
+                          PlaceholderText="全部科室">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ScheduleWorkstationViewModel+DepartmentChoice">
+                            <TextBlock Text="{Binding Name}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <TextBox x:Name="QueryDateBox" Grid.Column="2" Margin="0,0,8,0"
+                         Text="{Binding Schedule.QueryDate, Mode=TwoWay}"
+                         PlaceholderText="日期 YYYY-MM-DD"/>
+
+                <Button Grid.Column="3" Content="查询号源 (F3)" Classes="Primary" Height="32" Margin="0,0,6,0"
+                        Command="{Binding FilterSlotsCommand}"/>
+                <Button Grid.Column="4" Content="重置" Height="32"
+                        Command="{Binding ClearFilterCommand}"/>
+            </Grid>
+        </Border>
+
+        <!-- 左右工作区 -->
+        <Grid Grid.Row="1" ColumnDefinitions="320,*" ColumnSpacing="12">
+            <!-- 左侧模板列表 -->
+            <Border Grid.Column="0" CornerRadius="8" Padding="12"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <TextBlock Text="排班模板库" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="+ 新建 (F2)" Classes="Primary" Height="28" FontSize="12"
+                                Command="{Binding NewTemplateCommand}"/>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding Schedule.Templates}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ScheduleTemplateItem">
+                                    <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                            Margin="0,3" Padding="10" CornerRadius="6"
+                                            Classes.Primary="{Binding IsSelected}"
+                                            Command="{Binding $parent[UserControl].((local:ScheduleStationViewModel)DataContext).SelectTemplateCommand}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="{Binding TemplateName}" FontWeight="Bold" TextWrapping="Wrap"/>
+                                                <controls:StatusTag Grid.Column="1" Text="{Binding StatusText}" Kind="Success"/>
+                                            </Grid>
+                                            <TextBlock Text="{Binding Summary}" FontSize="12" TextWrapping="Wrap"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding DeptName}" FontSize="11"/>
+                                                <TextBlock Text="{Binding DoctorName}" FontSize="11"/>
+                                                <TextBlock Text="{Binding CapacityText}" FontSize="11"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <Border Grid.Row="2" Padding="10" CornerRadius="6"
+                            Background="{DynamicResource SemiColorBackground0}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="按选中模板生成号源" FontSize="13" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding Schedule.GenerateTemplateHint}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding Schedule.GenerateStartDate, Mode=TwoWay}" PlaceholderText="开始 YYYY-MM-DD"/>
+                                <TextBox Grid.Column="1" Text="{Binding Schedule.GenerateEndDate, Mode=TwoWay}" PlaceholderText="结束 YYYY-MM-DD"/>
+                            </Grid>
+                            <Button Content="确认批量发布号源" Classes="Warning" Height="32" HorizontalAlignment="Stretch"
+                                    Command="{Binding GenerateSlotsCommand}"/>
+                            <TextBlock Text="{Binding GenerateBlockedReason}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"
+                                       IsVisible="{Binding GenerateBlockedReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- 右侧：模板编辑器 + 号源池明细 -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" RowSpacing="12">
+                <!-- 模板表单 -->
+                <Border Grid.Row="0" CornerRadius="8" Padding="14"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding Schedule.EditorTitle}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="{Binding Schedule.SaveTemplateText}" Classes="Primary" Height="32"
+                                    Command="{Binding SaveTemplateCommand}"/>
+                        </Grid>
+
+                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
+                            <TextBox x:Name="TemplateNameBox" Grid.Column="0"
+                                     Text="{Binding Schedule.TemplateName, Mode=TwoWay}"
+                                     PlaceholderText="模板名称"/>
+                            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding Schedule.DepartmentOptions}"
+                                      SelectedItem="{Binding Schedule.SelectedDepartment, Mode=TwoWay}"
+                                      PlaceholderText="出诊科室">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ScheduleWorkstationViewModel+DepartmentChoice">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ComboBox Grid.Column="2" HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding Schedule.DoctorOptions}"
+                                      SelectedItem="{Binding Schedule.SelectedDoctor, Mode=TwoWay}"
+                                      PlaceholderText="出诊医生">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ScheduleWorkstationViewModel+DoctorChoice">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBox Grid.Column="3" Text="{Binding Schedule.RoomId, Mode=TwoWay}" PlaceholderText="诊室编号"/>
+                        </Grid>
+
+                        <Grid ColumnDefinitions="Auto,120,90,90,120,90,90,Auto" ColumnSpacing="8">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <CheckBox Content="一" IsChecked="{Binding Schedule.IsMondaySelected, Mode=TwoWay}"/>
+                                <CheckBox Content="二" IsChecked="{Binding Schedule.IsTuesdaySelected, Mode=TwoWay}"/>
+                                <CheckBox Content="三" IsChecked="{Binding Schedule.IsWednesdaySelected, Mode=TwoWay}"/>
+                                <CheckBox Content="四" IsChecked="{Binding Schedule.IsThursdaySelected, Mode=TwoWay}"/>
+                                <CheckBox Content="五" IsChecked="{Binding Schedule.IsFridaySelected, Mode=TwoWay}"/>
+                                <CheckBox Content="六" IsChecked="{Binding Schedule.IsSaturdaySelected, Mode=TwoWay}"/>
+                                <CheckBox Content="日" IsChecked="{Binding Schedule.IsSundaySelected, Mode=TwoWay}"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding Schedule.PeriodOptions}"
+                                      SelectedItem="{Binding Schedule.SelectedPeriod, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ScheduleWorkstationViewModel+PeriodChoice">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBox Grid.Column="2" Text="{Binding Schedule.StartTime, Mode=TwoWay}" PlaceholderText="开始 HH:mm"/>
+                            <TextBox Grid.Column="3" Text="{Binding Schedule.EndTime, Mode=TwoWay}" PlaceholderText="结束 HH:mm"/>
+                            <ComboBox Grid.Column="4" HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding Schedule.RegistrationLevelOptions}"
+                                      SelectedItem="{Binding Schedule.SelectedRegistrationLevel, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ScheduleWorkstationViewModel+RegistrationLevelChoice">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBox Grid.Column="5" Text="{Binding Schedule.RegistrationFee, Mode=TwoWay}" PlaceholderText="挂号费"/>
+                            <TextBox Grid.Column="6" Text="{Binding Schedule.Capacity, Mode=TwoWay}" PlaceholderText="总号容"/>
+                            <CheckBox Grid.Column="7" Content="启用" IsChecked="{Binding Schedule.IsTemplateActive, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <TextBlock Text="{Binding Schedule.ErrorMessage}" FontSize="12" Foreground="{DynamicResource SemiColorDanger}"
+                                   IsVisible="{Binding Schedule.HasError}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 号源池明细 -->
+                <Border Grid.Row="1" CornerRadius="8" Padding="12"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid RowDefinitions="Auto,*">
+                        <Grid Grid.Row="0" ColumnDefinitions="130,110,*,120,100,110,90,190" Margin="8,4,8,8">
+                            <TextBlock Grid.Column="0" Text="出诊日期" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="时段" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="科室 / 医生 / 诊室" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="3" Text="号别 / 挂号费" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="4" Text="已约 / 总号容" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="5" Text="调容" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="6" Text="状态" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="7" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1">
+                            <StackPanel>
+                                <TextBlock Text="当前筛选条件下暂无已发布号源，请先在左侧选择模板并点击『确认批量发布号源』。"
+                                           IsVisible="{Binding Schedule.IsSlotListEmpty}"
+                                           HorizontalAlignment="Center" Margin="0,32"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                <ItemsControl ItemsSource="{Binding Schedule.Slots}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ScheduleSlotItem">
+                                            <Border Margin="0,3" Padding="10" CornerRadius="6"
+                                                    Background="{DynamicResource SemiColorBackground0}"
+                                                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="130,110,*,120,100,110,90,190">
+                                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DateText}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding WeekdayText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding PeriodText}" FontWeight="SemiBold" FontSize="12"/>
+                                                        <TextBlock Text="{Binding TimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DoctorName}" FontWeight="Bold"/>
+                                                        <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText2}">
+                                                            <Run Text="{Binding DeptName}"/>
+                                                            <Run Text=" · "/>
+                                                            <Run Text="{Binding RoomText}"/>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding LevelText}" FontSize="12"/>
+                                                        <TextBlock Text="{Binding FeeText}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="4" Text="{Binding CapacityText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <TextBox Grid.Column="5" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                             Text="{Binding CapacityEditText, Mode=TwoWay}"
+                                                             IsEnabled="{Binding CanChangeCapacity}"
+                                                             PlaceholderText="容量"/>
+                                                    <controls:StatusTag Grid.Column="6" Text="{Binding StatusText}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                                    <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                        <Button Content="保存容量" Classes="Primary" Height="28" FontSize="12"
+                                                                IsEnabled="{Binding CanChangeCapacity}"
+                                                                Command="{Binding $parent[UserControl].((local:ScheduleStationViewModel)DataContext).UpdateSlotCapacityCommand}"
+                                                                CommandParameter="{Binding}"/>
+                                                        <Button Content="{Binding ToggleActionText}" Classes="Warning" Height="28" FontSize="12"
+                                                                IsEnabled="{Binding CanStop}"
+                                                                ToolTip.Tip="已存在预约号源不可直接停诊"
+                                                                Command="{Binding $parent[UserControl].((local:ScheduleStationViewModel)DataContext).ToggleSlotCommand}"
+                                                                CommandParameter="{Binding}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

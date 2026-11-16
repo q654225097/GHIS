@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.EmrArchive"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.EmrArchive.EmrArchiveView"
+             x:DataType="local:EmrArchiveViewModel">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="16" RowSpacing="12">
+        <!-- 顶部工具栏 -->
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="电子病历国标 OFD 归档与防篡改中心" FontSize="17" FontWeight="Bold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="14">
+                        <TextBlock Text="{Binding TotalCount, StringFormat=归档文档 {0} 份}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding VerifiedCount, StringFormat=SM2 验签通过 {0} 份}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}"/>
+                        <TextBlock Text="标准：GB/T 33190-2016 (版式 + 语义双轨)" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <Button Grid.Column="1" Content="刷新" Classes="Tertiary" Height="32" Margin="0,0,8,0"
+                        Command="{Binding RefreshCommand}"/>
+                <Button Grid.Column="2" Content="防篡改校验 (F3)" Classes="Warning" Height="32" Margin="0,0,8,0"
+                        Command="{Binding VerifyCurrentOfdCommand}"/>
+                <Button Grid.Column="3" Content="导出当前 OFD" Height="32" Margin="0,0,8,0"
+                        Command="{Binding ExportCurrentOfdCommand}"/>
+                <Button Grid.Column="4" Content="生成并归档 OFD" Classes="Primary" Height="32"
+                        Command="{Binding ArchiveCurrentEmrCommand}"/>
+            </Grid>
+        </Border>
+
+        <!-- 检索框 -->
+        <TextBox x:Name="SearchBox" Grid.Row="1"
+                 Text="{Binding SearchKeyword, Mode=TwoWay}"
+                 PlaceholderText="按归档编号、患者姓名、文书类型或科室检索归档记录 (Ctrl+F)"/>
+
+        <!-- 归档台账 -->
+        <Border Grid.Row="2" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                Padding="12">
+            <Grid RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="150,*,100,110,130,170,280" Margin="8,4,8,8">
+                    <TextBlock Grid.Column="0" Text="归档编号" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="1" Text="文书类型 / 标准" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="2" Text="患者" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="3" Text="归档科室" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="4" Text="归档时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="5" Text="验签状态" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="6" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1">
+                    <ItemsControl ItemsSource="{Binding FilteredRecords}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:OfdArchiveRecordModel">
+                                <Border Margin="0,3" Padding="10" CornerRadius="6"
+                                        Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="150,*,100,110,130,170,280">
+                                        <TextBlock Grid.Column="0" Text="{Binding ArchiveNo}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DocType}" FontWeight="Bold" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding HashSha256}" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" MaxWidth="360" HorizontalAlignment="Left"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" Text="{Binding PatientName}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding DeptName}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="4" Text="{Binding ArchiveTime}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                        <controls:StatusTag Grid.Column="5" Text="{Binding SignatureStatus}" Kind="Success" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <Button Content="预览" Classes="Primary" Height="28" FontSize="12"
+                                                    Command="{Binding $parent[UserControl].((local:EmrArchiveViewModel)DataContext).PreviewRecordCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Content="验签" Classes="Success" Height="28" FontSize="12"
+                                                    Command="{Binding $parent[UserControl].((local:EmrArchiveViewModel)DataContext).VerifyRecordCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Content="逆向 XML" Height="28" FontSize="12"
+                                                    Command="{Binding $parent[UserControl].((local:EmrArchiveViewModel)DataContext).ReverseXmlCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Content="导出" Height="28" FontSize="12"
+                                                    Command="{Binding $parent[UserControl].((local:EmrArchiveViewModel)DataContext).ExportRecordCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
+

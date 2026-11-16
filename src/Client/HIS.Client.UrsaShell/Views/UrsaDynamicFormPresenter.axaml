@@ -10,7 +10,7 @@
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Spacing="2">
                     <TextBlock Text="{Binding SelectedFormTemplate.TemplateName, FallbackValue='心血管专病结构化随访表单'}" FontSize="16" FontWeight="Bold"/>
-                    <TextBlock Text="{Binding SelectedFormTemplate.DeptScope, StringFormat='{}适用范围: {0} · 纯数据驱动 EAV 存储', FallbackValue='心血管内科 (OPD &amp; IPD)'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Text="{Binding SelectedFormTemplate.DeptScope, StringFormat='{}适用范围: {0}', FallbackValue='心血管内科（门诊及住院）'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
                 </StackPanel>
                 <u:Badge Grid.Column="1" Header="{Binding SelectedFormTemplate.Version, FallbackValue='v2.1'}" Classes="Primary"/>
             </Grid>
@@ -18,8 +18,8 @@
             <!-- Dynamic Schema Rule Banner -->
             <Border Background="{DynamicResource SemiColorWarningLight}" BorderBrush="{DynamicResource SemiColorWarning}" BorderThickness="1" CornerRadius="6" Padding="10,6">
                 <Grid ColumnDefinitions="Auto,*">
-                    <TextBlock Grid.Column="0" Text="🛡️ 门禁3 (GATE-03) 规则定义:" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="{Binding SelectedFormTemplate.GenderRuleDescription, FallbackValue='前列腺触诊仅限男性 (MALE_ONLY)；孕产史仅限女性 (FEMALE_ONLY)'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" Margin="8,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="0" Text="字段显示规则:" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding SelectedFormTemplate.GenderRuleDescription, FallbackValue='按患者性别显示相应字段'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" Margin="8,0" VerticalAlignment="Center"/>
                 </Grid>
             </Border>
 
@@ -44,13 +44,13 @@
                     </u:FormItem>
                 </Grid>
 
-                <u:Divider Content="专科专病数据元 (GATE-03 临床性别排他规则)"/>
+                <u:Divider Content="专科专病数据"/>
 
                 <Grid ColumnDefinitions="*,*">
-                    <u:FormItem Grid.Column="0" Label="前列腺触诊 [男性专属 - MALE ONLY]:" Margin="0,0,8,0">
+                    <u:FormItem Grid.Column="0" Label="前列腺触诊（男性）:" Margin="0,0,8,0">
                         <TextBox Text="{Binding EmrWorkspace.ProstateExam}" Height="32"/>
                     </u:FormItem>
-                    <u:FormItem Grid.Column="1" Label="孕产次数 [女性专属 - FEMALE ONLY]:" Margin="8,0,0,0">
+                    <u:FormItem Grid.Column="1" Label="孕产次数（女性）:" Margin="8,0,0,0">
                         <u:NumericIntUpDown Value="{Binding EmrWorkspace.PregnancyCount}" Minimum="0" Maximum="20" Height="32"/>
                     </u:FormItem>
                 </Grid>
@@ -59,9 +59,9 @@
             <!-- Bottom Action Footer -->
             <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="12,8">
                 <Grid ColumnDefinitions="Auto,*,Auto">
-                    <TextBlock Grid.Column="0" Text="EAV 存储特征:" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="零 DDL 变更扩展 · ANSI SQL 纯存储 · 前后端双向 JSON 校验" FontSize="10" Foreground="{DynamicResource SemiColorText2}" Margin="8,0" VerticalAlignment="Center"/>
-                    <Button Grid.Column="2" Content="保存动态表单实例" Classes="Primary" Height="28" Padding="12,0"/>
+                    <TextBlock Grid.Column="0" Text="{Binding SelectedFormTemplate.FieldCount, StringFormat='{}共 {0} 个字段'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="字段可按需扩展，保存后继续用于该科室的病历书写" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="8,0" VerticalAlignment="Center"/>
+                    <Button Grid.Column="2" Content="保存表单" Classes="Primary" Height="32" Padding="12,0"/>
                 </Grid>
             </Border>
         </StackPanel>

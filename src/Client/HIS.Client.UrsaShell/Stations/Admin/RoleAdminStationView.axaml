@@ -1,0 +1,210 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Admin"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Admin.RoleAdminStationView"
+             x:DataType="local:RoleAdminStationViewModel">
+    <Grid Margin="14" RowDefinitions="Auto,*" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="角色与资源级权限" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="先选择角色，再维护该角色实际写入服务端的权限键与授权级别"
+                               FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新 (F5)" Classes="Tertiary" Height="32" Margin="0,0,8,0"
+                        Command="{Binding RefreshCommand}"/>
+                <Button Grid.Column="2" Content="新建角色 (F2)" Classes="Primary" Height="32"
+                        Command="{Binding OpenCreateRoleDrawerCommand}"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="320,*" ColumnSpacing="10">
+            <Border Grid.Column="0" Padding="10" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="全院角色" FontSize="14" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Workbench.RolesList.Count, StringFormat={}{0} 个角色}"
+                                   FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding Workbench.RolesList}"
+                             SelectedItem="{Binding SelectedRole, Mode=TwoWay}"
+                             BorderThickness="0" Background="Transparent">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Padding" Value="4"/>
+                            </Style>
+                        </ListBox.Styles>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RoleAdminItemModel">
+                                <Border Padding="10" CornerRadius="6"
+                                        Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="5">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding RoleName}" FontSize="13" FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"/>
+                                            <controls:StatusTag Grid.Column="1" Text="{Binding StatusText}"
+                                                                Kind="{Binding StatusClass}" Margin="6,0,0,0"/>
+                                        </Grid>
+                                        <TextBlock Grid.Row="1" Text="{Binding RoleCode}" FontFamily="Consolas"
+                                                   FontSize="12" Foreground="{DynamicResource SemiColorText2}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding ScopeDescription}" FontSize="12"
+                                                       Foreground="{DynamicResource SemiColorText1}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Button Grid.Column="1" Content="编辑" Height="28" Padding="8,0" FontSize="12"
+                                                    Command="{Binding $parent[UserControl].((local:RoleAdminStationViewModel)DataContext).EditRoleCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                    <Border Grid.Row="0" Padding="12,10" CornerRadius="6"
+                            Background="{DynamicResource SemiColorBackground2}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding SelectedRoleName}" FontSize="15" FontWeight="Bold"/>
+                                    <controls:StatusTag Text="{Binding SelectedRoleStatus}"
+                                                        Kind="{Binding SelectedRoleStatusClass}"/>
+                                </StackPanel>
+                                <TextBlock Foreground="{DynamicResource SemiColorText2}" FontSize="12">
+                                    <Run Text="{Binding SelectedRoleCode}" FontFamily="Consolas"/>
+                                    <Run Text="  ·  数据范围  "/>
+                                    <Run Text="{Binding SelectedRoleScope}"/>
+                                    <Run Text="  ·  "/>
+                                    <Run Text="{Binding PermissionCountText}"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="+ 新增权限 (F3)" Height="32" Padding="12,0"
+                                    Command="{Binding AddPermissionCommand}"
+                                    IsEnabled="{Binding HasSelectedRole}"
+                                    ToolTip.Tip="为当前角色添加服务端资源键"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+                        <TextBox x:Name="ResourceSearchBox"
+                                 Text="{Binding ResourceFilter, Mode=TwoWay}"
+                                 Height="32" FontSize="12"
+                                 PlaceholderText="搜索资源键、名称或授权级别 (Ctrl+F)"/>
+                        <Button Grid.Column="1" Content="全部完全授权" Height="32" Padding="10,0" FontSize="12"
+                                Command="{Binding BulkFullAccessCommand}"
+                                IsEnabled="{Binding HasFilteredPermissions}"
+                                ToolTip.Tip="将当前筛选结果统一设为完全授权"/>
+                        <Button Grid.Column="2" Content="全部只读" Height="32" Padding="10,0" FontSize="12"
+                                Command="{Binding BulkReadOnlyCommand}"
+                                IsEnabled="{Binding HasFilteredPermissions}"
+                                ToolTip.Tip="将当前筛选结果统一设为只读"/>
+                        <Button Grid.Column="3" Content="全部隐藏" Height="32" Padding="10,0" FontSize="12"
+                                Command="{Binding BulkHiddenCommand}"
+                                IsEnabled="{Binding HasFilteredPermissions}"
+                                ToolTip.Tip="将当前筛选结果统一设为仅隐藏"/>
+                        <TextBlock Grid.Column="4" Text="{Binding PermissionCountText}" FontSize="12"
+                                   Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"
+                                   MinWidth="86"/>
+                    </Grid>
+
+                    <Grid Grid.Row="2" RowDefinitions="Auto,*" RowSpacing="6">
+                        <Grid ColumnDefinitions="*,200,320" Margin="8,0">
+                            <TextBlock Text="资源键 / 名称" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="授权级别" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="调整为" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding FilteredPermissions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PermissionMatrixItemModel">
+                                            <Border Margin="0,0,0,5" Padding="10,8" CornerRadius="6"
+                                                    Background="{DynamicResource SemiColorBackground0}"
+                                                    BorderBrush="{DynamicResource SemiColorBorder}"
+                                                    BorderThickness="1">
+                                                <Grid ColumnDefinitions="*,200,320" ColumnSpacing="8">
+                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding ResourceName}"
+                                                                   FontSize="12" FontWeight="SemiBold"
+                                                                   TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding ResourceKey}" FontFamily="Consolas"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource SemiColorText2}"
+                                                                   IsVisible="{Binding HasDisplayName}"
+                                                                   TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                    <controls:StatusTag Grid.Column="1"
+                                                                        Text="{Binding PolicyLabel}"
+                                                                        Kind="{Binding PolicyClass}"
+                                                                        VerticalAlignment="Center"/>
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                                Spacing="4" VerticalAlignment="Center">
+                                                        <Button Content="完全" Height="28" Padding="8,0" FontSize="12"
+                                                                Command="{Binding $parent[UserControl].((local:RoleAdminStationViewModel)DataContext).SetFullAccessCommand}"
+                                                                CommandParameter="{Binding}"/>
+                                                        <Button Content="只读" Height="28" Padding="8,0" FontSize="12"
+                                                                Command="{Binding $parent[UserControl].((local:RoleAdminStationViewModel)DataContext).SetReadOnlyCommand}"
+                                                                CommandParameter="{Binding}"/>
+                                                        <Button Content="脱敏" Height="28" Padding="8,0" FontSize="12"
+                                                                Command="{Binding $parent[UserControl].((local:RoleAdminStationViewModel)DataContext).SetMaskedCommand}"
+                                                                CommandParameter="{Binding}"/>
+                                                        <Button Content="隐藏" Height="28" Padding="8,0" FontSize="12"
+                                                                Command="{Binding $parent[UserControl].((local:RoleAdminStationViewModel)DataContext).SetHiddenCommand}"
+                                                                CommandParameter="{Binding}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <Border IsVisible="{Binding IsLoadingPermissions}" Padding="16"
+                                    Background="{DynamicResource SemiColorBackground1}">
+                                <TextBlock Text="正在读取当前角色权限…" FontSize="12"
+                                           Foreground="{DynamicResource SemiColorText2}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+
+                            <Border IsVisible="{Binding IsFilteredEmpty}" Padding="20"
+                                    Background="{DynamicResource SemiColorBackground1}">
+                                <StackPanel Spacing="6" MaxWidth="480"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding EmptyStateTitle}" FontSize="14" FontWeight="Bold"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding EmptyStateDescription}" FontSize="12"
+                                               Foreground="{DynamicResource SemiColorText2}"
+                                               TextWrapping="Wrap" TextAlignment="Center"/>
+                                    <Button Content="新增权限" Height="32" Padding="14,0"
+                                            HorizontalAlignment="Center"
+                                            Command="{Binding AddPermissionCommand}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

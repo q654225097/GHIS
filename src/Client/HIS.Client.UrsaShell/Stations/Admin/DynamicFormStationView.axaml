@@ -1,0 +1,412 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Admin"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Admin.DynamicFormStationView"
+             x:DataType="local:DynamicFormStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="动态表单与处方字段配置" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="模板、字段和预览在独立工作区内编辑；删除处方字段时仅隐藏界面列并保留历史数据"
+                               FontSize="12" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新" Classes="Tertiary" Height="32" Margin="0,0,8,0"
+                        Command="{Binding RefreshCommand}" ToolTip.Tip="重新加载模板与字段（F5）"/>
+                <Button Grid.Column="2" Content="新增处方字段" Height="32" Margin="0,0,8,0"
+                        Command="{Binding AddPrescriptionFieldCommand}"
+                        IsEnabled="{Binding CanConfigureDynamicForms}"
+                        ToolTip.Tip="{Binding PermissionBlockedReason}"/>
+                <Button Grid.Column="3" Content="处方字段配置" Height="32" Margin="0,0,8,0"
+                        Command="{Binding DesignPrescriptionSchemaCommand}"
+                        IsEnabled="{Binding CanConfigureDynamicForms}"
+                        ToolTip.Tip="{Binding PermissionBlockedReason}"/>
+                <Button Grid.Column="4" Content="保存模板 (Ctrl+S)" Classes="Primary" Height="32"
+                        Command="{Binding SaveTemplateCommand}"
+                        IsEnabled="{Binding HasEditingTemplate}"
+                        ToolTip.Tip="保存当前模板及全部字段配置"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="250,*,360" ColumnSpacing="10">
+            <!-- Template list -->
+            <Border Grid.Column="0" Padding="10" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="表单模板" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding FilteredTemplates.Count, StringFormat={}{0} 个模板}"
+                                       FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="新增模板" Height="30" Padding="10,0"
+                                Command="{Binding NewTemplateCommand}"/>
+                    </Grid>
+
+                    <TextBox x:Name="SearchBox" Grid.Row="1"
+                             Text="{Binding SearchKeyword, Mode=TwoWay}"
+                             Height="32" FontSize="12"
+                             PlaceholderText="搜索模板名称或编码 (Ctrl+F)"/>
+
+                    <ListBox Grid.Row="2"
+                             ItemsSource="{Binding FilteredTemplates}"
+                             SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}"
+                             BorderThickness="0"
+                             Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DynamicFormTemplateModel">
+                                <StackPanel Spacing="4" Margin="0,4">
+                                    <TextBlock Text="{Binding TemplateName}" FontSize="13" FontWeight="SemiBold"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding TemplateCode}" FontSize="11"
+                                               Foreground="{DynamicResource SemiColorText2}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding DeptScope}" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText1}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <controls:StatusTag Grid.Column="1" Margin="6,0,0,0"
+                                                            Text="{Binding FieldCount, StringFormat={}{0} 项}"
+                                                            Kind="Info"/>
+                                    </Grid>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Field list and selected field properties -->
+            <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding Workbench.EditingTemplate.TemplateName, FallbackValue=字段清单}"
+                                       FontSize="14" FontWeight="Bold" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding SelectedTemplateMeta}" FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="新增字段 (F2)" Height="32" Margin="0,0,8,0"
+                                Command="{Binding AddFieldCommand}"
+                                IsEnabled="{Binding HasEditingTemplate}"/>
+                        <Button Grid.Column="2" Content="保存字段" Height="32"
+                                Command="{Binding SaveFieldCommand}"
+                                IsEnabled="{Binding HasEditingField}"
+                                ToolTip.Tip="校验并保存当前字段 (Ctrl+S)"/>
+                    </Grid>
+
+                    <Border Grid.Row="1" Padding="10,8" CornerRadius="6"
+                            Background="{DynamicResource SemiColorBackground2}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Workbench.EditingTemplate.Version, StringFormat={}版本 {0}}"
+                                           FontSize="12" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding Workbench.EditingTemplate.EntityType, StringFormat={}绑定实体 {0}}"
+                                           FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                            <controls:StatusTag Grid.Column="1" Text="{Binding Workbench.EditingTemplate.Status}"
+                                                Kind="Success" Margin="0,0,8,0"/>
+                            <controls:StatusTag Grid.Column="2" Text="{Binding PreviewFieldCountText}" Kind="Info"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="2" RowDefinitions="Auto,*" RowSpacing="8">
+                        <Grid ColumnDefinitions="40,*,Auto" Margin="4,0">
+                            <TextBlock Text="序号" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="字段名称 / 编码" FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="控件 · 排序 · 操作" FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Workbench.EditingTemplate.Fields}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DynamicFormFieldModel">
+                                        <Border Margin="0,0,0,6" Padding="8" CornerRadius="6"
+                                                Background="{DynamicResource SemiColorBackground0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}"
+                                                BorderThickness="1">
+                                            <Grid ColumnDefinitions="34,*,Auto" ColumnSpacing="8">
+                                                <TextBlock Grid.Column="0" Text="{Binding OrderNumber}"
+                                                           FontWeight="Bold" FontSize="13"
+                                                           Foreground="{DynamicResource SemiColorText2}"
+                                                           VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" Spacing="2"
+                                                            VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding FieldLabel}" FontSize="12"
+                                                                   FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <controls:StatusTag Text="{Binding RequirementText}"
+                                                                            Kind="Info"
+                                                                            IsVisible="{Binding IsRequired}"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding FieldCode}" FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText2}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                            Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding ControlDisplayText}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText2}"
+                                                               VerticalAlignment="Center"
+                                                               MinWidth="48"/>
+                                                    <Button Content="上移" Height="28" Padding="7,0" FontSize="11"
+                                                            Command="{Binding $parent[UserControl].((local:DynamicFormStationViewModel)DataContext).MoveFieldUpCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Content="下移" Height="28" Padding="7,0" FontSize="11"
+                                                            Command="{Binding $parent[UserControl].((local:DynamicFormStationViewModel)DataContext).MoveFieldDownCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Content="编辑" Height="28" Padding="8,0" FontSize="11"
+                                                            Command="{Binding $parent[UserControl].((local:DynamicFormStationViewModel)DataContext).EditFieldCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Content="删除" Height="28" Padding="8,0" FontSize="11"
+                                                            Classes="Danger"
+                                                            IsEnabled="{Binding CanRemove}"
+                                                            ToolTip.Tip="{Binding RemoveButtonTip}"
+                                                            Command="{Binding $parent[UserControl].((local:DynamicFormStationViewModel)DataContext).RemoveFieldCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Border Grid.Row="3" Padding="12" CornerRadius="6"
+                            Background="{DynamicResource SemiColorBackground2}"
+                            BorderBrush="{DynamicResource SemiColorBorder}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Spacing="1">
+                                    <TextBlock Text="{Binding FieldEditorTitle}" FontSize="13" FontWeight="Bold"/>
+                                    <TextBlock Text="修改后点击保存字段；处方字段删除仅隐藏界面列，后台保留历史值"
+                                               FontSize="11" Foreground="{DynamicResource SemiColorText2}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <Button Content="取消" Height="30" Padding="10,0"
+                                            Command="{Binding CancelFieldCommand}"
+                                            IsEnabled="{Binding HasEditingField}"/>
+                                    <Button Content="删除字段" Classes="Danger" Height="30" Padding="10,0"
+                                            Command="{Binding RemoveFieldCommand}"
+                                            CommandParameter="{Binding Workbench.EditingField}"
+                                            IsEnabled="{Binding Workbench.EditingField.CanRemove, FallbackValue=False}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <ScrollViewer MinHeight="220" MaxHeight="360"
+                                          VerticalScrollBarVisibility="Visible"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          AllowAutoHide="False">
+                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                                      ColumnSpacing="10" RowSpacing="8"
+                                      IsEnabled="{Binding HasEditingField}">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="字段名称" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding Workbench.EditingField.FieldLabel, Mode=TwoWay}"
+                                                 Height="32" FontSize="12"
+                                                 PlaceholderText="如 单次剂量"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="字段编码" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding Workbench.EditingField.FieldCode, Mode=TwoWay}"
+                                                 Height="32" FontSize="12"
+                                                 IsEnabled="{Binding Workbench.EditingField.IsProtectedField, Converter={x:Static BoolConverters.Not}, FallbackValue=False}"
+                                                 PlaceholderText="如 custom_dose_note"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="数据类型" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <ComboBox ItemsSource="{Binding Workbench.FormDataTypes}"
+                                                  SelectedItem="{Binding Workbench.EditingField.DataType, Mode=TwoWay}"
+                                                  Height="32" FontSize="12"
+                                                  HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="控件类型" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <ComboBox ItemsSource="{Binding Workbench.FormControlTypes}"
+                                                  SelectedItem="{Binding Workbench.EditingField.UrsaControlType, Mode=TwoWay}"
+                                                  Height="32" FontSize="12"
+                                                  HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="计量单位" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding Workbench.EditingField.UnitText, Mode=TwoWay}"
+                                                 Height="32" FontSize="12"
+                                                 PlaceholderText="如 mg、片、次"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="列宽" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <u:NumericIntUpDown Value="{Binding Workbench.EditingField.ColumnWidth, Mode=TwoWay}"
+                                                            Minimum="48" Maximum="600" Height="32" FontSize="12"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="3" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="提示文字" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding Workbench.EditingField.Placeholder, Mode=TwoWay}"
+                                                 Height="32" FontSize="12"
+                                                 PlaceholderText="输入时的提示"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="3" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="可见性规则" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <ComboBox ItemsSource="{Binding Workbench.FormVisibilityRules}"
+                                                  SelectedItem="{Binding Workbench.EditingField.VisibilityExpr, Mode=TwoWay}"
+                                                  Height="32" FontSize="12"
+                                                  HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="4" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="下拉选项（每行一个）" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding Workbench.EditingField.OptionsText, Mode=TwoWay}"
+                                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                                 MinHeight="58" MaxHeight="100" FontSize="12"
+                                                 PlaceholderText="例如：口服&#10;静脉滴注"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="4" Grid.Column="1" Spacing="6">
+                                                    <TextBlock Text="字段属性" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <CheckBox Content="必填字段"
+                                                  IsChecked="{Binding Workbench.EditingField.IsRequired, Mode=TwoWay}"/>
+                                        <CheckBox Content="允许在业务界面编辑"
+                                                  IsChecked="{Binding Workbench.EditingField.IsEditable, Mode=TwoWay}"/>
+                                        <CheckBox Content="系统内置字段"
+                                                  IsChecked="{Binding Workbench.EditingField.IsSystemField, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="5" Grid.ColumnSpan="2" Spacing="3">
+                                        <TextBlock Text="数值约束（最小值 / 最大值 / 步长）" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                            <u:NumericDoubleUpDown Grid.Column="0"
+                                                                   Value="{Binding Workbench.EditingField.Minimum, Mode=TwoWay}"
+                                                                   Height="32" FontSize="12"
+                                                                   PlaceholderText="最小值"/>
+                                            <u:NumericDoubleUpDown Grid.Column="1"
+                                                                   Value="{Binding Workbench.EditingField.Maximum, Mode=TwoWay}"
+                                                                   Height="32" FontSize="12"
+                                                                   PlaceholderText="最大值"/>
+                                            <u:NumericDoubleUpDown Grid.Column="2"
+                                                                   Value="{Binding Workbench.EditingField.Step, Mode=TwoWay}"
+                                                                   Height="32" FontSize="12"
+                                                                   PlaceholderText="步长"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Live preview -->
+            <Border Grid.Column="2" Padding="12" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="实时预览" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding Workbench.PreviewPatientSummary}"
+                                       FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        </StackPanel>
+                        <controls:StatusTag Grid.Column="1" Text="{Binding PreviewFieldCountText}" Kind="Info"/>
+                    </Grid>
+
+                    <Border Grid.Row="1" Padding="8,6" CornerRadius="5"
+                            Background="{DynamicResource SemiColorPrimaryLight}">
+                        <TextBlock Text="按当前控件类型即时渲染；修改字段名称、类型、单位或选项会立即反映在下方"
+                                   FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="10">
+                            <ItemsControl ItemsSource="{Binding Workbench.PreviewFields}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DynamicFormFieldModel">
+                                        <Border Margin="0,0,0,8" Padding="10" CornerRadius="6"
+                                                Background="{DynamicResource SemiColorBackground0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}"
+                                                BorderThickness="1">
+                                            <StackPanel Spacing="5">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding FieldLabel}"
+                                                               FontSize="12" FontWeight="SemiBold"
+                                                               TextWrapping="Wrap"/>
+                                                    <controls:StatusTag Grid.Column="1" Text="必填" Kind="Danger"
+                                                                        Margin="6,0,0,0"
+                                                                        IsVisible="{Binding IsRequired}"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding UnitText}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText2}"/>
+                                                </Grid>
+
+                                                <TextBox Text="{Binding RuntimeValue, Mode=TwoWay}"
+                                                         IsVisible="{Binding IsTextControl}"
+                                                         IsReadOnly="{Binding IsEditable, Converter={x:Static BoolConverters.Not}}"
+                                                         AcceptsReturn="{Binding IsMultiLine}"
+                                                         TextWrapping="Wrap"
+                                                         MinHeight="32" MaxHeight="92"
+                                                         PlaceholderText="{Binding Placeholder}"/>
+                                                <u:NumericIntUpDown Value="{Binding RuntimeInt, Mode=TwoWay}"
+                                                                    IsVisible="{Binding IsIntegerControl}"
+                                                                    Minimum="{Binding Minimum}"
+                                                                    Maximum="{Binding Maximum}"
+                                                                    Height="32"/>
+                                                <u:NumericDoubleUpDown Value="{Binding RuntimeDecimal, Mode=TwoWay}"
+                                                                       IsVisible="{Binding IsDecimalControl}"
+                                                                       Minimum="{Binding Minimum}"
+                                                                       Maximum="{Binding Maximum}"
+                                                                       Step="{Binding Step}"
+                                                                       Height="32"/>
+                                                <ComboBox ItemsSource="{Binding Options}"
+                                                          SelectedItem="{Binding RuntimeValue, Mode=TwoWay}"
+                                                          IsVisible="{Binding IsEnumControl}"
+                                                          Height="32"
+                                                          HorizontalAlignment="Stretch"/>
+                                                <DatePicker SelectedDate="{Binding RuntimeDate, Mode=TwoWay}"
+                                                            IsVisible="{Binding IsDateControl}"
+                                                            Height="32"/>
+                                                <CheckBox Content="{Binding FieldLabel}"
+                                                          IsChecked="{Binding RuntimeBoolean, Mode=TwoWay}"
+                                                          IsVisible="{Binding IsBooleanControl}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border IsVisible="{Binding IsPreviewEmpty}"
+                                    Padding="16" CornerRadius="6"
+                                    Background="{DynamicResource SemiColorBackground2}">
+                                <TextBlock Text="当前模板暂无字段。新增字段后，预览会在此实时出现。"
+                                           FontSize="12" Foreground="{DynamicResource SemiColorText2}"
+                                           TextWrapping="Wrap" HorizontalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

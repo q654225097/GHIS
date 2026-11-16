@@ -1,0 +1,93 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Admin"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Admin.UserAdminStationView"
+             x:DataType="local:UserAdminStationViewModel">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="16" RowSpacing="12">
+        <!-- 顶部工具栏 -->
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="系统用户账号与分级授权管理" FontSize="17" FontWeight="Bold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="{Binding TotalCount, StringFormat=总账号 {0} 个}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding ActiveCount, StringFormat=正常启用 {0} 个}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}"/>
+                    </StackPanel>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新" Classes="Tertiary" Height="32" Margin="0,0,8,0"
+                        Command="{Binding RefreshCommand}"/>
+                <Button Grid.Column="2" Content="+ 新增账号 (F2)" Classes="Primary" Height="32"
+                        Command="{Binding OpenCreateUserDrawerCommand}"/>
+            </Grid>
+        </Border>
+
+        <!-- 搜索框 -->
+        <TextBox x:Name="SearchBox" Grid.Row="1"
+                 Text="{Binding SearchKeyword, Mode=TwoWay}"
+                 PlaceholderText="按姓名、账号、工号、角色或科室过滤系统账号 (Ctrl+F)"/>
+
+        <!-- 账号列表 -->
+        <Border Grid.Row="2" CornerRadius="8" Padding="12"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="150,110,160,*,180,90,190" Margin="8,4,8,8">
+                    <TextBlock Grid.Column="0" Text="姓名 / 工号" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="1" Text="登录账号" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="2" Text="默认身份 / 科室" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="3" Text="临床资质分级" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="4" Text="多身份摘要" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="5" Text="状态" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Grid.Column="6" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1">
+                    <ItemsControl ItemsSource="{Binding FilteredUsers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:UserAdminItemModel">
+                                <Border Margin="0,3" Padding="10" CornerRadius="6"
+                                        Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="150,110,160,*,180,90,190">
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding EmployeeNo}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding UserName}" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding RoleName}" FontWeight="SemiBold" FontSize="12"/>
+                                            <TextBlock Text="{Binding DeptName}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding PrescribeLevelText}" FontSize="11"/>
+                                            <TextBlock Text="{Binding SurgeryLevelText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <TextBlock Text="{Binding EmrSignLevelText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding ContextCountText}" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding ContextSummary}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <controls:StatusTag Grid.Column="5" Text="{Binding StatusText}" Kind="{Binding StatusClass}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <Button Content="停/启用" Classes="Warning" Height="28" FontSize="12"
+                                                    Command="{Binding $parent[UserControl].((local:UserAdminStationViewModel)DataContext).ToggleUserStatusCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Content="重置密码" Classes="Danger" Height="28" FontSize="12"
+                                                    Command="{Binding $parent[UserControl].((local:UserAdminStationViewModel)DataContext).ResetPasswordCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
+
