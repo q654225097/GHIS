@@ -1,0 +1,514 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.PharmacyWarehouse"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             x:Class="HIS.Client.UrsaShell.Stations.PharmacyWarehouse.PharmacyWarehouseView"
+             x:DataType="local:PharmacyWarehouseViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.sectionTitle">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="TextBlock.caption">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource SemiColorText2}"/>
+        </Style>
+        <Style Selector="TextBlock.tableHead">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource SemiColorText2}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.tableCell">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource SemiColorText0}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.strongCell">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource SemiColorText0}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="Border.panel">
+            <Setter Property="Background" Value="{DynamicResource SemiColorBackground1}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14"/>
+        </Style>
+        <Style Selector="Border.rowLine">
+            <Setter Property="Background" Value="{DynamicResource SemiColorBackground0}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorBorder}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="11,8"/>
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel Margin="16">
+        <!-- Scope & Status -->
+        <Border DockPanel.Dock="Top" Classes="panel" Margin="0,0,0,10" Padding="14,10">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,210,*,Auto">
+                    <TextBlock Grid.Column="0" Text="当前库房" Classes="caption" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox Grid.Column="1"
+                              ItemsSource="{Binding Pharmacy.WarehouseChoices}"
+                              SelectedItem="{Binding Pharmacy.SelectedWarehouse, Mode=TwoWay}"
+                              Height="30"
+                              SelectionChanged="WarehouseScope_SelectionChanged">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WarehouseChoice">
+                                <TextBlock Text="{Binding Name}" FontSize="12"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="16,0">
+                        <u:Badge Header="{Binding Pharmacy.OperatorText}" Classes="Primary"/>
+                        <u:Badge Header="FEFO 效期批次管理 · 跨库调拨台账" Classes="Secondary"/>
+                        <TextBlock Text="F2 查目录 · F5 刷新" Classes="caption" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="正在加载库存…" Classes="caption" IsVisible="{Binding Pharmacy.IsBusy}" VerticalAlignment="Center"/>
+                        <Button Content="刷新当前页 (F5)" Height="30" Padding="12,0" Command="{Binding RefreshCommand}"/>
+                    </StackPanel>
+                </Grid>
+                <Border Grid.Row="1" Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="5" Padding="10,6"
+                        IsVisible="{Binding Pharmacy.HasNotice}">
+                    <TextBlock Text="{Binding Pharmacy.Notice}" Foreground="{DynamicResource SemiColorSuccess}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                </Border>
+                <Border Grid.Row="1" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="5" Padding="10,6"
+                        IsVisible="{Binding Pharmacy.HasError}">
+                    <TextBlock Text="{Binding Pharmacy.ErrorMessage}" Foreground="{DynamicResource SemiColorDanger}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                </Border>
+            </Grid>
+        </Border>
+
+        <TabControl SelectedIndex="{Binding LocalTabIndex, Mode=TwoWay}">
+            <!-- Tab 0: 采购入库与结存 -->
+            <TabItem Header="采购入库与结存">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,8,0,0">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                            <Border Grid.Column="0" Classes="panel">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="启用药品" Classes="caption"/>
+                                    <TextBlock Text="{Binding Pharmacy.ActiveDrugCount}" FontSize="22" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Classes="panel">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding Pharmacy.CurrentWarehouseText, StringFormat='{}{0} · 批次结余'}" Classes="caption" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Pharmacy.TotalBatchQuantity}" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource SemiColorPrimary}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Classes="panel">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="180 天内效期批次" Classes="caption"/>
+                                    <TextBlock Text="{Binding Pharmacy.ExpiringBatchCount}" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource SemiColorWarning}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="3" Classes="panel">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="在库药品品类" Classes="caption"/>
+                                    <TextBlock Text="{Binding Pharmacy.StockRows.Count}" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource SemiColorSuccess}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Classes="panel">
+                            <StackPanel Spacing="9">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="采购收货入库" Classes="sectionTitle"/>
+                                        <TextBlock Text="按生产批号、效期及冷链温度登记，入库后直接进入所选库房的可发库存。" Classes="caption"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="刷新库存" Height="30" Padding="12,0" Command="{Binding RefreshStockCommand}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="1.7*,1*,1*,90,90,1.15*" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="药品" Classes="caption"/>
+                                        <ComboBox ItemsSource="{Binding Pharmacy.Drugs}" SelectedItem="{Binding Pharmacy.SelectedStockDrug, Mode=TwoWay}"
+                                                  HorizontalAlignment="Stretch" Height="30">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:DrugRow">
+                                                    <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="生产批号" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.BatchNo, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Spacing="3">
+                                        <TextBlock Text="有效期 (yyyy-MM-dd)" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.ExpiryDate, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" Spacing="3">
+                                        <TextBlock Text="入库数量" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.StockInQuantity, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4" Spacing="3">
+                                        <TextBlock Text="冷链实测 ℃" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.ColdChainTemperature, Mode=TwoWay}" Height="30" PlaceholderText="常温可空"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="5" Spacing="3">
+                                        <TextBlock Text="采购发票 / 单据号" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.InvoiceNo, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Text="冷链最高允收温度 ℃" Classes="caption" VerticalAlignment="Center"/>
+                                        <TextBox Text="{Binding Pharmacy.ColdChainMaximum, Mode=TwoWay}" Width="70" Height="28"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="确认采购入库" Classes="Primary" Height="32" Padding="16,0" Command="{Binding StockInCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid ColumnDefinitions="1.15*,1*" ColumnSpacing="10">
+                            <Border Grid.Column="0" Classes="panel">
+                                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                                    <TextBlock Grid.Row="0" Text="当前库房药品结存" Classes="sectionTitle"/>
+                                    <Grid Grid.Row="1" ColumnDefinitions="1.5*,1.2*,78,90,92,80" Margin="8,0">
+                                        <TextBlock Grid.Column="0" Text="药品" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="1" Text="规格" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="2" Text="结余" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="3" Text="可用(FEFO)" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="4" Text="最早效期" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="5" Text="批次" Classes="tableHead"/>
+                                    </Grid>
+                                    <ScrollViewer Grid.Row="2" MaxHeight="270" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding Pharmacy.StockRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:StockRow">
+                                                    <Border Classes="rowLine" Padding="8,7">
+                                                        <Grid ColumnDefinitions="1.5*,1.2*,78,90,92,80">
+                                                            <TextBlock Grid.Column="0" Text="{Binding DrugName}" Classes="strongCell" Margin="0,0,8,0"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Spec}" Classes="tableCell" Margin="0,0,8,0"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding QuantityText}" Classes="tableCell"/>
+                                                            <TextBlock Grid.Column="3" Text="{Binding AvailableText}" Classes="tableCell"/>
+                                                            <TextBlock Grid.Column="4" Text="{Binding EarliestExpiry}" Classes="tableCell"/>
+                                                            <TextBlock Grid.Column="5" Text="{Binding BatchText}" Classes="tableCell"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Column="1" Classes="panel">
+                                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                                    <TextBlock Grid.Row="0" Text="当前库房批次明细" Classes="sectionTitle"/>
+                                    <Grid Grid.Row="1" ColumnDefinitions="1.5*,1.1*,90,90,86" Margin="8,0">
+                                        <TextBlock Grid.Column="0" Text="药品" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="1" Text="生产批号" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="2" Text="有效期" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="3" Text="数量" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="4" Text="状态" Classes="tableHead"/>
+                                    </Grid>
+                                    <ScrollViewer Grid.Row="2" MaxHeight="270" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding Pharmacy.Batches}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:BatchRow">
+                                                    <Border Classes="rowLine" Padding="8,7">
+                                                        <Grid ColumnDefinitions="1.5*,1.1*,90,90,86">
+                                                            <TextBlock Grid.Column="0" Text="{Binding DrugName}" Classes="strongCell" Margin="0,0,8,0"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding BatchNo}" Classes="tableCell" FontFamily="Consolas,Menlo"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding ExpiryText}" Classes="tableCell"/>
+                                                            <TextBlock Grid.Column="3" Text="{Binding Quantity}" Classes="tableCell"/>
+                                                            <TextBlock Grid.Column="4" Text="{Binding StatusText}" Classes="tableCell"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Tab 1: 药库出库与调拨 -->
+            <TabItem Header="药库出库与调拨">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,8,0,0">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="1.1*,1*" ColumnSpacing="10">
+                            <Border Grid.Column="0" Classes="panel">
+                                <StackPanel Spacing="9">
+                                    <TextBlock Text="药库向药房出库 / 跨库调拨" Classes="sectionTitle"/>
+                                    <TextBlock Text="按 FEFO 效期先出先批自动出库，目标库房同步入账。" Classes="caption" TextWrapping="Wrap"/>
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+                                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                            <TextBlock Text="调出库房 / 药房" Classes="caption"/>
+                                            <ComboBox ItemsSource="{Binding Pharmacy.WarehouseChoices}"
+                                                      SelectedItem="{Binding Pharmacy.SelectedWarehouse, Mode=TwoWay}"
+                                                      HorizontalAlignment="Stretch" Height="30">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:WarehouseChoice">
+                                                        <TextBlock Text="{Binding Name}" FontSize="12"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="调入药房 / 库房" Classes="caption"/>
+                                            <ComboBox ItemsSource="{Binding Pharmacy.WarehouseChoices}"
+                                                      SelectedItem="{Binding Pharmacy.TargetPharmacy, Mode=TwoWay}"
+                                                      HorizontalAlignment="Stretch" Height="30">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:WarehouseChoice">
+                                                        <TextBlock Text="{Binding Name}" FontSize="12"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                            <TextBlock Text="发出药品" Classes="caption"/>
+                                            <ComboBox ItemsSource="{Binding Pharmacy.Drugs}"
+                                                      SelectedItem="{Binding Pharmacy.IssueDrug, Mode=TwoWay}"
+                                                      HorizontalAlignment="Stretch" Height="30">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:DrugRow">
+                                                        <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="发出数量" Classes="caption"/>
+                                            <TextBox Text="{Binding Pharmacy.IssueQuantity, Mode=TwoWay}" Height="30"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                            <TextBlock Text="药库出库说明" Classes="caption"/>
+                                            <TextBox Text="{Binding Pharmacy.IssueRemark, Mode=TwoWay}" Height="30"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="跨库调拨说明" Classes="caption"/>
+                                            <TextBox Text="{Binding Pharmacy.TransferRemark, Mode=TwoWay}" Height="30"/>
+                                        </StackPanel>
+                                        <WrapPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,4,0,0">
+                                            <Button Content="药库发药出库" Classes="Primary" Height="32" Padding="16,0" Margin="0,0,8,0" Command="{Binding WarehouseIssueCommand}"/>
+                                            <Button Content="执行跨库调拨" Height="32" Padding="16,0" Command="{Binding TransferCommand}"/>
+                                        </WrapPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Classes="panel">
+                                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="{Binding Pharmacy.CurrentWarehouseText}" Classes="sectionTitle"/>
+                                            <TextBlock Text="{Binding Pharmacy.StockRows.Count, StringFormat='{}在库品类 {0} 项 · 批号效期实时可见'}" Classes="caption"/>
+                                        </StackPanel>
+                                        <u:Badge Grid.Column="1" Header="FEFO 优先" Classes="Success"/>
+                                    </Grid>
+                                    <Grid Grid.Row="1" ColumnDefinitions="1.5*,1.2*,82,90,84" Margin="8,0">
+                                        <TextBlock Grid.Column="0" Text="药品" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="1" Text="规格" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="2" Text="结余" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="3" Text="可用" Classes="tableHead"/>
+                                        <TextBlock Grid.Column="4" Text="效期" Classes="tableHead"/>
+                                    </Grid>
+                                    <ScrollViewer Grid.Row="2" MaxHeight="288" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding Pharmacy.StockRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:StockRow">
+                                                    <Border Classes="rowLine" Padding="8,7">
+                                                        <Grid ColumnDefinitions="1.5*,1.2*,82,90,84">
+                                                            <TextBlock Grid.Column="0" Text="{Binding DrugName}" Classes="strongCell" Margin="0,0,8,0"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Spec}" Classes="tableCell" Margin="0,0,8,0"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding QuantityText}" Classes="tableCell"/>
+                                                            <TextBlock Grid.Column="3" Text="{Binding AvailableText}" Classes="tableCell"/>
+                                                            <TextBlock Grid.Column="4" Text="{Binding EarliestExpiry}" Classes="tableCell"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <Border Classes="panel">
+                            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                                <TextBlock Grid.Row="0" Text="药库出库与调拨台账" Classes="sectionTitle"/>
+                                <Grid Grid.Row="1" ColumnDefinitions="116,78,1.3*,1*,1.3*,1.1*,80,90" Margin="8,0">
+                                    <TextBlock Grid.Column="0" Text="业务单号" Classes="tableHead"/>
+                                    <TextBlock Grid.Column="1" Text="类型" Classes="tableHead"/>
+                                    <TextBlock Grid.Column="2" Text="调出" Classes="tableHead"/>
+                                    <TextBlock Grid.Column="3" Text="调入" Classes="tableHead"/>
+                                    <TextBlock Grid.Column="4" Text="药品" Classes="tableHead"/>
+                                    <TextBlock Grid.Column="5" Text="批号" Classes="tableHead"/>
+                                    <TextBlock Grid.Column="6" Text="数量" Classes="tableHead"/>
+                                    <TextBlock Grid.Column="7" Text="时间" Classes="tableHead"/>
+                                </Grid>
+                                <ScrollViewer Grid.Row="2" MaxHeight="260" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding Pharmacy.Transfers}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:TransferRow">
+                                                <Border Classes="rowLine" Padding="8,7">
+                                                    <Grid ColumnDefinitions="116,78,1.3*,1*,1.3*,1.1*,80,90">
+                                                        <TextBlock Grid.Column="0" Text="{Binding TransferNo}" Classes="strongCell" FontFamily="Consolas,Menlo" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding TypeText}" Classes="tableCell"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding Source}" Classes="tableCell" Margin="0,0,8,0"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding Target}" Classes="tableCell" Margin="0,0,8,0"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding DrugName}" Classes="tableCell" Margin="0,0,8,0"/>
+                                                        <TextBlock Grid.Column="5" Text="{Binding BatchNo}" Classes="tableCell" FontFamily="Consolas,Menlo"/>
+                                                        <TextBlock Grid.Column="6" Text="{Binding QuantityText}" Classes="tableCell"/>
+                                                        <TextBlock Grid.Column="7" Text="{Binding CreatedAt}" Classes="tableCell"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Tab 2: 药品基础目录与调价 -->
+            <TabItem Header="药品主目录">
+                <Grid ColumnDefinitions="1.65*,1*" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Classes="panel" Margin="0,0,10,0">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="药品基础目录" Classes="sectionTitle"/>
+                                    <TextBlock Text="{Binding Pharmacy.ActiveDrugCount, StringFormat='{}启用药品 {0} 项 · 编码、规格、单位与价格统一维护'}" Classes="caption"/>
+                                </StackPanel>
+                                <TextBox x:Name="DrugSearchBox" Grid.Column="1" Width="220" Height="30" Margin="0,0,8,0"
+                                         Text="{Binding Pharmacy.DrugKeyword, Mode=TwoWay}"
+                                         PlaceholderText="药品名称 / 编码 / 规格 (F2)"
+                                         KeyDown="DrugSearch_KeyDown"/>
+                                <Button Grid.Column="2" Content="查询" Height="30" Padding="14,0" Command="{Binding SearchDrugsCommand}"/>
+                            </Grid>
+                            <Grid Grid.Row="1" ColumnDefinitions="88,1.4*,1.2*,80,82,82,78,82" Margin="10,0">
+                                <TextBlock Grid.Column="0" Text="药品编码" Classes="tableHead"/>
+                                <TextBlock Grid.Column="1" Text="药品名称" Classes="tableHead"/>
+                                <TextBlock Grid.Column="2" Text="规格" Classes="tableHead"/>
+                                <TextBlock Grid.Column="3" Text="单位" Classes="tableHead"/>
+                                <TextBlock Grid.Column="4" Text="零售价" Classes="tableHead"/>
+                                <TextBlock Grid.Column="5" Text="成本价" Classes="tableHead"/>
+                                <TextBlock Grid.Column="6" Text="用药安全" Classes="tableHead"/>
+                                <TextBlock Grid.Column="7" Text="状态" Classes="tableHead"/>
+                            </Grid>
+                            <ListBox Grid.Row="2"
+                                     x:Name="DrugList"
+                                     ItemsSource="{Binding Pharmacy.Drugs}"
+                                     SelectedItem="{Binding Pharmacy.SelectedDrug, Mode=TwoWay}"
+                                     Background="Transparent"
+                                     BorderThickness="0">
+                                <ListBox.Styles>
+                                    <Style Selector="ListBoxItem">
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="Margin" Value="0,1"/>
+                                        <Setter Property="CornerRadius" Value="0"/>
+                                    </Style>
+                                </ListBox.Styles>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DrugRow">
+                                        <Border Classes="rowLine" Padding="10,7">
+                                            <Grid ColumnDefinitions="88,1.4*,1.2*,80,82,82,78,82">
+                                                <TextBlock Grid.Column="0" Text="{Binding DrugCode}" Classes="strongCell" FontFamily="Consolas,Menlo" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding DrugName}" Classes="strongCell" Margin="0,0,8,0"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Spec}" Classes="tableCell" Margin="0,0,8,0"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding UnitName}" Classes="tableCell"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding PriceText}" Classes="tableCell"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding CostPriceText}" Classes="tableCell"/>
+                                                <TextBlock Grid.Column="6" Text="{Binding SafetyText}" Classes="tableCell"/>
+                                                <TextBlock Grid.Column="7" Text="{Binding StatusText}" Classes="strongCell"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Classes="panel">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{Binding Pharmacy.EditorTitle}" Classes="sectionTitle"/>
+                                        <TextBlock Text="主数据维护由系统管理员执行，历史批次与价格调整留痕。" Classes="caption" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="新建药品" Height="30" Padding="10,0" Command="{Binding NewDrugCommand}"/>
+                                </Grid>
+                                <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="5" Padding="10,7"
+                                        IsVisible="{Binding DrugEditBlockedReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                    <TextBlock Text="{Binding DrugEditBlockedReason}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" TextWrapping="Wrap"/>
+                                </Border>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8"
+                                      IsEnabled="{Binding Pharmacy.CanEditDrugs}">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="药品编码" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.EditorCode, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="药品名称" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.EditorName, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="规格" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.EditorSpec, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="单位" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.EditorUnit, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="零售单价" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.EditorRetailPrice, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="采购成本" Classes="caption"/>
+                                        <TextBox Text="{Binding Pharmacy.EditorCostPrice, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Spacing="3">
+                                        <TextBlock Text="抗菌药管理等级" Classes="caption"/>
+                                        <ComboBox ItemsSource="{Binding Pharmacy.AntibioticLevelOptions}"
+                                                  SelectedIndex="{Binding Pharmacy.EditorAntibioticLevelIndex, Mode=TwoWay}"
+                                                  HorizontalAlignment="Stretch" Height="30"/>
+                                    </StackPanel>
+                                    <WrapPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2">
+                                        <CheckBox Content="麻醉药品" IsChecked="{Binding Pharmacy.EditorNarcotic, Mode=TwoWay}" Margin="0,0,12,0"/>
+                                        <CheckBox Content="需皮试" IsChecked="{Binding Pharmacy.EditorSkinTest, Mode=TwoWay}" Margin="0,0,12,0"/>
+                                        <CheckBox Content="启用" IsChecked="{Binding Pharmacy.EditorActive, Mode=TwoWay}"/>
+                                    </WrapPanel>
+                                </Grid>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="维护 / 调价依据" Classes="caption"/>
+                                    <TextBox Text="{Binding Pharmacy.AdjustReason, Mode=TwoWay}" Height="30"
+                                             PlaceholderText="填写本次维护或价格调整依据" IsEnabled="{Binding Pharmacy.CanEditDrugs}"/>
+                                </StackPanel>
+                                <WrapPanel>
+                                    <Button Content="保存药品" Classes="Primary" Height="32" Padding="16,0" Margin="0,0,8,0" Command="{Binding SaveDrugCommand}"/>
+                                    <Button Content="启用 / 停用" Height="32" Padding="12,0" Command="{Binding ToggleDrugCommand}"/>
+                                </WrapPanel>
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="5" Padding="10,8">
+                                    <TextBlock Text="{Binding Pharmacy.SelectedDrugText}" FontSize="11" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap"/>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>
+

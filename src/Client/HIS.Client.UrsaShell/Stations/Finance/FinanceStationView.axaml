@@ -1,0 +1,213 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Finance"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:views="using:HIS.Client.UrsaShell.Views"
+             x:Class="HIS.Client.UrsaShell.Stations.Finance.FinanceStationView"
+             x:DataType="local:FinanceStationViewModel">
+    <DockPanel Margin="16">
+        <!-- Top KPI & Action Bar -->
+        <Border DockPanel.Dock="Top" Margin="0,0,0,10" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+                <Grid Grid.Row="0" ColumnDefinitions="*,*,*,*">
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="待门急诊收费处方" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Workbench.UnpaidPrescriptionCount, StringFormat='{}{0} 张'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="已实物退药·待财务退款" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Workbench.PendingFinancialRefundCount, StringFormat='{}{0} 笔'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="今日已办结退款冲红" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Workbench.CompletedFinancialRefundCount, StringFormat='{}{0} 笔'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3">
+                        <TextBlock Text="财务日结轧账状态" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Workbench.DailyClosingStatusText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+                    <WrapPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="收费并通知药房 (Ctrl+Enter)" Classes="Primary" Height="32" Margin="0,0,8,0" Padding="12,0" Command="{Binding CashierSettleCommand}"/>
+                        <Button Content="原路退费冲红" Height="32" Margin="0,0,8,0" Padding="10,0" Command="{Binding FinancialRefundCommand}"/>
+                        <Button Content="收费员日结" Classes="Success" Height="32" Padding="10,0" Command="{Binding DailyClosingCommand}"/>
+                    </WrapPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding FinanceBlockedReason}"
+                               FontSize="12" Foreground="{DynamicResource SemiColorWarning}"
+                               VerticalAlignment="Center" Margin="12,0,0,0"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding FinanceBlockedReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <TabControl SelectedIndex="{Binding Workbench.SelectedFinanceTabIndex, Mode=TwoWay}">
+            <!-- Tab 0: 门急诊收费 -->
+            <TabItem Header="门急诊收费">
+                <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14" Margin="0,8,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="10">
+                            <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="12,8">
+                                <TextBlock Text="核对医生已审签的处方，完成医保、现金或扫码收费。收费成功后处方进入待发药队列，并通知药房备药。"
+                                           FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding Workbench.PharmacyRecords}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PharmacyDispenseModel">
+                                        <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="5">
+                                                    <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding PrescriptionNo}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding PatientName, StringFormat='{}患者: {0}'}" FontWeight="Bold" FontSize="14" Margin="14,0,0,0"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding TotalAmount, StringFormat='{}应收金额: ¥{0:0.00}'}" FontSize="13" Foreground="{DynamicResource SemiColorDanger}" FontWeight="Bold" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                                        <Border Grid.Column="3" Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="8,3">
+                                                            <TextBlock Text="{Binding PaymentNoticeStatus}" FontWeight="Bold" FontSize="11" Foreground="{Binding StatusBrush}"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding DrugSummary, StringFormat='{}药品明细: {0}'}" FontSize="12"/>
+                                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                                        <TextBlock Text="{Binding PharmacistName, StringFormat='{}复核药师: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding SafetyAudit, StringFormat='{}处方审方: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding DispenseStatus, StringFormat='{}发药进度: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0">
+                                                    <Button Content="收费" Classes="Primary" Height="30" Padding="12,0"
+                                                            IsEnabled="{Binding NeedsCashierSettlement}"
+                                                            Command="{Binding $parent[UserControl].((local:FinanceStationViewModel)DataContext).SettleRowCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- Tab 1: 退药退费 -->
+            <TabItem Header="退药退费">
+                <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14" Margin="0,8,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="10">
+                            <Border Background="{DynamicResource SemiColorDangerLight}" CornerRadius="6" Padding="12,8">
+                                <TextBlock Text="退药经药房验收并完成入库后，方可办理原路退款并打印红字退费收据。"
+                                           FontSize="12" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding Workbench.PharmacyRecords}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PharmacyDispenseModel">
+                                        <Border Margin="0,4" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1.5">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="5">
+                                                    <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding PrescriptionNo}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding PatientName, StringFormat='{}患者: {0}'}" FontWeight="Bold" FontSize="14" Margin="14,0,0,0"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding TotalAmount, StringFormat='{}退款金额: ¥{0:0.00}'}" FontSize="13" Foreground="{DynamicResource SemiColorDanger}" FontWeight="Bold" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                                        <Border Grid.Column="3" Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="8,3">
+                                                            <TextBlock Text="{Binding DispenseStatus}" FontWeight="Bold" FontSize="11" Foreground="{Binding StatusBrush}"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding DrugSummary, StringFormat='{}退药明细: {0}'}" FontSize="12"/>
+                                                    <TextBlock Text="{Binding PaymentNoticeStatus}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0">
+                                                    <Button Content="审核入库并退费" Classes="Danger" Height="30" Padding="12,0"
+                                                            IsEnabled="{Binding CanExecuteFinancialRefund}"
+                                                            Command="{Binding $parent[UserControl].((local:FinanceStationViewModel)DataContext).RefundRowCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- Tab 2: 住院结算 -->
+            <TabItem Header="住院结算">
+                <views:InpatientSettlementView/>
+            </TabItem>
+
+            <!-- Tab 3: 药品对账 -->
+            <TabItem Header="药品对账">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,8,0,0" Spacing="10">
+                        <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                            <Grid ColumnDefinitions="*,*,*,*">
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="药品采购入库总成本 (应付供应商)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding Workbench.TotalProcurementCostText}" FontSize="20" FontWeight="Bold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="临床发药净销售收入 (已扣退药)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding Workbench.TotalDrugNetSalesText}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="患者退药冲红总额" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding Workbench.TotalDrugReturnDeductionText}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="3">
+                                    <TextBlock Text="药品集采调价库存损益差额" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding Workbench.TotalPriceDiffImpactText}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="药品进销存汇总" FontSize="14" FontWeight="Bold"/>
+                                <ItemsControl ItemsSource="{Binding Workbench.DrugFinanceBreakdownList}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:DrugFinanceReconcileItemModel">
+                                            <Border Margin="0,3" Padding="12,10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="190,*,*,*,*,160">
+                                                    <StackPanel Grid.Column="0" Spacing="2">
+                                                        <TextBlock Text="{Binding DrugName}" FontWeight="Bold" FontSize="13"/>
+                                                        <TextBlock Text="{Binding DrugCode}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                        <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <TextBlock Text="采购入库量/成本" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding PurchasedSummary}" FontSize="12" FontWeight="SemiBold"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Spacing="2">
+                                                        <TextBlock Text="临床发药量/销售" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding DispensedSummary}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="3" Spacing="2">
+                                                        <TextBlock Text="退药入库/冲红" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding ReturnedSummary}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="4" Spacing="2">
+                                                        <TextBlock Text="净销售额" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding NetSalesText}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="5" Spacing="2">
+                                                        <TextBlock Text="当前在库结存" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding CurrentStockSummary}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>
+

@@ -1,0 +1,653 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Registration"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Registration.RegistrationStationView"
+             x:DataType="local:RegistrationStationViewModel">
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SettleCommand}"/>
+        <KeyBinding Gesture="F3" Command="{Binding SearchSlotsCommand}"/>
+        <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}"/>
+    </UserControl.KeyBindings>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="18,16,18,24" Spacing="12">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <TextBlock Text="门诊挂号与收费"
+                               FontSize="20"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource SemiColorText0}"/>
+                    <TextBlock Text="检索患者、选择可用号源并完成收款，挂号成功后自动进入门诊候诊队列。"
+                               FontSize="12"
+                               Foreground="{DynamicResource SemiColorText2}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBox Width="124"
+                             Height="32"
+                             Text="{Binding Registration.QueryDate, Mode=TwoWay}"
+                             PlaceholderText="yyyy-MM-dd"/>
+                    <Button Content="查询号源 (F3)"
+                            Height="32"
+                            Padding="12,0"
+                            Command="{Binding SearchSlotsCommand}"/>
+                    <Button Content="刷新 (F5)"
+                            Height="32"
+                            Padding="12,0"
+                            Command="{Binding RefreshCommand}"/>
+                    <Button Content="排班管理"
+                            Height="32"
+                            Padding="12,0"
+                            IsVisible="{Binding IsAdmin}"
+                            Command="{Binding OpenScheduleCommand}"/>
+                </StackPanel>
+            </Grid>
+
+            <Border Background="{DynamicResource SemiColorDangerLight}"
+                    BorderBrush="{DynamicResource SemiColorDanger}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="12,8"
+                    IsVisible="{Binding IsPermissionBlocked}">
+                <TextBlock Text="{Binding PermissionBlockedReason}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource SemiColorDanger}"
+                           TextWrapping="Wrap"/>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                <Border Grid.Column="0"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12,9">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="今日挂号" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Registration.RegistrationCountText}"
+                                   FontSize="17"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorText0}"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12,9">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="有效挂号" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Registration.EffectiveCountText, StringFormat='{}{0} 人'}"
+                                   FontSize="17"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorSuccess}"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12,9">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="今日实收" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Registration.TodayRevenueText}"
+                                   FontSize="17"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorPrimary}"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="3"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12,9">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="退号退款" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding Registration.RefundedAmountText}"
+                                   FontSize="17"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorDanger}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid ColumnDefinitions="286,*,304" ColumnSpacing="12">
+                <!-- 1. Patient selection -->
+                <Border Grid.Column="0"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="8">
+                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="1  选择患者"
+                                       FontSize="14"
+                                       FontWeight="Bold"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Registration.PatientCountText}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText2}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBox Grid.Row="1"
+                                 Text="{Binding Registration.PatientKeyword, Mode=TwoWay}"
+                                 PlaceholderText="姓名 / 病历号"
+                                 Height="32"/>
+                        <Button Grid.Row="2"
+                                Content="检索患者"
+                                Height="30"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding SearchPatientsCommand}"/>
+
+                        <ScrollViewer Grid.Row="3"
+                                      MinHeight="188"
+                                      MaxHeight="330"
+                                      VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Registration.Patients}" Margin="0,2">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RegistrationPatientItem">
+                                        <Button HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch"
+                                                Margin="0,2"
+                                                Padding="8"
+                                                CornerRadius="5"
+                                                Classes.Primary="{Binding IsSelected}"
+                                                Command="{Binding $parent[UserControl].((local:RegistrationStationViewModel)DataContext).SelectPatientCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                                <Border Grid.Column="0"
+                                                        Width="30"
+                                                        Height="30"
+                                                        CornerRadius="15"
+                                                        Background="{DynamicResource SemiColorPrimaryLight}"
+                                                        VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding Initial}"
+                                                               FontSize="13"
+                                                               FontWeight="Bold"
+                                                               Foreground="{DynamicResource SemiColorPrimary}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock Text="{Binding DisplayName}"
+                                                               FontSize="13"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Demographics}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <TextBlock Text="{Binding MedicalRecordNo}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText2}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding PhoneText}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText3}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Spacing="4">
+                                                    <controls:StatusTag Text="{Binding EmergencyLabel}"
+                                                                        Kind="Warning"/>
+                                                    <controls:StatusTag Text="{Binding AllergyShort}"
+                                                                        Kind="Danger"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <Border Grid.Row="4"
+                                IsVisible="{Binding Registration.NotifyPatientEmpty}"
+                                Background="{DynamicResource SemiColorBackground0}"
+                                CornerRadius="5"
+                                Padding="12">
+                            <TextBlock Text="{Binding PatientEmptyHint}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SemiColorText2}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- 2. Slot selection -->
+                <Border Grid.Column="1"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
+                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="2  选择号源"
+                                       FontSize="14"
+                                       FontWeight="Bold"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Registration.SlotCountText}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText2}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding Registration.Departments}"
+                                      SelectedItem="{Binding Registration.SelectedDepartment, Mode=TwoWay}"
+                                      PlaceholderText="全部门诊科室">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RegistrationCashierViewModel+RegistrationDepartmentChoice">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button Grid.Column="1"
+                                    Content="筛选"
+                                    Height="32"
+                                    Padding="12,0"
+                                    Command="{Binding SearchSlotsCommand}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="2"
+                                      MinHeight="230"
+                                      MaxHeight="430"
+                                      VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Registration.Slots}" Margin="0,2">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RegistrationSlotItem">
+                                        <Button HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch"
+                                                Margin="0,2"
+                                                Padding="10"
+                                                CornerRadius="5"
+                                                Classes.Primary="{Binding IsSelected}"
+                                                Command="{Binding $parent[UserControl].((local:RegistrationStationViewModel)DataContext).SelectSlotCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Grid ColumnDefinitions="84,*,Auto" ColumnSpacing="12">
+                                                <StackPanel Grid.Column="0" Spacing="2">
+                                                    <TextBlock Text="{Binding TimeText}"
+                                                               FontSize="13"
+                                                               FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding PeriodText}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText2}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="3">
+                                                    <TextBlock Text="{Binding DeptName}"
+                                                               FontSize="13"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding DoctorName, StringFormat='{}医生 {0}'}"
+                                                               FontSize="12"/>
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <TextBlock Text="{Binding RoomName}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Text="{Binding LevelLabel}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                    <ProgressBar Height="3"
+                                                                 Minimum="0"
+                                                                 Maximum="100"
+                                                                 Value="{Binding OccupancyPercent}"
+                                                                 Margin="0,2,0,0"/>
+                                                    <TextBlock Text="{Binding OccupancyText}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText3}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Spacing="5" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding FeeText}"
+                                                               FontSize="15"
+                                                               FontWeight="Bold"
+                                                               Foreground="{DynamicResource SemiColorDanger}"
+                                                               HorizontalAlignment="Right"/>
+                                                    <TextBlock Text="{Binding AvailabilityText}"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{Binding AvailabilityBrush}"
+                                                               HorizontalAlignment="Right"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <Border Grid.Row="3"
+                                IsVisible="{Binding Registration.NotifySlotEmpty}"
+                                Background="{DynamicResource SemiColorBackground0}"
+                                CornerRadius="5"
+                                Padding="12">
+                            <TextBlock Text="{Binding SlotEmptyHint}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SemiColorText2}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- 3. Checkout -->
+                <Border Grid.Column="2"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="14">
+                    <StackPanel Spacing="11">
+                        <TextBlock Text="3  确认收款"
+                                   FontSize="14"
+                                   FontWeight="Bold"/>
+
+                        <Border Background="{DynamicResource SemiColorBackground0}"
+                                CornerRadius="5"
+                                Padding="10">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding Registration.PatientDisplayName}"
+                                           FontSize="14"
+                                           FontWeight="Bold"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Registration.PatientDemographics}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding Registration.PatientRecordNo}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding Registration.PatientPhone}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText3}"/>
+                                <Border Background="{DynamicResource SemiColorDangerLight}"
+                                        CornerRadius="3"
+                                        Padding="5,2"
+                                        IsVisible="{Binding Registration.HasPatientAllergy}">
+                                    <TextBlock Text="{Binding Registration.PatientAllergy}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource SemiColorDanger}"
+                                               TextWrapping="Wrap"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{DynamicResource SemiColorPrimaryLight}"
+                                CornerRadius="5"
+                                Padding="10"
+                                IsVisible="{Binding Registration.SelectedSlot, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding Registration.SelectedSlotSummary}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource SemiColorPrimary}"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding Registration.SelectedSlotTime}"
+                                           FontSize="12"/>
+                                <TextBlock Text="{Binding Registration.SelectedSlotRoom}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding Registration.SelectedSlotAvailability}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="本次应收"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SemiColorText2}"
+                                       VerticalAlignment="Bottom"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Registration.SelectedSlotFee}"
+                                       FontSize="28"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource SemiColorDanger}"/>
+                        </Grid>
+
+                        <StackPanel Spacing="5">
+                            <TextBlock Text="收款方式" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <ComboBox ItemsSource="{Binding Registration.PaymentChannels}"
+                                      SelectedItem="{Binding Registration.SelectedPaymentChannel, Mode=TwoWay}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RegistrationCashierViewModel+PaymentChannelChoice">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <Border Background="{DynamicResource SemiColorWarningLight}"
+                                BorderBrush="{DynamicResource SemiColorWarning}"
+                                BorderThickness="1"
+                                CornerRadius="5"
+                                Padding="9,7"
+                                IsVisible="{Binding SettleBlockedReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <TextBlock Text="{Binding SettleBlockedReason}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource SemiColorWarning}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+
+                        <Button Content="确认收款并挂号  Ctrl+Enter"
+                                Classes="Primary"
+                                Height="36"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding SettleCommand}"
+                                ToolTip.Tip="{Binding SettleBlockedReason}"/>
+
+                        <Border Background="{DynamicResource SemiColorSuccessLight}"
+                                CornerRadius="5"
+                                Padding="9,7"
+                                IsVisible="{Binding HasNotice}">
+                            <TextBlock Text="{Binding Notice}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource SemiColorSuccess}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                        <Border Background="{DynamicResource SemiColorDangerLight}"
+                                CornerRadius="5"
+                                Padding="9,7"
+                                IsVisible="{Binding HasErrorMessage}">
+                            <TextBlock Text="{Binding ErrorMessage}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource SemiColorDanger}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+
+                        <Button Content="前往处方收费结算"
+                                Height="30"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding OpenFinanceCommand}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Registrations and refunds -->
+            <Border Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="12">
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="今日挂号记录"
+                                       FontSize="14"
+                                       FontWeight="Bold"/>
+                            <TextBlock Text="{Binding Registration.RegistrationCountText}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <TextBox Width="210"
+                                     Height="30"
+                                     Text="{Binding Registration.RegistrationKeyword, Mode=TwoWay}"
+                                     PlaceholderText="患者姓名 / 病历号 / 挂号号"/>
+                            <Button Content="查询记录"
+                                    Height="30"
+                                    Padding="12,0"
+                                    Command="{Binding SearchRegistrationsCommand}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="2" ColumnDefinitions="*,292" ColumnSpacing="12">
+                        <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="4">
+                            <Border Grid.Row="0"
+                                    Background="{DynamicResource SemiColorBackground2}"
+                                    CornerRadius="4"
+                                    Padding="9,6">
+                                <Grid ColumnDefinitions="1.2*,1.5*,96,88,86,110,88">
+                                    <TextBlock Grid.Column="0" Text="患者" FontSize="11" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" Text="科室 / 医生" FontSize="11" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="2" Text="排队号" FontSize="11" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="3" Text="金额" FontSize="11" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="4" Text="收费方式" FontSize="11" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="5" Text="状态" FontSize="11" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="6" Text="收款时间" FontSize="11" FontWeight="Bold"/>
+                                </Grid>
+                            </Border>
+                            <ScrollViewer Grid.Row="1"
+                                          MinHeight="110"
+                                          MaxHeight="280"
+                                          VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Registration.Registrations}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:RegistrationRecordItem">
+                                            <Button HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    Margin="0,1"
+                                                    Padding="9,6"
+                                                    CornerRadius="4"
+                                                    Classes.Primary="{Binding IsSelected}"
+                                                    Command="{Binding $parent[UserControl].((local:RegistrationStationViewModel)DataContext).SelectRegistrationCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Grid ColumnDefinitions="1.2*,1.5*,96,88,86,110,88" ColumnSpacing="4">
+                                                    <StackPanel Grid.Column="0" Spacing="1">
+                                                        <TextBlock Text="{Binding PatientName}"
+                                                                   FontSize="12"
+                                                                   FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding MedicalRecordNo}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource SemiColorText2}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="1">
+                                                        <TextBlock Text="{Binding DeptName}"
+                                                                   FontSize="12"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding DoctorName}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource SemiColorText2}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding QueueText}"
+                                                               FontSize="12"
+                                                               FontWeight="Bold"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3"
+                                                               Text="{Binding PaidAmountText}"
+                                                               FontSize="12"
+                                                               FontWeight="SemiBold"
+                                                               HorizontalAlignment="Right"
+                                                               VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="4"
+                                                               Text="{Binding PaymentChannelLabel}"
+                                                               FontSize="11"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                    <Border Grid.Column="5"
+                                                            Background="{DynamicResource SemiColorBackground2}"
+                                                            CornerRadius="4"
+                                                            Padding="6,2"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding StatusLabel}"
+                                                                   FontSize="11"
+                                                                   Foreground="{Binding StatusBrush}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="6"
+                                                               Text="{Binding PaidTimeText}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorText2}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <Border Grid.Row="1"
+                                    IsVisible="{Binding Registration.NotifyRegistrationEmpty}"
+                                    Background="{DynamicResource SemiColorBackground0}"
+                                    CornerRadius="5"
+                                    Padding="12">
+                                <TextBlock Text="{Binding RegistrationEmptyHint}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                            </Border>
+                        </Grid>
+
+                        <Border Grid.Column="1"
+                                Background="{DynamicResource SemiColorBackground0}"
+                                CornerRadius="5"
+                                Padding="11">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="退号与退款"
+                                           FontSize="13"
+                                           FontWeight="Bold"/>
+                                <TextBlock Text="{Binding Registration.SelectedRegistrationPatientLine}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding Registration.SelectedRegistrationClinicLine}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding Registration.SelectedRegistrationAmountLine}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Text="退号原因"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBox Text="{Binding Registration.RefundReason, Mode=TwoWay}"
+                                         PlaceholderText="患者申请退号"
+                                         Height="30"/>
+                                <Border Background="{DynamicResource SemiColorWarningLight}"
+                                        CornerRadius="4"
+                                        Padding="8,6"
+                                        IsVisible="{Binding RefundBlockedReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                    <TextBlock Text="{Binding RefundBlockedReason}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SemiColorWarning}"
+                                               TextWrapping="Wrap"/>
+                                </Border>
+                                <Button Content="退号并原路退款"
+                                        Classes="Danger"
+                                        Height="32"
+                                        HorizontalAlignment="Stretch"
+                                        Command="{Binding RefundCommand}"
+                                        ToolTip.Tip="{Binding RefundBlockedReason}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
