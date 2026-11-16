@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Shell.Controls.ToastHost"
+             x:Name="Root"
+             IsHitTestVisible="True">
+    <ItemsControl ItemsSource="{Binding #Root.Items}">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <StackPanel Spacing="8" Width="360"/>
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="shell:ToastMessage">
+                <Border Background="{DynamicResource SemiColorBackground0}"
+                        BorderBrush="{Binding BorderBrush}"
+                        BorderThickness="1.5"
+                        CornerRadius="8"
+                        Padding="12,10">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                        <Border Grid.Column="0" Width="4" CornerRadius="2" Background="{Binding AccentBrush}"/>
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Message}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SemiColorText0}"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding Timestamp}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource SemiColorText3}"/>
+                        </StackPanel>
+                        <Button Grid.Column="2"
+                                Content="{Binding ActionText}"
+                                IsVisible="{Binding ActionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                Classes="Primary"
+                                Height="24"
+                                Padding="8,0"
+                                FontSize="11"
+                                Command="{Binding ActionCommand}"
+                                VerticalAlignment="Center"/>
+                        <Button Grid.Column="3"
+                                Content="✕"
+                                Classes="Tertiary"
+                                Width="24"
+                                Height="24"
+                                Padding="0"
+                                FontSize="11"
+                                Command="{Binding DismissCommand}"
+                                VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>
+

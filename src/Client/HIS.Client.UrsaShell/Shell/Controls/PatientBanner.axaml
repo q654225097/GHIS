@@ -1,0 +1,97 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HIS.Client.UrsaShell.Shell.Controls.PatientBanner"
+             x:Name="Root">
+    <Border Background="{DynamicResource SemiColorBackground1}"
+            BorderBrush="{DynamicResource SemiColorBorder}"
+            BorderThickness="0,0,0,1"
+            Padding="16,10">
+        <StackPanel Spacing="6">
+            <Grid ColumnDefinitions="*,Auto">
+                <!-- Patient Identity Summary -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
+                            IsVisible="{Binding #Root.HasPatient}">
+                    <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="8,4">
+                        <TextBlock Text="{Binding #Root.EncounterBadge}"
+                                   FontSize="11"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SemiColorPrimary}"/>
+                    </Border>
+                    <TextBlock Text="{Binding #Root.PatientName}"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource SemiColorText0}"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding #Root.GenderAndAge}"
+                               FontSize="12"
+                               Foreground="{DynamicResource SemiColorText1}"
+                               VerticalAlignment="Center"/>
+                    <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding #Root.IdentifierText}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource SemiColorText2}"/>
+                    </Border>
+                    <TextBlock Text="{Binding #Root.DiagnosisText}"
+                               FontSize="12"
+                               Foreground="{DynamicResource SemiColorText1}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="360"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Empty State -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                            IsVisible="{Binding !#Root.HasPatient}">
+                    <TextBlock Text="未选择当前患者"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource SemiColorText2}"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="按 Ctrl+K 搜索患者或从左侧队列选择"
+                               FontSize="12"
+                               Foreground="{DynamicResource SemiColorText3}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Quick Actions -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="360° 病历时间轴"
+                            Height="28"
+                            Padding="10,0"
+                            FontSize="12"
+                            IsEnabled="{Binding #Root.HasPatient}"
+                            Command="{Binding #Root.TimelineCommand}"/>
+                    <Button Content="切换患者 (Ctrl+K)"
+                            Classes="Tertiary"
+                            Height="28"
+                            Padding="10,0"
+                            FontSize="12"
+                            Command="{Binding #Root.SwitchPatientCommand}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Allergy / Critical Safety Strip -->
+            <Border IsVisible="{Binding #Root.HasAllergy}"
+                    Background="{DynamicResource SemiColorDangerLight}"
+                    BorderBrush="{DynamicResource SemiColorDanger}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10,4">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="用药安全提醒:"
+                               FontSize="11"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource SemiColorDanger}"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding #Root.AllergyText}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource SemiColorDanger}"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Border>
+</UserControl>
+

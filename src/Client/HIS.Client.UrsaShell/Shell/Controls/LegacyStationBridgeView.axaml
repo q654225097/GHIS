@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HIS.Client.UrsaShell.Shell.Controls.LegacyStationBridgeView"
+             x:Name="Root">
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
+        <Border Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="28">
+            <StackPanel Spacing="14">
+                <TextBlock x:Name="TitleText"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource SemiColorText0}"/>
+                <TextBlock x:Name="DescText"
+                           FontSize="13"
+                           Foreground="{DynamicResource SemiColorText2}"
+                           TextWrapping="Wrap"/>
+                <Button Content="打开功能工作区"
+                        Classes="Primary"
+                        Height="36"
+                        Padding="18,0"
+                        HorizontalAlignment="Left"
+                        Command="{Binding #Root.OpenCommand}"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
+

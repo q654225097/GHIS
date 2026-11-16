@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HIS.Client.UrsaShell.Shell.Controls.ConfirmDialog"
+             x:Name="Root"
+             IsVisible="{Binding #Root.IsOpen}">
+    <Grid>
+        <Border Background="{DynamicResource SemiColorText0}" Opacity="0.42"/>
+        <Border Width="440"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="{DynamicResource SemiColorBackground0}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="20">
+            <StackPanel Spacing="14">
+                <TextBlock Text="{Binding #Root.Title}"
+                           FontSize="16"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource SemiColorText0}"/>
+                <TextBlock Text="{Binding #Root.Message}"
+                           FontSize="13"
+                           Foreground="{DynamicResource SemiColorText1}"
+                           TextWrapping="Wrap"/>
+                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,6,0,0">
+                    <Button Content="取消"
+                            Height="32"
+                            Padding="14,0"
+                            Command="{Binding #Root.CancelCommand}"/>
+                    <Button Content="{Binding #Root.ConfirmText}"
+                            Classes="Danger"
+                            Height="32"
+                            Padding="16,0"
+                            Command="{Binding #Root.ConfirmCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
+

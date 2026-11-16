@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HIS.Client.UrsaShell.Shell.Controls.RightDrawer"
+             x:Name="Root"
+             IsVisible="{Binding #Root.IsOpen}">
+    <Grid ColumnDefinitions="*,Auto">
+        <!-- Scrim backdrop -->
+        <Border Grid.Column="0"
+                Opacity="0.42"
+                Background="{DynamicResource SemiColorText0}"
+                PointerPressed="Backdrop_PointerPressed"/>
+
+        <!-- Drawer panel -->
+        <Border Grid.Column="1"
+                Width="{Binding #Root.DrawerWidth}"
+                Background="{DynamicResource SemiColorBackground0}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="1,0,0,0">
+            <Grid RowDefinitions="Auto,*">
+                <Border Grid.Row="0"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}"
+                        BorderThickness="0,0,0,1"
+                        Padding="18,14">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="{Binding #Root.Title}"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource SemiColorText0}"/>
+                            <TextBlock Text="{Binding #Root.Subtitle}"
+                                       IsVisible="{Binding #Root.Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SemiColorText2}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Content="✕"
+                                Classes="Tertiary"
+                                Width="28"
+                                Height="28"
+                                Padding="0"
+                                Command="{Binding #Root.CloseCommand}"/>
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" Padding="18">
+                    <ContentPresenter Content="{Binding #Root.DrawerContent}"/>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
+
