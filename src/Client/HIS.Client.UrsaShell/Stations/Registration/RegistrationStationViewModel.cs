@@ -51,6 +51,16 @@ public sealed class RegistrationStationViewModel : ClientModelBase, IStationLife
             () => _shell?.NavigateByKey("finance"));
         OpenScheduleCommand = new RelayCommand(
             () => _shell?.NavigateByKey("schedule"));
+        ShowPatientFormCommand = new RelayCommand(
+            () => Registration.ShowPatientForm());
+        HidePatientFormCommand = new RelayCommand(
+            () => Registration.HidePatientForm());
+        RegisterPatientCommand = new AsyncRelayCommand(
+            ExecuteRegisterPatientAsync,
+            () => Registration.IsNotBusy);
+        CreateEmergencyPatientCommand = new AsyncRelayCommand(
+            ExecuteCreateEmergencyPatientAsync,
+            () => Registration.IsNotBusy);
     }
 
     public WorkbenchModel Workbench { get; }
@@ -68,6 +78,10 @@ public sealed class RegistrationStationViewModel : ClientModelBase, IStationLife
     public ICommand RefundCommand { get; }
     public ICommand OpenFinanceCommand { get; }
     public ICommand OpenScheduleCommand { get; }
+    public ICommand ShowPatientFormCommand { get; }
+    public ICommand HidePatientFormCommand { get; }
+    public ICommand RegisterPatientCommand { get; }
+    public ICommand CreateEmergencyPatientCommand { get; }
 
     public string Notice
     {
@@ -279,6 +293,28 @@ public sealed class RegistrationStationViewModel : ClientModelBase, IStationLife
         Execute();
     }
 
+    private async System.Threading.Tasks.Task ExecuteRegisterPatientAsync()
+    {
+        var result = await Registration.RegisterNewPatientAsync();
+        SyncMessages();
+        RaiseComputed();
+        if (result != null)
+        {
+            _shell?.ShowToast(result, "Success");
+        }
+    }
+
+    private async System.Threading.Tasks.Task ExecuteCreateEmergencyPatientAsync()
+    {
+        var result = await Registration.CreateEmergencyPatientAsync();
+        SyncMessages();
+        RaiseComputed();
+        if (result != null)
+        {
+            _shell?.ShowToast(result, "Success");
+        }
+    }
+
     private async System.Threading.Tasks.Task ExecuteRefundAsync(RegistrationRecordItem record)
     {
         var result = await Registration.RefundSelectedAsync();
@@ -349,5 +385,7 @@ public sealed class RegistrationStationViewModel : ClientModelBase, IStationLife
         (SettleCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (SearchRegistrationsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (RefundCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (RegisterPatientCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (CreateEmergencyPatientCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 }

@@ -41,6 +41,19 @@ public sealed class RegistrationCashierViewModel : ClientModelBase
     private bool _isSlotListEmpty;
     private bool _isRegistrationListEmpty;
 
+    // Patient registration form fields
+    private bool _isPatientFormVisible;
+    private string _newPatientName = string.Empty;
+    private string _newPatientGender = "1";
+    private string _newPatientBirthDate = string.Empty;
+    private string _newPatientIdCard = string.Empty;
+    private string _newPatientPhone = string.Empty;
+    private string _newPatientGuardianName = string.Empty;
+    private string _newPatientGuardianIdCard = string.Empty;
+    private string _newPatientAllergy = string.Empty;
+    private string _patientFormNotice = string.Empty;
+    private string _patientFormError = string.Empty;
+
     public RegistrationCashierViewModel()
     {
         _queryDate = DateTime.Today.ToString("yyyy-MM-dd");
@@ -275,6 +288,311 @@ public sealed class RegistrationCashierViewModel : ClientModelBase
     public bool NotifyRegistrationEmpty => IsRegistrationListEmpty && IsNotBusy && Registrations.Count == 0;
     public bool NotifyRegistrationFilteredEmpty => HasRegistrationKeyword && NotifyRegistrationEmpty;
     public bool NotifyRegistrationDayEmpty => !HasRegistrationKeyword && NotifyRegistrationEmpty;
+
+    // ── Patient registration form ──
+
+    public bool IsPatientFormVisible
+    {
+        get => _isPatientFormVisible;
+        set
+        {
+            if (SetField(ref _isPatientFormVisible, value))
+            {
+                OnPropertyChanged(nameof(IsPatientListVisible));
+            }
+        }
+    }
+
+    public bool IsPatientListVisible => !IsPatientFormVisible;
+
+    public string NewPatientName
+    {
+        get => _newPatientName;
+        set => SetField(ref _newPatientName, value ?? string.Empty);
+    }
+
+    public string NewPatientGender
+    {
+        get => _newPatientGender;
+        set => SetField(ref _newPatientGender, value ?? "1");
+    }
+
+    public string NewPatientBirthDate
+    {
+        get => _newPatientBirthDate;
+        set => SetField(ref _newPatientBirthDate, value ?? string.Empty);
+    }
+
+    public string NewPatientIdCard
+    {
+        get => _newPatientIdCard;
+        set => SetField(ref _newPatientIdCard, value ?? string.Empty);
+    }
+
+    public string NewPatientPhone
+    {
+        get => _newPatientPhone;
+        set => SetField(ref _newPatientPhone, value ?? string.Empty);
+    }
+
+    public string NewPatientGuardianName
+    {
+        get => _newPatientGuardianName;
+        set => SetField(ref _newPatientGuardianName, value ?? string.Empty);
+    }
+
+    public string NewPatientGuardianIdCard
+    {
+        get => _newPatientGuardianIdCard;
+        set => SetField(ref _newPatientGuardianIdCard, value ?? string.Empty);
+    }
+
+    public string NewPatientAllergy
+    {
+        get => _newPatientAllergy;
+        set => SetField(ref _newPatientAllergy, value ?? string.Empty);
+    }
+
+    public string PatientFormNotice
+    {
+        get => _patientFormNotice;
+        set => SetField(ref _patientFormNotice, value ?? string.Empty);
+    }
+
+    public string PatientFormError
+    {
+        get => _patientFormError;
+        set
+        {
+            if (SetField(ref _patientFormError, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(HasPatientFormError));
+            }
+        }
+    }
+
+    public bool HasPatientFormError => !string.IsNullOrWhiteSpace(PatientFormError);
+    public bool HasPatientFormNotice => !string.IsNullOrWhiteSpace(PatientFormNotice);
+
+    public ObservableCollection<GenderChoice> GenderChoices { get; } = new()
+    {
+        new GenderChoice("1", "男"),
+        new GenderChoice("2", "女"),
+        new GenderChoice("0", "未知")
+    };
+
+    public sealed record GenderChoice(string Code, string Name);
+
+    public void ShowPatientForm()
+    {
+        ResetPatientForm();
+        IsPatientFormVisible = true;
+    }
+
+    public void HidePatientForm()
+    {
+        IsPatientFormVisible = false;
+        PatientFormError = string.Empty;
+        PatientFormNotice = string.Empty;
+    }
+
+    public void ResetPatientForm()
+    {
+        NewPatientName = string.Empty;
+        NewPatientGender = "1";
+        NewPatientBirthDate = string.Empty;
+        NewPatientIdCard = string.Empty;
+        NewPatientPhone = string.Empty;
+        NewPatientGuardianName = string.Empty;
+        NewPatientGuardianIdCard = string.Empty;
+        NewPatientAllergy = string.Empty;
+        PatientFormError = string.Empty;
+        PatientFormNotice = string.Empty;
+    }
+
+    public async Task<string?> RegisterNewPatientAsync()
+    {
+        if (IsBusy)
+        {
+            return null;
+        }
+
+        // Client-side validation
+        if (string.IsNullOrWhiteSpace(NewPatientName))
+        {
+            PatientFormError = "请填写患者姓名。";
+            return null;
+        }
+        if (string.IsNullOrWhiteSpace(NewPatientIdCard))
+        {
+            PatientFormError = "请填写身份证号码。";
+            return null;
+        }
+        if (string.IsNullOrWhiteSpace(NewPatientPhone))
+        {
+            PatientFormError = "请填写联系电话。";
+            return null;
+        }
+        if (string.IsNullOrWhiteSpace(NewPatientBirthDate))
+        {
+            PatientFormError = "请填写出生日期。";
+            return null;
+        }
+
+        if (!int.TryParse(NewPatientBirthDate.Trim().Replace("-", "").Replace("/", ""), out var birthDateInt)
+            || birthDateInt < 19000101 || birthDateInt > 20991231)
+        {
+            PatientFormError = "出生日期格式无效，请输入 yyyyMMdd 或 yyyy-MM-dd。";
+            return null;
+        }
+
+        // Parse allergy tags
+        List<string>? allergyTags = null;
+        if (!string.IsNullOrWhiteSpace(NewPatientAllergy))
+        {
+            allergyTags = NewPatientAllergy.Split(new[] { ',', '，', '、', ';', '；' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => x.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        IsBusy = true;
+        PatientFormError = string.Empty;
+        try
+        {
+            using var http = CreateHttpClient();
+            using var response = await http.PostAsJsonAsync(
+                "/api/v4/patients/register",
+                new
+                {
+                    FullName = NewPatientName.Trim(),
+                    GenderCode = NewPatientGender,
+                    BirthDateInt = birthDateInt,
+                    IdCardNo = NewPatientIdCard.Trim(),
+                    Phone = NewPatientPhone.Trim(),
+                    GuardianName = string.IsNullOrWhiteSpace(NewPatientGuardianName) ? (string?)null : NewPatientGuardianName.Trim(),
+                    GuardianIdCardNo = string.IsNullOrWhiteSpace(NewPatientGuardianIdCard) ? (string?)null : NewPatientGuardianIdCard.Trim(),
+                    AllergyTags = allergyTags
+                },
+                JsonOptions);
+
+            var envelope = await ReadEnvelopeAsync<RegisteredPatientDto>(response);
+
+            if (!response.IsSuccessStatusCode || envelope.Code is not 200 and not 201)
+            {
+                // 409 means duplicate – show the existing MRN
+                PatientFormError = string.IsNullOrWhiteSpace(envelope.Message)
+                    ? $"建档失败 (HTTP {(int)response.StatusCode})"
+                    : envelope.Message;
+                return null;
+            }
+
+            var newPatient = envelope.Data;
+            if (newPatient == null)
+            {
+                PatientFormError = "建档响应异常，未返回患者信息。";
+                return null;
+            }
+
+            // Refresh patient list and auto-select
+            PatientKeyword = newPatient.MedicalRecordNo ?? NewPatientName.Trim();
+            await SearchPatientsCoreAsync(PatientKeyword);
+            var matchItem = Patients.FirstOrDefault(p => p.Id == newPatient.Id);
+            if (matchItem != null)
+            {
+                await SelectPatientAsync(matchItem);
+            }
+
+            HidePatientForm();
+            ClearError();
+            var mrn = newPatient.MedicalRecordNo ?? "--";
+            var fullName = newPatient.FullName ?? NewPatientName.Trim();
+            Notice = $"实名建档成功：{fullName}（{mrn}），请继续选择号源完成挂号。";
+            ClientDiagnosticsLog.Info("patient.register", $"Registered {fullName} as {mrn}.");
+            return $"建档成功 · {mrn}";
+        }
+        catch (Exception ex)
+        {
+            PatientFormError = "建档请求失败：" + ex.Message;
+            ClientDiagnosticsLog.Error("patient.register", "Patient registration failed", ex);
+            return null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public async Task<string?> CreateEmergencyPatientAsync()
+    {
+        if (IsBusy)
+        {
+            return null;
+        }
+
+        IsBusy = true;
+        PatientFormError = string.Empty;
+        try
+        {
+            using var http = CreateHttpClient();
+            using var response = await http.PostAsync("/api/v4/patients/emergency-temp", null);
+            var envelope = await ReadEnvelopeAsync<RegisteredPatientDto>(response);
+
+            if (!response.IsSuccessStatusCode || envelope.Code is not 200 and not 201)
+            {
+                var msg = string.IsNullOrWhiteSpace(envelope.Message)
+                    ? $"急诊建档失败 (HTTP {(int)response.StatusCode})"
+                    : envelope.Message;
+                PatientFormError = msg;
+                Notice = msg;
+                return null;
+            }
+
+            var newPatient = envelope.Data;
+            if (newPatient == null)
+            {
+                PatientFormError = "急诊建档响应异常。";
+                return null;
+            }
+
+            // Refresh patient list and auto-select
+            PatientKeyword = newPatient.MedicalRecordNo ?? string.Empty;
+            await SearchPatientsCoreAsync(PatientKeyword);
+            var matchItem = Patients.FirstOrDefault(p => p.Id == newPatient.Id);
+            if (matchItem != null)
+            {
+                await SelectPatientAsync(matchItem);
+            }
+
+            HidePatientForm();
+            ClearError();
+            var mrn = newPatient.MedicalRecordNo ?? "--";
+            Notice = $"急诊三无临时建档成功：{mrn}，后续可归并至正式实名档案。请继续选择号源。";
+            ClientDiagnosticsLog.Info("patient.emergency", $"Created emergency temp patient {mrn}.");
+            return $"急诊建档 · {mrn}";
+        }
+        catch (Exception ex)
+        {
+            PatientFormError = "急诊建档失败：" + ex.Message;
+            ClientDiagnosticsLog.Error("patient.emergency", "Emergency patient creation failed", ex);
+            return null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private sealed class RegisteredPatientDto
+    {
+        public string Id { get; set; } = string.Empty;
+        public string MedicalRecordNo { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string GenderCode { get; set; } = string.Empty;
+    }
+
+    // ── End Patient registration form ──
 
     public string PatientCountText => $"{Patients.Count} 位患者";
     public string SlotCountText => $"{Slots.Count} 个可挂号源";

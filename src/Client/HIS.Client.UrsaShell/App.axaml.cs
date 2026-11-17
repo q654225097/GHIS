@@ -157,6 +157,15 @@ public partial class App : Application
                     await Task.Delay(400);
                     Capture("view_08_registration.png");
 
+                    // 8b. Patient Registration Form (新建患者实名建档)
+                    if (shell.CurrentStationView is Control { DataContext: HIS.Client.UrsaShell.Stations.Registration.RegistrationStationViewModel regVm })
+                    {
+                        regVm.Registration.ShowPatientForm();
+                        await Task.Delay(300);
+                        Capture("view_08b_patient_registration_form.png");
+                        regVm.Registration.HidePatientForm();
+                    }
+
                     // 9. Finance Outpatient Billing (收费结算)
                     shell.NavigateByKey("finance");
                     workbench.SelectedFinanceTabIndex = 0;
