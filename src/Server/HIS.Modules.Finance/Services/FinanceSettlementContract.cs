@@ -24,6 +24,14 @@ public sealed class FinanceSettlementContract : IFinanceSettlementContract
         _connectionFactory = connectionFactory;
     }
 
+    public static string GenerateFiscalInvoiceNo(string prefix = "BILL")
+    {
+        string year = DateTime.UtcNow.ToString("yy");
+        int randomCode = Random.Shared.Next(100000, 999999);
+        long seq = (DateTime.UtcNow.Ticks / 10000) % 100000000;
+        return $"{prefix}-210601{year}-{seq:D8}-CHK{randomCode}";
+    }
+
     public async Task<RegistrationPaymentResultDto> CreateRegistrationPaymentAsync(
         RegistrationPaymentRequestDto request,
         CancellationToken ct = default)
@@ -43,7 +51,7 @@ public sealed class FinanceSettlementContract : IFinanceSettlementContract
             PaymentChannel = request.PaymentChannel,
             Status = 1,
             PaidAtMs = request.PaidAtMs,
-            InvoiceOfdId = "INV-OFD-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+            InvoiceOfdId = GenerateFiscalInvoiceNo("BILL"),
             CreatedBy = request.OperatorId,
             UpdatedBy = request.OperatorId
         };

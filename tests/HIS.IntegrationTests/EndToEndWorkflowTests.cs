@@ -915,6 +915,7 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
         ));
         var emrOkData = await emrOkRes.Content.ReadFromJsonAsync<ApiResponse<EmrDocument>>();
         Assert.Equal(200, emrOkData?.Code);
+        Assert.NotNull(emrOkData?.Data);
         var docId = emrOkData.Data.Id;
 
         // Sign EMR & Generate GB/T 33190-2016 OFD Archive
@@ -926,6 +927,7 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
         Assert.True(signRes.IsSuccessStatusCode);
         var signData = await signRes.Content.ReadFromJsonAsync<ApiResponse<EmrOfdArchive>>();
         Assert.NotNull(signData?.Data?.OfdNo);
+        Assert.NotNull(signData?.Data);
         Assert.Equal("GB/T 33190-2016", signData.Data.OfdVersionStandard);
 
         // 4. Inpatient Admission with Borrowed Bed (WF-IPD-01, WF-IPD-02)
@@ -971,6 +973,7 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
         var reqContent = await reqRes.Content.ReadAsStringAsync();
         Assert.True(reqRes.IsSuccessStatusCode, $"Status: {reqRes.StatusCode}, Content: {reqContent}");
         var reqData = await reqRes.Content.ReadFromJsonAsync<ApiResponse<MtcServiceRequest>>();
+        Assert.NotNull(reqData?.Data);
         var mtcRequestId = reqData.Data.Id;
 
         // Confirm fee and receive sample
@@ -1825,11 +1828,13 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
             Assert.Equal(450.00m, refund.RefundAmount);
             Assert.Equal((short)1, refund.DrugReturnConfirmed);
 
-            IpdEncounter closedEncounter = await encounterRepo.GetByIdAsync(encounterId);
+            IpdEncounter? closedEncounter = await encounterRepo.GetByIdAsync(encounterId);
+            Assert.NotNull(closedEncounter);
             Assert.Equal(3, closedEncounter.Status);
             Assert.Equal(0m, closedEncounter.PrepaymentBalance);
 
-            IpdBed releasedBed = await bedRepo.GetByIdAsync(bedId);
+            IpdBed? releasedBed = await bedRepo.GetByIdAsync(bedId);
+            Assert.NotNull(releasedBed);
             Assert.Equal(0, releasedBed.BedStatus);
             Assert.Null(releasedBed.CurrentEncounterId);
         }
@@ -1891,9 +1896,12 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
         var login = await loginResponse.Content.ReadFromJsonAsync<ApiResponse<PlatformController.LoginResponseDto>>();
         Assert.True(login?.Code == 200,
             $"Login failed for {userName}/{expectedRoleCode}: Code={login?.Code}, Message={login?.Message}");
-        Assert.Equal(context.PostId, login!.Data!.PostId);
-        Assert.True(login.Data.RoleCode.Equals(expectedRoleCode, StringComparison.OrdinalIgnoreCase) ||
-                    RoleCode.Normalize(login.Data.RoleCode).Equals(RoleCode.Normalize(expectedRoleCode), StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(login);
+        Assert.NotNull(login.Data);
+        Assert.Equal(context.PostId, login.Data.PostId);
+        string actualRole = login.Data.RoleCode ?? string.Empty;
+        Assert.True(actualRole.Equals(expectedRoleCode, StringComparison.OrdinalIgnoreCase) ||
+                    RoleCode.Normalize(actualRole).Equals(RoleCode.Normalize(expectedRoleCode), StringComparison.OrdinalIgnoreCase));
         Assert.Equal(expectedDeptId, login.Data.ActiveDeptId);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer", login.Data.AccessToken);
@@ -2061,7 +2069,7 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
             Assert.True(contexts?.Code == 200, $"Context lookup failed for {userName}: {contexts?.Message}");
             Assert.NotEmpty(contexts!.Data!);
 
-            foreach (PlatformController.LoginContextDto context in contexts.Data)
+            foreach (PlatformController.LoginContextDto context in contexts.Data!)
             {
                 var loginResponse = await client.PostAsJsonAsync(
                     "/api/v4/platform/auth/login",

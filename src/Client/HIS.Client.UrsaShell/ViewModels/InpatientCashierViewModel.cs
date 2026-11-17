@@ -143,10 +143,6 @@ public sealed class InpatientCashierViewModel : ClientModelBase
                 Beds.Clear();
                 _loadedWardId = string.Empty;
                 NotifySelection();
-                foreach (var encounter in Encounters)
-                {
-                    encounter.IsSelected = value != null && encounter.Id == value.Id;
-                }
                 if (value != null)
                 {
                     _ = LoadBedsAsync(value.Id);
@@ -388,7 +384,7 @@ public sealed class InpatientCashierViewModel : ClientModelBase
                     IpdDeptId = SelectedDept.Id,
                     WardId = SelectedWard.Id,
                     BedCode = SelectedBed.BedCode,
-                    IsBorrowedBed = false,
+                    IsBorrowedBed = SelectedWard.IsBorrowed,
                     InitialPrepayment = InitialPrepayment ?? 0,
                     PaymentChannel = SelectedPaymentChannel.Code,
                     RequestKey = "IPD-REGISTER-" + Guid.NewGuid().ToString("N"),
@@ -762,6 +758,7 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         public string Id { get; set; } = string.Empty;
         public string DeptCode { get; set; } = string.Empty;
         public string DeptName { get; set; } = string.Empty;
+        public string RelationType { get; set; } = "PRIMARY";
     }
 
     public sealed class InpatientDeptChoice
@@ -787,11 +784,14 @@ public sealed class InpatientCashierViewModel : ClientModelBase
             Id = dto.Id;
             DeptCode = dto.DeptCode;
             Name = dto.DeptName;
+            RelationType = string.IsNullOrWhiteSpace(dto.RelationType) ? "PRIMARY" : dto.RelationType;
         }
         public string Id { get; }
         public string DeptCode { get; }
         public string Name { get; }
-        public override string ToString() => Name;
+        public string RelationType { get; }
+        public bool IsBorrowed => RelationType.Equals("BORROW_ALLOWED", StringComparison.OrdinalIgnoreCase);
+        public override string ToString() => IsBorrowed ? $"{Name} (借床)" : Name;
     }
 
     public sealed record PrepaymentChannel(string Code, string Name);

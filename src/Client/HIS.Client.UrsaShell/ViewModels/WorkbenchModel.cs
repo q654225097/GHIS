@@ -3371,8 +3371,8 @@ public partial class WorkbenchModel : ClientModelBase
 		RebuildNavigationItems();
 		SelectedInpatient = InpatientRecords.FirstOrDefault();
 		_selectedFormTemplate = ((DynamicFormTemplates.Count > 0) ? DynamicFormTemplates[0] : null);
-		LoadDynamicFormTemplatesAsync();
-		LoadPrescriptionColumnsAsync();
+		_ = LoadDynamicFormTemplatesAsync();
+		_ = LoadPrescriptionColumnsAsync();
 		_ = LoadOpdQueueAsync();
 	}
 
@@ -4679,6 +4679,8 @@ public partial class WorkbenchModel : ClientModelBase
 			return false;
 		}
 	}
+
+	public System.Windows.Input.ICommand SaveDynamicFormInstanceCommand => new HIS.Client.UrsaShell.Shell.AsyncRelayCommand(SaveDynamicFormInstanceAsync);
 
 	public async Task SaveDynamicFormInstanceAsync()
 	{
@@ -6310,10 +6312,10 @@ public partial class WorkbenchModel : ClientModelBase
 		}
 	}
 
-	public void SimulateSignOfd()
+	public async Task SignOfdAsync()
 	{
-		EmrWorkspace.OfdStatus = $"GB/T 33190-2016 OFD 审签已完成 (Hash: {DateTime.Now:yyyyMMddHHmmss})";
-		SystemNotice = "国标 OFD 审签成功，已生成防篡改电子双签封包，归档单号: " + EmrWorkspace.DocNo;
+		await EmrWorkspace.SignOfdAsync();
+		SystemNotice = "国标 OFD 审签已请求服务端真国密双签通道: " + EmrWorkspace.OfdStatus;
 	}
 
 	public PrescriptionItemModel? AddPrescriptionFromCatalog(DrugCatalogItemModel drug)
@@ -7505,7 +7507,7 @@ public partial class WorkbenchModel : ClientModelBase
 		};
 		FrequencyDefinitions.Add(orderFrequencyDefinition);
 		SyncFrequencyOptions();
-		PersistFrequencyToServerAsync(orderFrequencyDefinition);
+		_ = PersistFrequencyToServerAsync(orderFrequencyDefinition);
 		CancelAddFrequency();
 		SystemNotice = $"已新增临床频次 [{orderFrequencyDefinition.Code}]，分解时间点: {orderFrequencyDefinition.TimePointsBadge}。";
 	}

@@ -25,7 +25,7 @@ public static class SqliteTypeHandlers
 	{
 		public override void SetValue(IDbDataParameter parameter, decimal? value)
 		{
-			parameter.Value = ((object)value) ?? DBNull.Value;
+			parameter.Value = (object?)value ?? DBNull.Value;
 		}
 
 		public override decimal? Parse(object value)
@@ -52,7 +52,7 @@ public static class SqliteTypeHandlers
 	{
 		public override void SetValue(IDbDataParameter parameter, double? value)
 		{
-			parameter.Value = ((object)value) ?? DBNull.Value;
+			parameter.Value = (object?)value ?? DBNull.Value;
 		}
 
 		public override double? Parse(object value)

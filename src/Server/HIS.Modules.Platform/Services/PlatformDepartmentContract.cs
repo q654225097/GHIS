@@ -21,7 +21,7 @@ public class PlatformDepartmentContract : IDepartmentReadOnlyContract
 
 	public async Task<DepartmentSummaryDto?> GetDeptSummaryAsync(string deptId, CancellationToken ct = default(CancellationToken))
 	{
-		SysDepartment dept = await _deptRepo.GetByIdAsync(deptId, ct);
+		SysDepartment? dept = await _deptRepo.GetByIdAsync(deptId, ct);
 		if (dept == null)
 		{
 			return null;

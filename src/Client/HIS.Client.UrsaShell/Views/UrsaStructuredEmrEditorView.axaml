@@ -15,8 +15,8 @@
                             <TextBlock Text="{Binding DocNo, StringFormat='文档编号: {0}'}" Foreground="{DynamicResource SemiColorText2}" FontSize="12"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
-                            <Button Name="BtnSignOfd" Content="医师审签并生成国标 OFD" Classes="Primary"/>
-                            <Button Name="BtnExportOfd" Content="导出国标 OFD"/>
+                            <Button Name="BtnSignOfd" Content="医师审签并生成国标 OFD" Command="{Binding SignOfdCommand}" Classes="Primary"/>
+                            <Button Name="BtnExportOfd" Content="导出国标 OFD" Command="{Binding ExportOfdCommand}"/>
                         </StackPanel>
                     </Grid>
 

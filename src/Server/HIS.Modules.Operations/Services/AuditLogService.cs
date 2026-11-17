@@ -38,7 +38,7 @@ public class AuditLogService : IAuditTrailContract
 			string prevHash = (await _auditRepo.QueryAsync("SELECT * FROM ops_audit_events ORDER BY created_at_ms DESC, rowid DESC LIMIT 1", null, ct)).FirstOrDefault()?.CurrHash ?? GenesisBlockHash;
 			long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 			string payload = ComputeAuditPayload(prevHash, eventType, targetEntity, targetId, actionDetail, userId, operatorName, deptId, nowMs);
-			string currHash = CryptoHelper.ComputeSha256(payload);
+			string currHash = CryptoHelper.ComputeSm3(payload);
 			OpsAuditEvent audit = new OpsAuditEvent
 			{
 				EventType = eventType,
@@ -53,7 +53,18 @@ public class AuditLogService : IAuditTrailContract
 				CreatedAtMs = nowMs,
 				UpdatedAtMs = nowMs
 			};
-			await _auditRepo.InsertAsync(audit, ct);
+			for (int attempt = 0; attempt < 5; attempt++)
+			{
+				try
+				{
+					await _auditRepo.InsertAsync(audit, ct);
+					break;
+				}
+				catch (Exception ex) when (attempt < 4 && ex.Message.Contains("lock", StringComparison.OrdinalIgnoreCase))
+				{
+					await Task.Delay(100 * (attempt + 1), ct);
+				}
+			}
 			return audit;
 		}
 		finally
@@ -108,19 +119,23 @@ public class AuditLogService : IAuditTrailContract
 				return new AuditChainVerificationResult(IsIntact: false, events.Count, ev.Id, $"哈希链断裂：事件 [{ev.Id}] 的前序哈希 ({ev.PrevHash}) 与期望值 ({expectedPrevHash}) 不一致");
 			}
 
-			// 支持包含 operatorName 和 deptId 的最新哈希规范，并向后兼容旧版无此字段的哈希
+			// 支持包含 operatorName 和 deptId 的最新国密 SM3 哈希规范，并向后兼容历史 SHA-256 哈希
 			string payloadFull = ComputeAuditPayload(ev.PrevHash, ev.EventType, ev.TargetEntity, ev.TargetId, ev.ActionDetail, ev.UserId, ev.OperatorName, ev.DeptId, ev.CreatedAtMs);
-			string recomputedFullHash = CryptoHelper.ComputeSha256(payloadFull);
+			string recomputedFullHashSm3 = CryptoHelper.ComputeSm3(payloadFull);
+			string recomputedFullHashSha = CryptoHelper.ComputeSha256(payloadFull);
 
 			string payloadLegacy = ComputeAuditPayloadLegacy(ev.PrevHash, ev.EventType, ev.TargetEntity, ev.TargetId, ev.ActionDetail, ev.UserId, ev.CreatedAtMs);
-			string recomputedLegacyHash = CryptoHelper.ComputeSha256(payloadLegacy);
+			string recomputedLegacyHashSm3 = CryptoHelper.ComputeSm3(payloadLegacy);
+			string recomputedLegacyHashSha = CryptoHelper.ComputeSha256(payloadLegacy);
 
-			bool matches = string.Equals(ev.CurrHash, recomputedFullHash, StringComparison.OrdinalIgnoreCase) ||
-						   string.Equals(ev.CurrHash, recomputedLegacyHash, StringComparison.OrdinalIgnoreCase);
+			bool matches = string.Equals(ev.CurrHash, recomputedFullHashSm3, StringComparison.OrdinalIgnoreCase) ||
+						   string.Equals(ev.CurrHash, recomputedFullHashSha, StringComparison.OrdinalIgnoreCase) ||
+						   string.Equals(ev.CurrHash, recomputedLegacyHashSm3, StringComparison.OrdinalIgnoreCase) ||
+						   string.Equals(ev.CurrHash, recomputedLegacyHashSha, StringComparison.OrdinalIgnoreCase);
 
 			if (!matches)
 			{
-				return new AuditChainVerificationResult(IsIntact: false, events.Count, ev.Id, $"防篡改校验失败：事件 [{ev.Id}] 内容或操作人被篡改，计算哈希 ({recomputedFullHash}) 与存储哈希 ({ev.CurrHash}) 不符");
+				return new AuditChainVerificationResult(IsIntact: false, events.Count, ev.Id, $"防篡改校验失败：事件 [{ev.Id}] 内容或操作人被篡改，计算哈希 ({recomputedFullHashSm3}) 与存储哈希 ({ev.CurrHash}) 不符");
 			}
 			expectedPrevHash = ev.CurrHash;
 		}

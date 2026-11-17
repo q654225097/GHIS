@@ -23,45 +23,70 @@
                 </Grid>
             </Border>
 
-            <u:Divider Content="患者建档与门诊专科通用扩展字段"/>
+            <u:Divider Content="动态表单字段"/>
 
-            <u:Form LabelPosition="Top">
-                <Grid ColumnDefinitions="*,*">
-                    <u:FormItem Grid.Column="0" Label="家庭医保共济账户授权绑定:" Margin="0,0,8,0">
-                        <TextBox Text="330106198506182215" Height="32"/>
-                    </u:FormItem>
-                    <u:FormItem Grid.Column="1" Label="特殊慢性病种待遇认定分类:" Margin="8,0,0,0">
-                        <TextBox Text="高血压 III 期 (极高危) / 冠心病" Height="32"/>
-                    </u:FormItem>
-                </Grid>
+            <!-- Dynamic Schema Fields -->
+            <ItemsControl ItemsSource="{Binding SelectedFormTemplate.Fields}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:DynamicFormFieldModel">
+                        <u:FormItem Label="{Binding FieldLabel}" IsRequired="{Binding IsRequired}"
+                                    IsVisible="{Binding IsVisibleForCurrentPatient}"
+                                    Width="420" Margin="0,4,16,4">
+                            <Panel>
+                                <!-- Text / String Control -->
+                                <TextBox Text="{Binding RuntimeValue}"
+                                         PlaceholderText="{Binding Placeholder}"
+                                         IsEnabled="{Binding IsEditable}"
+                                         IsVisible="{Binding IsTextControl}" Height="32"/>
 
-                <Grid ColumnDefinitions="*,*">
-                    <u:FormItem Grid.Column="0" Label="冷链药品专有温度接收上限 (°C):" Margin="0,0,8,0">
-                        <u:NumericDoubleUpDown Value="8.0" Minimum="0" Maximum="25" Height="32"/>
-                    </u:FormItem>
-                    <u:FormItem Grid.Column="1" Label="急诊绿色通道授信额度 (元):" Margin="8,0,0,0">
-                        <u:NumericDoubleUpDown Value="5000.0" Minimum="0" Maximum="50000" Step="500" Height="32"/>
-                    </u:FormItem>
-                </Grid>
+                                <!-- Integer Control -->
+                                <u:NumericIntUpDown Value="{Binding RuntimeInt}"
+                                                   PlaceholderText="{Binding Placeholder}"
+                                                   IsEnabled="{Binding IsEditable}"
+                                                   IsVisible="{Binding IsIntegerControl}" Height="32"/>
 
-                <u:Divider Content="专科专病数据"/>
+                                <!-- Decimal Control -->
+                                <u:NumericDoubleUpDown Value="{Binding RuntimeDecimal}"
+                                                      PlaceholderText="{Binding Placeholder}"
+                                                      IsEnabled="{Binding IsEditable}"
+                                                      IsVisible="{Binding IsDecimalControl}" Height="32"/>
 
-                <Grid ColumnDefinitions="*,*">
-                    <u:FormItem Grid.Column="0" Label="前列腺触诊（男性）:" Margin="0,0,8,0">
-                        <TextBox Text="{Binding EmrWorkspace.ProstateExam}" Height="32"/>
-                    </u:FormItem>
-                    <u:FormItem Grid.Column="1" Label="孕产次数（女性）:" Margin="8,0,0,0">
-                        <u:NumericIntUpDown Value="{Binding EmrWorkspace.PregnancyCount}" Minimum="0" Maximum="20" Height="32"/>
-                    </u:FormItem>
-                </Grid>
-            </u:Form>
+                                <!-- Enum / ComboBox Control -->
+                                <ComboBox ItemsSource="{Binding Options}"
+                                          SelectedItem="{Binding RuntimeValue}"
+                                          PlaceholderText="{Binding Placeholder}"
+                                          IsEnabled="{Binding IsEditable}"
+                                          IsVisible="{Binding IsEnumControl}"
+                                          HorizontalAlignment="Stretch" Height="32"/>
+
+                                <!-- Boolean / CheckBox Control -->
+                                <CheckBox IsChecked="{Binding RuntimeBoolean}"
+                                          Content="{Binding FieldLabel}"
+                                          IsEnabled="{Binding IsEditable}"
+                                          IsVisible="{Binding IsBooleanControl}"/>
+
+                                <!-- DatePicker Control -->
+                                <CalendarDatePicker SelectedDate="{Binding RuntimeDate}"
+                                                    IsEnabled="{Binding IsEditable}"
+                                                    IsVisible="{Binding IsDateControl}"
+                                                    HorizontalAlignment="Stretch" Height="32"/>
+                            </Panel>
+                        </u:FormItem>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <!-- Bottom Action Footer -->
             <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="12,8">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                     <TextBlock Grid.Column="0" Text="{Binding SelectedFormTemplate.FieldCount, StringFormat='{}共 {0} 个字段'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
                     <TextBlock Grid.Column="1" Text="字段可按需扩展，保存后继续用于该科室的病历书写" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="8,0" VerticalAlignment="Center"/>
-                    <Button Grid.Column="2" Content="保存表单" Classes="Primary" Height="32" Padding="12,0"/>
+                    <Button Grid.Column="2" Name="BtnSaveDynamicForm" Content="保存表单" Command="{Binding SaveDynamicFormInstanceCommand}" Classes="Primary" Height="32" Padding="12,0"/>
                 </Grid>
             </Border>
         </StackPanel>

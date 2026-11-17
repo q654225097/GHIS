@@ -1,11 +1,30 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading.Tasks;
+using HIS.BuildingBlocks.Common;
+using HIS.BuildingBlocks.OfdEngine;
 using HIS.Client.Core;
+using HIS.Client.UrsaShell.Services;
+using HIS.Client.UrsaShell.Shell;
 using HIS.Client.UrsaShell.Stations.OpdDoctor;
 
 namespace HIS.Client.UrsaShell.ViewModels;
 
 public class EmrEditorWorkspaceModel : ClientModelBase
 {
+	public EmrEditorWorkspaceModel()
+	{
+		SignOfdCommand = new AsyncRelayCommand(SignOfdAsync, () => !IsBusy);
+		ExportOfdCommand = new AsyncRelayCommand(ExportOfdAsync, () => !IsBusy);
+	}
+
+	public AsyncRelayCommand SignOfdCommand { get; }
+	public AsyncRelayCommand ExportOfdCommand { get; }
+	public string? LatestArchiveId { get; set; }
 	// Kept at workspace level so replacing a template cannot leave old field handlers
 	// holding the shared preview debounce state.
 	internal System.ComponentModel.PropertyChangedEventHandler? DynamicFieldChanged { get; set; }
@@ -305,5 +324,151 @@ public class EmrEditorWorkspaceModel : ClientModelBase
 		}
 		Fields.Clear();
 		Sections.Clear();
+	}
+
+	public async Task SignOfdAsync()
+	{
+		IsBusy = true;
+		try
+		{
+			string signerId = string.IsNullOrWhiteSpace(SessionContext.Current.UserId) ? "USER-DOC-01" : SessionContext.Current.UserId;
+			string signerName = string.IsNullOrWhiteSpace(SessionContext.Current.DisplayName)
+				? (string.IsNullOrWhiteSpace(SessionContext.Current.UserName) ? "张建国 (主治医师)" : SessionContext.Current.UserName)
+				: SessionContext.Current.DisplayName;
+			int signLevel = Math.Clamp(SessionContext.Current.EmrSignLevel > 0 ? SessionContext.Current.EmrSignLevel : 1, 1, 3);
+
+			if (string.IsNullOrWhiteSpace(DocNo))
+			{
+				DocNo = "EMR-" + DateTime.Now.ToString("yyyyMMddHHmmss");
+			}
+
+			var structuredElements = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+			{
+				["DE_CHIEF_COMPLAINT"] = ChiefComplaint,
+				["DE_PRESENT_ILLNESS"] = PresentIllness,
+				["DE_DIAGNOSIS"] = Diagnosis
+			};
+			if (!string.IsNullOrWhiteSpace(ProstateExam))
+			{
+				structuredElements["DE_PROSTATE_EXAM"] = ProstateExam;
+			}
+			if (PregnancyCount > 0)
+			{
+				structuredElements["DE_PREGNANCY_COUNT"] = PregnancyCount.ToString();
+			}
+
+			foreach (OpdEmrFieldModel field in Fields)
+			{
+				if (!string.IsNullOrWhiteSpace(field.Value))
+				{
+					structuredElements[field.ElementCode] = field.Value;
+				}
+			}
+
+			using var client = AuthenticatedHttpClientFactory.Create();
+			var savePayload = new
+			{
+				DocNo = DocNo,
+				Title = DocTitle,
+				PatientId = string.IsNullOrWhiteSpace(PatientName) ? "PAT85061801" : PatientName,
+				EncounterOrVisitId = "VISIT-OPD-DEMO",
+				EmrScene = "OPD",
+				TemplateId = SelectedTemplateId,
+				StructuredElements = structuredElements,
+				AuthorId = signerId,
+				AuthorName = signerName
+			};
+
+			var saveResp = await client.PostAsJsonAsync("/api/v4/emr/documents", savePayload);
+			string actualDocId = DocNo;
+			if (saveResp.IsSuccessStatusCode)
+			{
+				var saveEnvelope = await saveResp.Content.ReadFromJsonAsync<ApiResponse<JsonElement>>();
+				if (saveEnvelope?.Data.ValueKind == JsonValueKind.Object && saveEnvelope.Data.TryGetProperty("id", out var idProp))
+				{
+					actualDocId = idProp.GetString() ?? DocNo;
+				}
+			}
+
+			var signPayload = new
+			{
+				SignerId = signerId,
+				SignerName = signerName,
+				SignLevel = signLevel
+			};
+			var signResp = await client.PostAsJsonAsync($"/api/v4/emr/documents/{actualDocId}/sign-and-generate-ofd", signPayload);
+			if (signResp.IsSuccessStatusCode)
+			{
+				var signEnvelope = await signResp.Content.ReadFromJsonAsync<ApiResponse<JsonElement>>();
+				if (signEnvelope?.Data.ValueKind == JsonValueKind.Object)
+				{
+					if (signEnvelope.Data.TryGetProperty("ofdNo", out var ofdNoProp))
+					{
+						OfdNo = ofdNoProp.GetString();
+					}
+					if (signEnvelope.Data.TryGetProperty("id", out var archiveIdProp))
+					{
+						LatestArchiveId = archiveIdProp.GetString();
+					}
+				}
+				QcStatus = "质控通过";
+				OfdStatus = "已生成国标 OFD (服务端真 CA/TSA 审签)";
+				CompletedSignLevels = signLevel;
+			}
+			else
+			{
+				var errBody = await signResp.Content.ReadAsStringAsync();
+				QcStatus = "审签失败";
+				OfdStatus = $"服务端审签拒绝 ({(int)signResp.StatusCode}): {errBody}";
+			}
+		}
+		catch (Exception ex)
+		{
+			QcStatus = "网络或服务异常";
+			OfdStatus = $"审签请求失败: {ex.Message}";
+			ClientDiagnosticsLog.Error("emr.sign", "Sign OFD failed", ex);
+		}
+		finally
+		{
+			IsBusy = false;
+		}
+	}
+
+	public async Task ExportOfdAsync()
+	{
+		IsBusy = true;
+		try
+		{
+			if (string.IsNullOrWhiteSpace(LatestArchiveId))
+			{
+				OfdStatus = "未找到已归档的 OFD 凭单，请先完成审签";
+				return;
+			}
+
+			using var client = AuthenticatedHttpClientFactory.Create();
+			var resp = await client.GetAsync($"/api/v4/emr/archives/{LatestArchiveId}/export-ofd");
+			if (resp.IsSuccessStatusCode)
+			{
+				byte[] bytes = await resp.Content.ReadAsByteArrayAsync();
+				string targetFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "OFD_Exports");
+				Directory.CreateDirectory(targetFolder);
+				string targetPath = Path.Combine(targetFolder, $"{(string.IsNullOrWhiteSpace(OfdNo) ? DocNo : OfdNo)}.ofd");
+				await File.WriteAllBytesAsync(targetPath, bytes);
+				OfdStatus = $"OFD 导出成功: {targetPath}";
+			}
+			else
+			{
+				OfdStatus = $"OFD 导出失败: 服务端响应 {(int)resp.StatusCode}";
+			}
+		}
+		catch (Exception ex)
+		{
+			OfdStatus = $"OFD 导出异常: {ex.Message}";
+			ClientDiagnosticsLog.Error("emr.export", "Export OFD failed", ex);
+		}
+		finally
+		{
+			IsBusy = false;
+		}
 	}
 }

@@ -395,7 +395,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "系统管理员",
 			RoleName = "全院超级管理员",
 			RoleCode = "ADMIN",
-			EmployeeNo = "A001"
+			EmployeeNo = "EMP001"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -403,7 +403,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "张建国",
 			RoleName = "门诊/住院多身份主治",
 			RoleCode = "OPD_DOC / IPD_ATTENDING",
-			EmployeeNo = "D001"
+			EmployeeNo = "EMP002"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -411,7 +411,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "李华",
 			RoleName = "心内住院医师",
 			RoleCode = "IPD_RESIDENT",
-			EmployeeNo = "D002"
+			EmployeeNo = "EMP003"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -419,7 +419,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "王崇",
 			RoleName = "多科室主治医师",
 			RoleCode = "IPD_ATTENDING",
-			EmployeeNo = "D003"
+			EmployeeNo = "EMP004"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -427,7 +427,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "陈芳",
 			RoleName = "内科一病区护士",
 			RoleCode = "WARD_NURSE",
-			EmployeeNo = "N001"
+			EmployeeNo = "EMP005"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -435,7 +435,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "赵敏",
 			RoleName = "内科二病区护士",
 			RoleCode = "WARD_NURSE",
-			EmployeeNo = "N002"
+			EmployeeNo = "EMP006"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -443,7 +443,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "孙伟",
 			RoleName = "门诊西药房药师",
 			RoleCode = "PHARMACIST",
-			EmployeeNo = "P001"
+			EmployeeNo = "EMP007"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -451,7 +451,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "刘洋",
 			RoleName = "财务收费员",
 			RoleCode = "CASHIER",
-			EmployeeNo = "C001"
+			EmployeeNo = "EMP008"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -459,7 +459,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "李建",
 			RoleName = "医技技师",
 			RoleCode = "MEDTECH",
-			EmployeeNo = "M001"
+			EmployeeNo = "EMP010"
 		});
 		KnownUsers.Add(new LoginUserOption
 		{
@@ -467,7 +467,7 @@ public sealed class LoginModel : ClientModelBase
 			DisplayName = "周强",
 			RoleName = "药库管理员",
 			RoleCode = "WAREHOUSE_KEEPER",
-			EmployeeNo = "W001"
+			EmployeeNo = "EMP011"
 		});
 		SelectedUser = KnownUsers[1];
 	}

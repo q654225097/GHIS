@@ -4,11 +4,11 @@ public sealed record ApiResponse<T>
 {
 	public int Code { get; init; }
 
-	public string Message { get; init; }
+	public string Message { get; init; } = string.Empty;
 
 	public T? Data { get; init; }
 
-	public string TraceId { get; init; }
+	public string TraceId { get; init; } = string.Empty;
 
 	public long TimestampMs { get; init; }
 

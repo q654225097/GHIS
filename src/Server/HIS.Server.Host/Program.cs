@@ -118,6 +118,13 @@ public class Program
 		RegisterRepo<FinRefundOrder>(builder.Services, "fin_refund_orders");
 		RegisterRepo<FinChargeLedger>(builder.Services, "fin_charge_ledgers");
 		RegisterRepo<FinDailyClosing>(builder.Services, "fin_daily_closings");
+		RegisterRepo<FinInpatientFeeItem>(builder.Services, "fin_inpatient_fee_items");
+		RegisterRepo<InvDrugTraceCode>(builder.Services, "inv_drug_trace_codes");
+		RegisterRepo<InvStockTake>(builder.Services, "inv_stock_takes");
+		RegisterRepo<InvStockTakeLine>(builder.Services, "inv_stock_take_lines");
+		RegisterRepo<MedtechCriticalValue>(builder.Services, "medtech_critical_values");
+		RegisterRepo<OpdInfectiousReportCard>(builder.Services, "opd_infectious_report_cards");
+		RegisterRepo<EmrInpatientFrontSheet>(builder.Services, "emr_inpatient_front_sheets");
 		RegisterRepo<OpsAuditEvent>(builder.Services, "ops_audit_events");
 		RegisterRepo<OpsAuditAnchor>(builder.Services, "ops_audit_anchors");
 		RegisterRepo<OpsIdempotencyKey>(builder.Services, "ops_idempotency_keys");
@@ -130,8 +137,8 @@ public class Program
 		builder.Services.AddHostedService<OutboxBackgroundDispatcher>();
 		builder.Services.AddScoped((Func<IServiceProvider, IUserSession>)((IServiceProvider sp) =>
 		{
-			HttpContext httpContext = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
-			ClaimsPrincipal principal = httpContext?.User;
+			HttpContext? httpContext = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
+			ClaimsPrincipal? principal = httpContext?.User;
 			if (principal?.Identity?.IsAuthenticated != true)
 			{
 				return new UserSession();
@@ -205,6 +212,7 @@ public class Program
 			PathString path = context.Request.Path;
 			bool isAnonymous = HttpMethods.IsOptions(context.Request.Method)
 				|| path == "/"
+				|| path.Equals("/health", StringComparison.OrdinalIgnoreCase)
 				|| path.Equals("/api/v4/platform/auth/login", StringComparison.OrdinalIgnoreCase)
 				|| path.Equals("/api/v4/platform/auth/refresh", StringComparison.OrdinalIgnoreCase)
 				|| path.Equals("/api/v4/platform/auth/contexts", StringComparison.OrdinalIgnoreCase);
@@ -272,6 +280,11 @@ public class Program
 			Decoupling = "4-Dimensional Department (OPD/IPD/WARD/MEDTECH)",
 			GB_Standard = "GB/T 33190-2016 OFD"
 		})));
+		app.MapGet("/health", (Func<IResult>)(() => Results.Ok(new
+		{
+			Status = "Healthy",
+			Timestamp = DateTime.UtcNow
+		}))).AllowAnonymous();
 		using (IServiceScope scope = app.Services.CreateScope())
 		{
 			IDbConnectionFactory connFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();

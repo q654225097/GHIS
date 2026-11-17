@@ -37,6 +37,10 @@ public sealed class IpdWardView
     public string DeptCode { get; set; } = string.Empty;
 
     public string DeptName { get; set; } = string.Empty;
+
+    public string RelationType { get; set; } = "PRIMARY";
+
+    public bool IsBorrowed => RelationType == "BORROW_ALLOWED";
 }
 
 public sealed class IpdDeptView

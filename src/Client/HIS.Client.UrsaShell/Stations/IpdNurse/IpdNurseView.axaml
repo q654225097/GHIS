@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:u="https://irihi.tech/ursa"
              xmlns:local="using:HIS.Client.UrsaShell.Stations.IpdNurse"
+             xmlns:ctrl="using:HIS.Client.UrsaShell.Controls"
              xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
              x:Class="HIS.Client.UrsaShell.Stations.IpdNurse.IpdNurseView"
              x:DataType="local:IpdNurseViewModel">
@@ -342,36 +343,45 @@
 
                         <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="7"
                                 BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" Padding="14">
-                            <Grid RowDefinitions="Auto,*">
-                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                                    <TextBlock Grid.Column="0" Text="体征记录" FontSize="13" FontWeight="Bold"/>
-                                    <TextBlock Grid.Column="1" Text="最新记录置顶" FontSize="11"
-                                               Foreground="{DynamicResource SemiColorText2}"/>
+                            <Grid ColumnDefinitions="*,340">
+                                <!-- Standard 3-Check Sheet Graphical Temperature & Pulse Chart -->
+                                <Grid Grid.Column="0" RowDefinitions="Auto,*" Margin="0,0,12,0">
+                                    <TextBlock Grid.Row="0" Text="标准三测单 (35°C~42°C 体温/脉搏双曲线)" FontSize="13" FontWeight="Bold" Margin="0,0,0,8"/>
+                                    <ctrl:TemperatureChartControl Grid.Row="1" ItemsSource="{Binding Workbench.SelectedInpatient.VitalSigns}" MinHeight="260"/>
                                 </Grid>
-                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                                    <ItemsControl ItemsSource="{Binding Workbench.SelectedInpatient.VitalSigns}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:VitalSignModel">
-                                                <Border Padding="11" Margin="0,0,0,8" CornerRadius="6"
-                                                        Background="{DynamicResource SemiColorBackground0}"
-                                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                                    <Grid ColumnDefinitions="*,Auto">
-                                                        <StackPanel Grid.Column="0" Spacing="4">
-                                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                                <TextBlock Text="{Binding RecordedAt}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                                <TextBlock Text="{Binding NurseName, StringFormat='{}记录人: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+
+                                <!-- Vitals Records List -->
+                                <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                        <TextBlock Grid.Column="0" Text="体征记录" FontSize="13" FontWeight="Bold"/>
+                                        <TextBlock Grid.Column="1" Text="最新记录置顶" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                    </Grid>
+                                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsControl ItemsSource="{Binding Workbench.SelectedInpatient.VitalSigns}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:VitalSignModel">
+                                                    <Border Padding="11" Margin="0,0,0,8" CornerRadius="6"
+                                                            Background="{DynamicResource SemiColorBackground0}"
+                                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <StackPanel Grid.Column="0" Spacing="4">
+                                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                    <TextBlock Text="{Binding RecordedAt}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                                    <TextBlock Text="{Binding NurseName, StringFormat='{}记录人: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Summary}" FontSize="12" TextWrapping="Wrap"/>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding Summary}" FontSize="12" TextWrapping="Wrap"/>
-                                                        </StackPanel>
-                                                        <Border Grid.Column="1" CornerRadius="4" Padding="7,3" VerticalAlignment="Center" Margin="10,0,0,0">
-                                                            <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="Bold" Foreground="{Binding StatusBrush}"/>
-                                                        </Border>
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
+                                                            <Border Grid.Column="1" CornerRadius="4" Padding="7,3" VerticalAlignment="Center" Margin="10,0,0,0">
+                                                                <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="Bold" Foreground="{Binding StatusBrush}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
                             </Grid>
                         </Border>
                     </Grid>

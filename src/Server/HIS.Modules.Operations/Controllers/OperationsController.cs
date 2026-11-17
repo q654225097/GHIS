@@ -83,8 +83,14 @@ ORDER BY created_at_ms DESC, rowid DESC", new
 		[FromQuery] string? eventType = null,
 		[FromQuery] string? targetEntity = null,
 		[FromQuery] long? startTimeMs = null,
-		[FromQuery] long? endTimeMs = null)
+		[FromQuery] long? endTimeMs = null,
+		[FromQuery] string? reason = null)
 	{
+		if (string.IsNullOrWhiteSpace(reason))
+		{
+			return BadRequest(ApiResponse<string>.Fail(400, "导出系统安全审计日志必须提供审批事由与业务凭证"));
+		}
+
 		var logs = await _auditRepo.QueryAsync(@"
 SELECT * FROM ops_audit_events
 WHERE (@EventType IS NULL OR event_type = @EventType)
@@ -101,6 +107,7 @@ LIMIT 1000", new
 		});
 
 		var sb = new StringBuilder();
+		sb.AppendLine($"# GHIS 等保三级审计日志导出 | 导出人: {_userSession?.DisplayName ?? "系统管理员"} ({_userSession?.UserId}) | 导出时间: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC | 审批事由: {reason.Trim()}");
 		sb.AppendLine("Id,EventType,TargetEntity,TargetId,ActionDetail,UserId,OperatorName,DeptId,CreatedAtMs,CurrHash,PrevHash");
 		foreach (var l in logs)
 		{
@@ -108,6 +115,17 @@ LIMIT 1000", new
 		}
 
 		byte[] csvBytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+		string digest = CryptoHelper.ComputeSm3(csvBytes);
+
+		await _auditService.RecordAuditAsync(
+			"AUDIT_LOG_EXPORT",
+			"ops_audit_events",
+			"EXPORT",
+			$"管理员 [{_userSession?.UserId}] 导出 {logs.Count} 条安全审计日志，事由: {reason}，文件防伪指纹: {digest}",
+			_userSession?.UserId,
+			_userSession?.DisplayName,
+			_userSession?.ActiveDeptId);
+
 		return File(csvBytes, "text/csv; charset=utf-8", $"audit_logs_{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
 	}
 

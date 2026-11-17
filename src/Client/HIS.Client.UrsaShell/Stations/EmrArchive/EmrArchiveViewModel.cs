@@ -169,12 +169,6 @@ public sealed class EmrArchiveViewModel : ClientModelBase, IShortcutTarget
             return exportPath;
         }
 
-        string legacyPath = Path.Combine(@"d:\GHIS", $"{docNo}.ofd");
-        if (File.Exists(legacyPath))
-        {
-            return legacyPath;
-        }
-
         byte[] bytes = Workbench.BuildCurrentOfdPackage();
         File.WriteAllBytes(exportPath, bytes);
         return exportPath;

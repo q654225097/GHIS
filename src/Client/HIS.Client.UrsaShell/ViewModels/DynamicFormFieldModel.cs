@@ -16,6 +16,8 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 
 	private string _ursaControlType = "u:TextBox";
 
+	private string _controlType = "SINGLE_TEXT";
+
 	private string _controlKey = string.Empty;
 
 	private string _unitText = string.Empty;
@@ -118,11 +120,50 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 		{
 			if (SetField(ref _ursaControlType, value, "UrsaControlType"))
 			{
+				_controlType = MapUrsaToControlType(value);
 				NotifyControlFlags();
+				OnPropertyChanged("ControlType");
 				OnPropertyChanged("ControlDisplayText");
 			}
 		}
 	}
+
+	public string ControlType
+	{
+		get => _controlType;
+		set
+		{
+			if (SetField(ref _controlType, value, "ControlType"))
+			{
+				_ursaControlType = MapControlTypeToUrsa(value);
+				NotifyControlFlags();
+				OnPropertyChanged("UrsaControlType");
+				OnPropertyChanged("ControlDisplayText");
+			}
+		}
+	}
+
+	public static string MapUrsaToControlType(string? ursaType) => ursaType switch
+	{
+		"u:TextArea" => "MULTI_TEXT",
+		"u:NumericIntUpDown" => "INT_INPUT",
+		"u:NumericDoubleUpDown" => "DECIMAL_INPUT",
+		"ComboBox" => "SELECT",
+		"DatePicker" => "DATE",
+		"CheckBox" => "CHECKBOX",
+		_ => "SINGLE_TEXT"
+	};
+
+	public static string MapControlTypeToUrsa(string? controlType) => controlType?.ToUpperInvariant() switch
+	{
+		"MULTI_TEXT" => "u:TextArea",
+		"INT_INPUT" => "u:NumericIntUpDown",
+		"DECIMAL_INPUT" => "u:NumericDoubleUpDown",
+		"SELECT" => "ComboBox",
+		"DATE" => "DatePicker",
+		"CHECKBOX" => "CheckBox",
+		_ => "u:TextBox"
+	};
 
 	public string ControlKey
 	{
@@ -487,30 +528,25 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 		}
 	}
 
-	public string ControlDisplayText
+	public string ControlDisplayText => ControlType switch
 	{
-		get
+		"MULTI_TEXT" => "多行文本",
+		"INT_INPUT" => "整数",
+		"DECIMAL_INPUT" => "小数",
+		"SELECT" => "下拉选择",
+		"DATE" => "日期",
+		"CHECKBOX" => "是 / 否",
+		_ => UrsaControlType switch
 		{
-			string ursaControlType = UrsaControlType;
-			if (1 == 0)
-			{
-			}
-			string result = ursaControlType switch
-			{
-				"u:TextArea" => "多行文本", 
-				"u:NumericIntUpDown" => "整数", 
-				"u:NumericDoubleUpDown" => "小数", 
-				"ComboBox" => "下拉选择", 
-				"DatePicker" => "日期", 
-				"CheckBox" => "是 / 否", 
-				_ => "单行文本", 
-			};
-			if (1 == 0)
-			{
-			}
-			return result;
+			"u:TextArea" => "多行文本",
+			"u:NumericIntUpDown" => "整数",
+			"u:NumericDoubleUpDown" => "小数",
+			"ComboBox" => "下拉选择",
+			"DatePicker" => "日期",
+			"CheckBox" => "是 / 否",
+			_ => "单行文本"
 		}
-	}
+	};
 
 	public string UnitDisplayText => string.IsNullOrWhiteSpace(UnitText) ? "无单位" : UnitText;
 
@@ -518,30 +554,19 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 
 	public string EditableText => IsEditable ? "可编辑" : "只读";
 
-	public bool IsTextControl
-	{
-		get
-		{
-			string ursaControlType = UrsaControlType;
-			if (ursaControlType == "u:TextBox" || ursaControlType == "u:TextArea")
-			{
-				return true;
-			}
-			return false;
-		}
-	}
+	public bool IsTextControl => ControlType == "SINGLE_TEXT" || ControlType == "MULTI_TEXT" || UrsaControlType == "u:TextBox" || UrsaControlType == "u:TextArea";
 
-	public bool IsIntegerControl => UrsaControlType == "u:NumericIntUpDown";
+	public bool IsIntegerControl => ControlType == "INT_INPUT" || UrsaControlType == "u:NumericIntUpDown";
 
-	public bool IsDecimalControl => UrsaControlType == "u:NumericDoubleUpDown";
+	public bool IsDecimalControl => ControlType == "DECIMAL_INPUT" || UrsaControlType == "u:NumericDoubleUpDown";
 
-	public bool IsEnumControl => UrsaControlType == "ComboBox";
+	public bool IsEnumControl => ControlType == "SELECT" || UrsaControlType == "ComboBox";
 
-	public bool IsDateControl => UrsaControlType == "DatePicker";
+	public bool IsDateControl => ControlType == "DATE" || UrsaControlType == "DatePicker";
 
-	public bool IsBooleanControl => UrsaControlType == "CheckBox";
+	public bool IsBooleanControl => ControlType == "CHECKBOX" || UrsaControlType == "CheckBox";
 
-	public bool IsMultiLine => UrsaControlType == "u:TextArea";
+	public bool IsMultiLine => ControlType == "MULTI_TEXT" || UrsaControlType == "u:TextArea";
 
 	public IEnumerable<string> Options => OptionsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 

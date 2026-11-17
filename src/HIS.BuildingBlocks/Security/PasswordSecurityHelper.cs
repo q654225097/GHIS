@@ -72,10 +72,9 @@ public static class PasswordSecurityHelper
             }
         }
 
-        // 2. 兼容旧版无盐 SHA-256 或历史明文格式
+        // 2. 兼容旧版无盐 SHA-256 格式（平滑升级）
         string legacySha256 = CryptoHelper.ComputeSha256(inputPassword);
-        if (string.Equals(storedHash, legacySha256, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(storedHash, inputPassword, StringComparison.Ordinal))
+        if (string.Equals(storedHash, legacySha256, StringComparison.OrdinalIgnoreCase))
         {
             return (true, true); // 验证通过，但需要平滑升级为加盐哈希
         }

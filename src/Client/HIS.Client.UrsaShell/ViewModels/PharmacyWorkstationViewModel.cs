@@ -132,7 +132,8 @@ public sealed class PharmacyWorkstationViewModel : ClientModelBase
     public bool IsNotBusy => !IsBusy;
     public bool IsAdmin => SessionContext.Current.IsAdmin;
     public bool IsPharmacist => SessionContext.Current.IsPharmacist || IsAdmin;
-    public bool CanUseWarehouse => IsPharmacist;
+    public bool IsWarehouseKeeper => SessionContext.Current.IsWarehouseKeeper || IsAdmin;
+    public bool CanUseWarehouse => IsPharmacist || IsWarehouseKeeper;
     public bool CanEditDrugs => IsAdmin;
     public bool ShowDrugReadOnly => !IsAdmin;
     public bool DispenseLinesEmpty => DispenseLines.Count == 0;
@@ -163,12 +164,14 @@ public sealed class PharmacyWorkstationViewModel : ClientModelBase
     private void Session_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(SessionContext.IsAdmin)
-            && e.PropertyName != nameof(SessionContext.IsPharmacist))
+            && e.PropertyName != nameof(SessionContext.IsPharmacist)
+            && e.PropertyName != nameof(SessionContext.IsWarehouseKeeper))
         {
             return;
         }
         OnPropertyChanged(nameof(IsAdmin));
         OnPropertyChanged(nameof(IsPharmacist));
+        OnPropertyChanged(nameof(IsWarehouseKeeper));
         OnPropertyChanged(nameof(CanUseWarehouse));
         OnPropertyChanged(nameof(CanEditDrugs));
         OnPropertyChanged(nameof(ShowDrugReadOnly));
@@ -650,7 +653,7 @@ public sealed class PharmacyWorkstationViewModel : ClientModelBase
 
     public async Task StockInAsync()
     {
-        if (!IsPharmacist)
+        if (!CanUseWarehouse)
         {
             SetValidationError("当前身份没有药品入库权限，请使用药库或药房药师账号操作。");
             return;
@@ -714,6 +717,11 @@ public sealed class PharmacyWorkstationViewModel : ClientModelBase
 
     public async Task WarehouseIssueAsync()
     {
+        if (!CanUseWarehouse)
+        {
+            SetValidationError("当前身份没有库房发药权限，请使用药库或药房账号操作。");
+            return;
+        }
         if (SelectedWarehouse == null || TargetPharmacy == null || IssueDrug == null)
         {
             SetValidationError("请选择药库、目标药房和发出药品。");
@@ -756,6 +764,11 @@ public sealed class PharmacyWorkstationViewModel : ClientModelBase
 
     public async Task TransferAsync()
     {
+        if (!CanUseWarehouse)
+        {
+            SetValidationError("当前身份没有调拨权限，请使用药库或药房账号操作。");
+            return;
+        }
         if (SelectedWarehouse == null || TargetPharmacy == null || IssueDrug == null)
         {
             SetValidationError("请选择调出库房、调入库房和药品。");
@@ -910,32 +923,30 @@ public sealed class PharmacyWorkstationViewModel : ClientModelBase
             return;
         }
         var encounterGroups = selected.GroupBy(x => x.EncounterId).ToList();
-        if (encounterGroups.Count != 1)
-        {
-            SetValidationError("一次只能办理一位住院患者的医嘱发药。");
-            return;
-        }
-        var encounterId = encounterGroups[0].Key;
         var pharmacyId = SelectedPharmacy.Id;
-        var lines = selected.Select(x => new { medicalOrderId = x.MedicalOrderId, quantity = x.Quantity }).ToList();
         await ExecuteMutationAsync(
-            "住院发药",
+            "住院汇总发药",
             async () =>
             {
-                using var response = await PostAsync(
-                    "/api/v4/pharmacy/ward-dispense",
-                    new
-                    {
-                        pharmacyId,
-                        encounterId,
-                        lines,
-                        requestKey = Guid.NewGuid().ToString("N")
-                    });
-                await EnsureSuccessfulAsync(response);
+                foreach (var group in encounterGroups)
+                {
+                    var encounterId = group.Key;
+                    var lines = group.Select(x => new { medicalOrderId = x.MedicalOrderId, quantity = x.Quantity }).ToList();
+                    using var response = await PostAsync(
+                        "/api/v4/pharmacy/ward-dispense",
+                        new
+                        {
+                            pharmacyId,
+                            encounterId,
+                            lines,
+                            requestKey = Guid.NewGuid().ToString("N")
+                        });
+                    await EnsureSuccessfulAsync(response);
+                }
                 await LoadWardAsync();
                 await LoadDispenseOrdersAsync();
             },
-            $"住院发药完成：共 {selected.Count} 条医嘱，已关闭对应发药单。");
+            $"住院汇总发药完成：共 {encounterGroups.Count} 位患者 {selected.Count} 条医嘱。");
     }
 
     public async Task FilterWardAsync()
@@ -1848,6 +1859,7 @@ public sealed class WardOrderRow : ClientModelBase
         FrequencyText = string.Equals(dto.FrequencyCode, "qd", StringComparison.OrdinalIgnoreCase) ? "每日一次" : dto.FrequencyCode;
         RouteText = string.Equals(dto.RouteCode, "PO", StringComparison.OrdinalIgnoreCase) ? "口服" : dto.RouteCode;
         StartTime = PharmacyRowModel.FormatTime(dto.PlanStartAtMs);
+        _quantity = Math.Max(1, PrescriptionItemModel.ParseDailyFrequencyCount(dto.FrequencyCode));
     }
 
     public string MedicalOrderId { get; }

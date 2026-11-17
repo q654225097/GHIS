@@ -10,6 +10,7 @@ using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
 using HIS.Modules.Finance.Models;
+using HIS.Modules.Finance.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HIS.Modules.Finance.Controllers;
@@ -22,6 +23,10 @@ public class FinanceController : ControllerBase
 
 	public sealed record ExecuteRefundRequestDto(string PaymentOrderId, decimal RefundAmount, string Reason, string? PharmacistReturnConfirmDocId = null, string? RequestKey = null);
 
+	public sealed record RecordInpatientFeeItemRequestDto(string EncounterId, string PatientId, int FeeDateInt, string ItemCategory, string ItemCode, string ItemName, string? Spec, string UnitName, decimal UnitPrice, decimal Quantity, decimal SelfPayRatio, string ReimburseType, string ChargeDeptId, string ExecDeptId, string? OrderId = null);
+
+	public sealed record DailyStatementItemDto(int FeeDateInt, int ItemCount, decimal TotalAmount, decimal SelfPayAmount, IReadOnlyList<FinInpatientFeeItem> Items);
+
 	private readonly IRepository<FinPaymentOrder> _paymentRepo;
 
 	private readonly IRepository<FinRefundOrder> _refundRepo;
@@ -29,6 +34,10 @@ public class FinanceController : ControllerBase
 	private readonly IRepository<FinChargeLedger> _chargeRepo;
 
 	private readonly IRepository<FinDailyClosing> _closingRepo;
+
+	private readonly IRepository<FinInpatientFeeItem> _inpatientFeeRepo;
+
+	private readonly IMedicalInsuranceAdapter? _insuranceAdapter;
 
 	private readonly IDbConnectionFactory _connFactory;
 
@@ -40,7 +49,18 @@ public class FinanceController : ControllerBase
 
 	private readonly IIdempotencyContract? _idempotency;
 
-	public FinanceController(IRepository<FinPaymentOrder> paymentRepo, IRepository<FinRefundOrder> refundRepo, IRepository<FinChargeLedger> chargeRepo, IRepository<FinDailyClosing> closingRepo, IDbConnectionFactory connFactory, IAuditTrailContract? auditTrail = null, IOutboxContract? outbox = null, IUserSession? userSession = null, IIdempotencyContract? idempotency = null)
+	public FinanceController(
+		IRepository<FinPaymentOrder> paymentRepo,
+		IRepository<FinRefundOrder> refundRepo,
+		IRepository<FinChargeLedger> chargeRepo,
+		IRepository<FinDailyClosing> closingRepo,
+		IDbConnectionFactory connFactory,
+		IAuditTrailContract? auditTrail = null,
+		IOutboxContract? outbox = null,
+		IUserSession? userSession = null,
+		IIdempotencyContract? idempotency = null,
+		IRepository<FinInpatientFeeItem>? inpatientFeeRepo = null,
+		IMedicalInsuranceAdapter? insuranceAdapter = null)
 	{
 		_paymentRepo = paymentRepo;
 		_refundRepo = refundRepo;
@@ -51,6 +71,8 @@ public class FinanceController : ControllerBase
 		_outbox = outbox;
 		_userSession = userSession;
 		_idempotency = idempotency;
+		_inpatientFeeRepo = inpatientFeeRepo ?? new DapperRepository<FinInpatientFeeItem>(connFactory, "fin_inpatient_fee_items");
+		_insuranceAdapter = insuranceAdapter;
 	}
 
 	private bool CanCollectPayment()
@@ -189,8 +211,7 @@ public class FinanceController : ControllerBase
 				PrepaymentId = req.PrepaymentDeduct > 0m ? req.PrepaymentId : null,
 				Status = 1,
 				PaidAtMs = SystemTime.UtcNowMs,
-				InvoiceOfdId = "INV-OFD-" + Guid.NewGuid().ToString("N").Substring(0, 8)
-					.ToUpper(),
+				InvoiceOfdId = FinanceSettlementContract.GenerateFiscalInvoiceNo("BILL"),
 				CreatedBy = cashierId,
 				UpdatedBy = cashierId
 			};
@@ -290,10 +311,17 @@ public class FinanceController : ControllerBase
 			}
 			return payment;
 		});
+		string insTraceText = "";
+		if (pay.InsuranceAmount > 0m && _insuranceAdapter != null)
+		{
+			string insTrace = await _insuranceAdapter.SettleAsync(req.PatientId, pay.TotalAmount, CancellationToken.None);
+			insTraceText = $"（医保统筹结算流水: {insTrace}）";
+		}
+
 		if (_auditTrail != null)
 		{
 			string rxNotifyText = ((notifiedPrescriptionNos.Count > 0) ? ("，已推送药房可发药通知 [" + string.Join(",", notifiedPrescriptionNos) + "]") : "");
-			await _auditTrail.RecordAuditAsync("FIN_SETTLE", "FinPaymentOrder", pay.Id, $"结算单 [{pay.PaymentNo}] 完成混合收款 ¥{pay.TotalAmount:0.00}，电子票据号：{pay.InvoiceOfdId}{rxNotifyText}", cashierId);
+			await _auditTrail.RecordAuditAsync("FIN_SETTLE", "FinPaymentOrder", pay.Id, $"结算单 [{pay.PaymentNo}] 完成混合收款 ¥{pay.TotalAmount:0.00}{insTraceText}，电子票据号：{pay.InvoiceOfdId}{rxNotifyText}", cashierId);
 		}
 		if (!string.IsNullOrWhiteSpace(req.RequestKey) && _idempotency != null)
 		{
@@ -451,7 +479,7 @@ public class FinanceController : ControllerBase
 				ApprovedBy = cashierId,
 				RefundedAtMs = now,
 				Status = 1,
-				ReissuedInvoiceOfdId = "RE-INV-OFD-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+				ReissuedInvoiceOfdId = FinanceSettlementContract.GenerateFiscalInvoiceNo("RED-BILL"),
 				CreatedBy = cashierId,
 				UpdatedBy = cashierId
 			};
@@ -565,5 +593,74 @@ ORDER BY closing_date_int DESC, created_at_ms DESC", new
 			await _auditTrail.RecordAuditAsync("FIN_DAILY_CLOSING", "FinDailyClosing", closing.Id, $"收费员 [{cashierId}] 日结完成：总收入 ¥{closing.TotalIncome:0.00}，总退费 ¥{closing.TotalRefund:0.00}，实缴净额 ¥{closing.NetAmount:0.00}", cashierId);
 		}
 		return ApiResponse<FinDailyClosing>.Success(closing, "收费员交接班日结单生成成功，已按实收与退费台账锁定当日流水");
+	}
+
+	[HttpPost("inpatient-fee-items")]
+	public async Task<ApiResponse<FinInpatientFeeItem>> RecordInpatientFeeItem([FromBody] RecordInpatientFeeItemRequestDto req)
+	{
+		if (string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.PatientId))
+			return ApiResponse<FinInpatientFeeItem>.Fail(400, "就诊 ID 与患者 ID 不能为空");
+
+		string userId = _userSession?.UserId ?? "USER-NURSE";
+		decimal total = req.Quantity * req.UnitPrice;
+
+		var item = new FinInpatientFeeItem
+		{
+			EncounterId = req.EncounterId.Trim(),
+			PatientId = req.PatientId.Trim(),
+			FeeDateInt = req.FeeDateInt > 0 ? req.FeeDateInt : SystemTime.TodayInt,
+			ItemCategory = req.ItemCategory ?? "MEDICINE",
+			ItemCode = req.ItemCode,
+			ItemName = req.ItemName,
+			Spec = req.Spec,
+			UnitName = req.UnitName ?? "项",
+			UnitPrice = req.UnitPrice,
+			Quantity = req.Quantity,
+			TotalAmount = total,
+			SelfPayRatio = req.SelfPayRatio,
+			ReimburseType = req.ReimburseType ?? "CLASS_A",
+			ChargeDeptId = req.ChargeDeptId,
+			ExecDeptId = req.ExecDeptId,
+			OrderId = req.OrderId,
+			IsSettled = 0,
+			CreatedBy = userId,
+			UpdatedBy = userId
+		};
+		await _inpatientFeeRepo.InsertAsync(item);
+
+		return ApiResponse<FinInpatientFeeItem>.Success(item, "住院费用明细已记录");
+	}
+
+	[HttpGet("inpatient-fee-items/{encounterId}")]
+	public async Task<ApiResponse<IReadOnlyList<FinInpatientFeeItem>>> GetInpatientFeeItems(string encounterId, [FromQuery] int? feeDateInt = null)
+	{
+		string sql = @"
+SELECT * FROM fin_inpatient_fee_items
+WHERE encounter_id = @EncounterId
+  AND (@FeeDateInt IS NULL OR fee_date_int = @FeeDateInt)
+ORDER BY fee_date_int DESC, created_at_ms DESC";
+
+		var list = await _inpatientFeeRepo.QueryAsync(sql, new { EncounterId = encounterId.Trim(), FeeDateInt = feeDateInt });
+		return ApiResponse<IReadOnlyList<FinInpatientFeeItem>>.Success(list);
+	}
+
+	[HttpGet("inpatient-fee-items/{encounterId}/daily-statement")]
+	public async Task<ApiResponse<IReadOnlyList<DailyStatementItemDto>>> GetDailyStatement(string encounterId)
+	{
+		var list = await _inpatientFeeRepo.QueryAsync(
+			"SELECT * FROM fin_inpatient_fee_items WHERE encounter_id = @EncounterId ORDER BY fee_date_int DESC, created_at_ms DESC",
+			new { EncounterId = encounterId.Trim() });
+
+		var groups = list.GroupBy(x => x.FeeDateInt)
+			.Select(g => new DailyStatementItemDto(
+				FeeDateInt: g.Key,
+				ItemCount: g.Count(),
+				TotalAmount: g.Sum(x => x.TotalAmount),
+				SelfPayAmount: g.Sum(x => x.TotalAmount * x.SelfPayRatio),
+				Items: g.ToList()
+			))
+			.ToList();
+
+		return ApiResponse<IReadOnlyList<DailyStatementItemDto>>.Success(groups);
 	}
 }

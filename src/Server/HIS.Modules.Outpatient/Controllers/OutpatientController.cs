@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using Dapper;
 using HIS.BuildingBlocks.Common;
@@ -25,6 +26,7 @@ public class OutpatientController : ControllerBase
     private readonly IRepository<OpdPrescription> _rxRepo;
     private readonly IRepository<OpdPrescriptionItem> _rxItemRepo;
     private readonly IRepository<OpdScheduleTemplate> _templateRepo;
+    private readonly IRepository<OpdInfectiousReportCard> _infectiousRepo;
     private readonly IDbConnectionFactory _connFactory;
     private readonly IPatientReadOnlyContract? _patientContract;
     private readonly IDepartmentReadOnlyContract? _departmentContract;
@@ -47,7 +49,8 @@ public class OutpatientController : ControllerBase
         IAuditTrailContract? auditTrail = null,
         IUserSession? userSession = null,
         IRepository<OpdScheduleTemplate>? templateRepo = null,
-        IPharmacyInventoryContract? inventoryContract = null)
+        IPharmacyInventoryContract? inventoryContract = null,
+        IRepository<OpdInfectiousReportCard>? infectiousRepo = null)
     {
         _slotRepo = slotRepo;
         _appointRepo = appointRepo;
@@ -63,6 +66,7 @@ public class OutpatientController : ControllerBase
         _userSession = userSession;
         _inventoryContract = inventoryContract;
         _templateRepo = templateRepo ?? new DapperRepository<OpdScheduleTemplate>(_connFactory, "opd_schedule_templates");
+        _infectiousRepo = infectiousRepo ?? new DapperRepository<OpdInfectiousReportCard>(_connFactory, "opd_infectious_report_cards");
     }
 
     public sealed record SaveScheduleTemplateRequestDto(
@@ -87,7 +91,9 @@ public class OutpatientController : ControllerBase
 
     public sealed record UpdateScheduleSlotRequestDto(
         bool IsStopped,
-        int? TotalCapacity = null);
+        int? TotalCapacity = null,
+        string? SubstituteDoctorId = null,
+        int? AddCapacity = null);
 
     public sealed record ScheduleGenerationResultDto(
         int CreatedCount,
@@ -308,28 +314,72 @@ public class OutpatientController : ControllerBase
         string id,
         [FromBody] UpdateScheduleSlotRequestDto req)
     {
-        if (!CanAdministerSchedule())
-            return ApiResponse<OpdScheduleSlot>.Fail(403, "仅系统管理员可以调整或停诊号源");
-
         var slot = await _slotRepo.GetByIdAsync(id);
         if (slot == null)
             return ApiResponse<OpdScheduleSlot>.Fail(404, "号源不存在");
-        if (req.IsStopped && slot.ReservedCount > 0)
-            return ApiResponse<OpdScheduleSlot>.Fail(409, $"该号源已有 {slot.ReservedCount} 个预约，不能直接停诊");
 
-        var capacity = req.TotalCapacity ?? slot.TotalCapacity;
-        if (capacity < 1)
-            return ApiResponse<OpdScheduleSlot>.Fail(400, "号源容量必须大于0");
-        if (capacity < slot.ReservedCount)
-            return ApiResponse<OpdScheduleSlot>.Fail(409, $"号源容量不能低于已预约数量 {slot.ReservedCount}");
+        bool isDoctorOfSlot = _userSession != null && _userSession.UserId == slot.DoctorId;
+        if (!CanAdministerSchedule() && !isDoctorOfSlot)
+            return ApiResponse<OpdScheduleSlot>.Fail(403, "仅系统管理员或出诊医生可以调整或停诊号源");
 
-        slot.TotalCapacity = capacity;
-        slot.SlotStatus = req.IsStopped ? 3 : (slot.ReservedCount >= capacity ? 2 : 1);
+        if (req.IsStopped)
+        {
+            if (slot.ReservedCount > 0)
+            {
+                if (string.IsNullOrWhiteSpace(req.SubstituteDoctorId))
+                {
+                    return ApiResponse<OpdScheduleSlot>.Fail(409, $"该号源已有 {slot.ReservedCount} 个预约，停诊必须指定替诊医生 (substitute_doctor_id)");
+                }
+                slot.SubstituteDoctorId = req.SubstituteDoctorId;
+                using var conn = _connFactory.CreateConnection();
+                await conn.ExecuteAsync(
+                    "UPDATE opd_appointments SET ext_data_json = json_set(COALESCE(ext_data_json, '{}'), '$.substitute_doctor_id', @SubDoctorId) WHERE schedule_id = @SlotId",
+                    new { SubDoctorId = req.SubstituteDoctorId, SlotId = slot.Id });
+                await conn.ExecuteAsync(
+                    "UPDATE opd_visits SET doctor_id = @SubDoctorId WHERE schedule_id = @SlotId",
+                    new { SubDoctorId = req.SubstituteDoctorId, SlotId = slot.Id });
+            }
+            slot.SlotStatus = 3;
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(req.SubstituteDoctorId))
+            {
+                slot.SubstituteDoctorId = req.SubstituteDoctorId;
+            }
+            var capacity = req.AddCapacity.HasValue && req.AddCapacity.Value > 0
+                ? slot.TotalCapacity + req.AddCapacity.Value
+                : (req.TotalCapacity ?? slot.TotalCapacity);
+            if (capacity < 1)
+                return ApiResponse<OpdScheduleSlot>.Fail(400, "号源容量必须大于0");
+            if (capacity < slot.ReservedCount)
+                return ApiResponse<OpdScheduleSlot>.Fail(409, $"号源容量不能低于已预约数量 {slot.ReservedCount}");
+
+            slot.TotalCapacity = capacity;
+            slot.SlotStatus = slot.ReservedCount >= capacity ? 2 : 1;
+        }
+
         slot.UpdatedBy = CurrentOperatorId;
         await _slotRepo.UpdateAsync(slot);
         await RecordScheduleAuditAsync("OPD_SCHEDULE_SLOT_UPDATE", slot.Id,
-            $"{(req.IsStopped ? "停诊" : "恢复")}号源：{slot.ScheduleDateInt} {slot.SlotPeriodCode}，容量 {slot.TotalCapacity}");
-        return ApiResponse<OpdScheduleSlot>.Success(slot, req.IsStopped ? "号源已停诊" : "号源状态已更新");
+            $"{(req.IsStopped ? "停诊" : "恢复")}号源：{slot.ScheduleDateInt} {slot.SlotPeriodCode}，容量 {slot.TotalCapacity}，替诊：{slot.SubstituteDoctorId ?? "无"}");
+        return ApiResponse<OpdScheduleSlot>.Success(slot, req.IsStopped ? "号源已停诊并转移预约至替诊医生" : "号源状态已更新");
+    }
+
+    [HttpPost("schedules/{id}/add-capacity")]
+    public async Task<ApiResponse<OpdScheduleSlot>> AddScheduleSlotCapacity(
+        string id,
+        [FromQuery] int addCount = 1)
+    {
+        return await UpdateScheduleSlot(id, new UpdateScheduleSlotRequestDto(false, null, null, addCount));
+    }
+
+    [HttpPost("schedules/{id}/substitute")]
+    public async Task<ApiResponse<OpdScheduleSlot>> SubstituteScheduleDoctor(
+        string id,
+        [FromQuery] string substituteDoctorId)
+    {
+        return await UpdateScheduleSlot(id, new UpdateScheduleSlotRequestDto(true, null, substituteDoctorId, null));
     }
 
     private bool CanAdministerSchedule()
@@ -489,6 +539,8 @@ public class OutpatientController : ControllerBase
     private async Task<string?> ValidatePrescriptionSafetyAsync(
         string patientId,
         IEnumerable<DrugCatalogSnapshotDto> drugs,
+        IEnumerable<OpdPrescriptionItem>? items = null,
+        string? agentIdCard = null,
         CancellationToken ct = default)
     {
         if (_patientContract == null)
@@ -498,11 +550,52 @@ public class OutpatientController : ControllerBase
         if (patient == null || !patient.IsActive)
             return "患者不存在或已停用，禁止开具处方";
 
+        int doctorPrescribeLevel = _userSession?.PrescribeLevel ?? 0;
+        var itemList = items?.ToList() ?? new List<OpdPrescriptionItem>();
+
         foreach (var drug in drugs)
         {
             var conflict = FindAllergyConflict(patient.AllergyTags, drug);
             if (conflict != null)
                 return $"患者存在 [{conflict}]，禁止开立 [{drug.DrugName}]";
+
+            var matchingItem = itemList.FirstOrDefault(x => x.DrugId == drug.DrugId);
+            if (matchingItem != null && matchingItem.SkinTestFlag == 4)
+            {
+                return $"药品 [{drug.DrugName}] 皮试结果为阳性，强阻断禁止开立";
+            }
+
+            if (drug.AntibioticLevel == 1 && doctorPrescribeLevel < 2 && !IsAdmin())
+            {
+                return $"当前医师处方权限等级为 {doctorPrescribeLevel}，不足以开具限制使用级抗菌药物 [{drug.DrugName}]（需主治医师及以上）";
+            }
+            if (drug.AntibioticLevel == 2)
+            {
+                if (doctorPrescribeLevel < 3 && !IsAdmin())
+                {
+                    return $"当前医师处方权限等级为 {doctorPrescribeLevel}，不足以开具特殊使用级抗菌药物 [{drug.DrugName}]（需副主任/主任医师）";
+                }
+                using var conn = _connFactory.CreateConnection();
+                int microCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                    "SELECT COUNT(1) FROM ord_medical_orders WHERE patient_id = @PatientId AND (order_category = 'MICROBIOLOGY' OR order_category = 'LAB' OR item_name LIKE '%微生物%' OR item_name LIKE '%细菌培养%')",
+                    new { PatientId = patientId }, cancellationToken: ct));
+                if (microCount == 0)
+                {
+                    return $"开具特殊使用级抗菌药物 [{drug.DrugName}] 必须预先或同时开具微生物培养与药敏送检医嘱";
+                }
+            }
+
+            if (drug.IsNarcotic)
+            {
+                if (string.IsNullOrWhiteSpace(agentIdCard) || !IdCardValidator.IsValid(agentIdCard))
+                {
+                    return $"开具麻精类药品 [{drug.DrugName}] 必须录入合法的代办人 18 位身份证号码";
+                }
+                if (matchingItem != null && matchingItem.Days > 7)
+                {
+                    return $"麻精类药品 [{drug.DrugName}] 单张处方最大用药天数不得超过 7 天（当前：{matchingItem.Days} 天）";
+                }
+            }
         }
         return null;
     }
@@ -1239,7 +1332,10 @@ public class OutpatientController : ControllerBase
         string OpdDeptId,
         string DoctorId,
         string TargetPharmacyId,
-        List<OpdPrescriptionItem> Items
+        List<OpdPrescriptionItem> Items,
+        int HerbDoses = 1,
+        string? AgentIdCard = null,
+        string RxType = "WESTERN"
     );
 
     [HttpPost("prescriptions")]
@@ -1261,14 +1357,16 @@ public class OutpatientController : ControllerBase
             !string.Equals(visit.OpdDeptId, _userSession.ActiveDeptId, StringComparison.OrdinalIgnoreCase))
             return ApiResponse<OpdPrescription>.Fail(403, "只能为本人接诊或本科室患者的就诊开立处方");
 
-        var targetPharmacyId = "DEPT-PHM-01";
-        if (_departmentContract != null)
+        var targetPharmacyId = !string.IsNullOrWhiteSpace(req.TargetPharmacyId) ? req.TargetPharmacyId.Trim() : string.Empty;
+        if (string.IsNullOrWhiteSpace(targetPharmacyId) && _departmentContract != null)
         {
             var department = await _departmentContract.GetDeptSummaryAsync(visit.OpdDeptId);
             if (!string.IsNullOrWhiteSpace(department?.DefaultPharmacyId))
                 targetPharmacyId = department.DefaultPharmacyId;
-            else if (!string.IsNullOrWhiteSpace(req.TargetPharmacyId))
-                targetPharmacyId = req.TargetPharmacyId.Trim();
+        }
+        if (string.IsNullOrWhiteSpace(targetPharmacyId))
+        {
+            targetPharmacyId = "DEPT-PHM-01";
         }
 
         var activeInput = req.Items.Where(x => x.IsDeleted == 0).ToList();
@@ -1286,7 +1384,7 @@ public class OutpatientController : ControllerBase
             resolved.Add((item, drug));
         }
         var safetyError = await ValidatePrescriptionSafetyAsync(
-            req.PatientId, resolved.Select(x => x.Drug));
+            req.PatientId, resolved.Select(x => x.Drug), resolved.Select(x => x.Item), req.AgentIdCard);
         if (safetyError != null)
             return ApiResponse<OpdPrescription>.Fail(400, safetyError);
 
@@ -1297,6 +1395,7 @@ public class OutpatientController : ControllerBase
         if (existingNo != null)
             return ApiResponse<OpdPrescription>.Fail(409, "该就诊已有草稿或已驳回处方，请修订原处方后重新提交", existingNo);
 
+        int herbDoses = Math.Max(1, req.HerbDoses);
         var rx = await _connFactory.ExecuteInTransactionAsync(async ct =>
         {
             var prescription = new OpdPrescription
@@ -1307,7 +1406,9 @@ public class OutpatientController : ControllerBase
                 OpdDeptId = visit.OpdDeptId,
                 DoctorId = doctorId,
                 TargetPharmacyId = targetPharmacyId,
-                TotalAmount = resolved.Sum(x => x.Drug.UnitPrice * x.Item.TotalQuantity),
+                RxType = req.RxType ?? "WESTERN",
+                HerbDoses = herbDoses,
+                TotalAmount = resolved.Sum(x => x.Drug.UnitPrice * x.Item.TotalQuantity) * herbDoses,
                 Status = 0,
                 CreatedBy = doctorId,
                 UpdatedBy = doctorId
@@ -1326,6 +1427,37 @@ public class OutpatientController : ControllerBase
                 item.CreatedBy = doctorId;
                 item.UpdatedBy = doctorId;
                 await _rxItemRepo.InsertAsync(item, ct);
+
+                if (drug.IsSkinTestRequired)
+                {
+                    using DbConnection conn = _connFactory.CreateConnection();
+                    string orderId = Guid.NewGuid().ToString("D");
+                    string orderNo = $"ORD-SKIN-{Guid.NewGuid():N}"[..24].ToUpperInvariant();
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+INSERT INTO ord_medical_orders
+    (id, order_no, encounter_id, patient_id, order_ipd_dept_id, patient_ward_id, exec_target_dept_id,
+     order_term_type, group_no, order_category, item_code, item_name,
+     dosage, dose_unit, frequency_code, route_code,
+     status, order_doctor_id, order_at_ms, total_quantity, unit_price,
+     skin_test_flag, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    (@Id, @OrderNo, @VisitId, @PatientId, 'DEPT-OPD-01', 'WARD-OPD', 'DEPT-NURSE-OPD',
+     2, 1, 'TREATMENT', @DrugId, @Title,
+     1, '次', 'ST', 'ID',
+     0, @DoctorId, @Now, 1, 5.0,
+     1, @Now, @DoctorId, @Now, @DoctorId, 1)",
+                        new
+                        {
+                            Id = orderId,
+                            OrderNo = orderNo,
+                            PatientId = req.PatientId,
+                            VisitId = req.VisitId,
+                            Title = $"[皮试医嘱] {drug.DrugName} 皮试试验",
+                            DrugId = drug.DrugId,
+                            Now = now,
+                            DoctorId = doctorId
+                        }, _connFactory.CurrentTransaction, cancellationToken: ct));
+                }
             }
 
             foreach (var deletedItem in req.Items.Where(x => x.IsDeleted != 0))
@@ -1905,5 +2037,87 @@ public class OutpatientController : ControllerBase
                 $"皮试阴性(-)双签：药品 [{item.DrugNameSnapshot}] 批号 [{req.BatchNo}]，核对护士 [{execNurseId}/{dualCheckNurseId}]",
                 execNurseId);
         return ApiResponse<OpdPrescriptionItem>.Success(savedItem, "皮试阴性(-)双签核对完成，允许执行输液与发药");
+    }
+
+    public sealed record CreateInfectiousReportCardRequestDto(
+        string VisitId,
+        string PatientId,
+        string IcdCode,
+        string DiseaseName,
+        string DiseaseCategory,
+        string DiagnoseType,
+        int OnsetDateInt,
+        int DiagnosedDateInt);
+
+    [HttpPost("infectious-report-cards")]
+    public async Task<ApiResponse<OpdInfectiousReportCard>> CreateInfectiousReportCard([FromBody] CreateInfectiousReportCardRequestDto req)
+    {
+        if (string.IsNullOrWhiteSpace(req.VisitId) || string.IsNullOrWhiteSpace(req.IcdCode))
+            return ApiResponse<OpdInfectiousReportCard>.Fail(400, "就诊 ID 与 ICD 疾病编码不能为空");
+
+        string docId = _userSession?.UserId ?? "USER-DOC-OPD";
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var card = new OpdInfectiousReportCard
+        {
+            ReportNo = "INF-" + DateTime.Now.ToString("yyMMddHHmmss") + "-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+            VisitId = req.VisitId.Trim(),
+            PatientId = req.PatientId.Trim(),
+            IcdCode = req.IcdCode.Trim(),
+            DiseaseName = req.DiseaseName,
+            DiseaseCategory = string.IsNullOrWhiteSpace(req.DiseaseCategory) ? "CLASS_B" : req.DiseaseCategory.Trim(),
+            DiagnoseType = string.IsNullOrWhiteSpace(req.DiagnoseType) ? "CONFIRMED" : req.DiagnoseType.Trim(),
+            OnsetDateInt = req.OnsetDateInt > 0 ? req.OnsetDateInt : SystemTime.TodayInt,
+            DiagnosedDateInt = req.DiagnosedDateInt > 0 ? req.DiagnosedDateInt : SystemTime.TodayInt,
+            ReportDoctorId = docId,
+            ReportedAtMs = nowMs,
+            CdcSyncStatus = "PENDING",
+            Status = "REPORTED",
+            CreatedBy = docId,
+            UpdatedBy = docId
+        };
+        await _infectiousRepo.InsertAsync(card);
+
+        if (_auditTrail != null)
+        {
+            await _auditTrail.RecordAuditAsync("OPD_INFECTIOUS_REPORT", "opd_infectious_report_cards", card.Id, $"录入传染病上报卡 [{card.ReportNo} · {card.DiseaseName}]", docId, _userSession?.DisplayName);
+        }
+
+        return ApiResponse<OpdInfectiousReportCard>.Success(card, "传染病上报卡已生成并等待疾控 CDC 交换网同步");
+    }
+
+    [HttpGet("infectious-report-cards")]
+    public async Task<ApiResponse<IReadOnlyList<OpdInfectiousReportCard>>> GetInfectiousReportCards([FromQuery] string? visitId = null, [FromQuery] string? cdcStatus = null)
+    {
+        string sql = @"
+SELECT * FROM opd_infectious_report_cards
+WHERE (@VisitId IS NULL OR visit_id = @VisitId)
+  AND (@CdcStatus IS NULL OR cdc_sync_status = @CdcStatus)
+ORDER BY reported_at_ms DESC LIMIT 100";
+        var list = await _infectiousRepo.QueryAsync(sql, new { VisitId = visitId, CdcStatus = cdcStatus });
+        return ApiResponse<IReadOnlyList<OpdInfectiousReportCard>>.Success(list);
+    }
+
+    [HttpPost("infectious-report-cards/{id}/sync-cdc")]
+    public async Task<ApiResponse<OpdInfectiousReportCard>> SyncCdc(string id)
+    {
+        var card = await _infectiousRepo.GetByIdAsync(id)
+            ?? await _infectiousRepo.QuerySingleOrDefaultAsync("SELECT * FROM opd_infectious_report_cards WHERE report_no = @No", new { No = id });
+        if (card == null)
+            return ApiResponse<OpdInfectiousReportCard>.Fail(404, "未找到传染病上报卡");
+
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        card.CdcSyncStatus = "SYNCED";
+        card.CdcSyncAtMs = nowMs;
+        card.UpdatedAtMs = nowMs;
+        card.UpdatedBy = _userSession?.UserId ?? "USER-DOC-OPD";
+        await _infectiousRepo.UpdateAsync(card);
+
+        if (_auditTrail != null)
+        {
+            await _auditTrail.RecordAuditAsync("OPD_INFECTIOUS_CDC_SYNC", "opd_infectious_report_cards", card.Id, $"传染病上报卡 [{card.ReportNo}] 已直报国家疾控 CDC 信息系统", _userSession?.UserId, _userSession?.DisplayName);
+        }
+
+        return ApiResponse<OpdInfectiousReportCard>.Success(card, "传染病信息已成功直报国家疾控 CDC 网络");
     }
 }

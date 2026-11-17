@@ -18,6 +18,10 @@ public class VitalSignModel : ClientModelBase
 
 	public string NurseName { get; set; } = string.Empty;
 
+	public double TemperatureValue => double.TryParse(Temperature, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : 0;
+
+	public double PulseValue => double.TryParse(Pulse, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var p) ? p : 0;
+
 	public bool IsAbnormal { get; set; }
 
 	public string StatusText => IsAbnormal ? "异常" : "正常";

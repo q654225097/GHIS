@@ -143,6 +143,13 @@ ORDER BY CASE c.status WHEN 'PENDING' THEN 0 ELSE 1 END, c.created_at_ms DESC";
                 return ApiResponse<IpdAdmissionCardView>.Fail(409,
                     $"该患者已有待登记住院卡 {pending.CardNo}，请勿重复开立");
             }
+            var activeEncounter = await conn.ExecuteScalarAsync<long>(
+                "SELECT COUNT(1) FROM ipd_encounters WHERE patient_id = @PatientId AND status IN (1, 4)",
+                new { PatientId = req.PatientId });
+            if (activeEncounter > 0)
+            {
+                return ApiResponse<IpdAdmissionCardView>.Fail(400, "该患者已有在院记录，禁止重复办理入院登记");
+            }
             var patient = await conn.QuerySingleOrDefaultAsync<IdNameRow>(
                 "SELECT id, full_name FROM pat_patients WHERE id = @Id", new { Id = req.PatientId });
             if (patient == null)
@@ -221,7 +228,7 @@ ORDER BY CASE c.status WHEN 'PENDING' THEN 0 ELSE 1 END, c.created_at_ms DESC";
     {
         using var conn = _connFactory.CreateConnection();
         const string sql = @"
-SELECT d.id, d.dept_code, d.dept_name, w.id AS ward_id, w.dept_code AS ward_code, w.dept_name AS ward_name
+SELECT d.id, d.dept_code, d.dept_name, w.id AS ward_id, w.dept_code AS ward_code, w.dept_name AS ward_name, r.relation_type
 FROM sys_departments d
 LEFT JOIN sys_dept_ward_relations r ON r.ipd_dept_id = d.id AND r.is_active = 1
 LEFT JOIN sys_departments w ON w.id = r.ward_dept_id AND w.is_active = 1
@@ -241,7 +248,8 @@ ORDER BY d.dept_name, r.priority_order, w.dept_name";
                     {
                         Id = w.Key!,
                         DeptCode = w.First().WardCode ?? string.Empty,
-                        DeptName = w.First().WardName ?? string.Empty
+                        DeptName = w.First().WardName ?? string.Empty,
+                        RelationType = w.First().RelationType ?? "PRIMARY"
                     }).ToList()
             }).ToList();
         return ApiResponse<IpdRegistrationOptionsView>.Success(new IpdRegistrationOptionsView { Depts = depts });
@@ -374,6 +382,13 @@ ORDER BY e.triage_status, e.created_at_ms DESC";
                 if (freshCard == null || freshCard.Status != "PENDING")
                 {
                     throw new InvalidOperationException("住院卡状态已发生变化，请刷新重试");
+                }
+                var activeEncounterCount = await conn.ExecuteScalarAsync<long>(new CommandDefinition(
+                    "SELECT COUNT(1) FROM ipd_encounters WHERE patient_id = @PatientId AND status IN (1, 4)",
+                    new { PatientId = freshCard.PatientId }, cancellationToken: ct));
+                if (activeEncounterCount > 0)
+                {
+                    throw new InvalidOperationException("该患者已有在院记录，禁止重复办理入院登记");
                 }
                 var beds = await _bedRepo.QueryAsync(
                     "SELECT * FROM ipd_beds WHERE ward_id = @WardId AND bed_code = @BedCode",
@@ -807,5 +822,6 @@ WHERE c.id = @CardId";
         public string? WardId { get; set; }
         public string? WardCode { get; set; }
         public string? WardName { get; set; }
+        public string? RelationType { get; set; }
     }
 }

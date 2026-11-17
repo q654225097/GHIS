@@ -38,6 +38,18 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 
 	public sealed record CreateTransferOrIssueRequestDto(string SourceWarehouseId, string TargetWarehouseId, string DrugId, int Quantity, string TransferType = "INTER_WAREHOUSE", string? BatchId = null, string? ApplicantId = null, string? OperatorId = null, string? Remark = null, string? RequestKey = null);
 
+	public sealed record ScanInTraceCodeRequestDto(string WarehouseOrPharmacyId, string DrugId, string BatchId, string BatchNo, string NationalInsCode, IReadOnlyList<string> TraceCodes, string? StockInOrderId = null);
+
+	public sealed record ScanDispenseTraceCodeRequestDto(string DispenseOrderId, string DispenseOrderLineId, IReadOnlyList<string> TraceCodes);
+
+	public sealed record CreateStockTakeRequestDto(string WarehouseOrPharmacyId, string DeptName, string StockTakeType, string? Remark = null);
+
+	public sealed record AddStockTakeLineRequestDto(string DrugId, string BatchId, string DrugCode, string DrugName, string Spec, string UnitName, string BatchNo, int SystemQty, int ActualQty, decimal UnitCostPrice, string? Reason = null);
+
+	public sealed record ApproveStockTakeRequestDto(string? Remark = null);
+
+	public sealed record StockTakeDetailDto(InvStockTake Header, IReadOnlyList<InvStockTakeLine> Lines);
+
 	private readonly IRepository<InvDrug> _drugRepo;
 
 	private readonly IRepository<InvDrugBatch> _batchRepo;
@@ -48,6 +60,12 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 
 	private readonly IRepository<InvTransferOrder> _transferRepo;
 
+	private readonly IRepository<InvDrugTraceCode> _traceCodeRepo;
+
+	private readonly IRepository<InvStockTake> _stockTakeRepo;
+
+	private readonly IRepository<InvStockTakeLine> _stockTakeLineRepo;
+
 	private readonly IDbConnectionFactory _connFactory;
 
 	private readonly IAuditTrailContract? _auditTrail;
@@ -56,7 +74,19 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 
 	private readonly IIdempotencyContract? _idempotency;
 
-	public InventoryController(IRepository<InvDrug> drugRepo, IRepository<InvDrugBatch> batchRepo, IRepository<InvStockLedger> ledgerRepo, IDbConnectionFactory connFactory, IAuditTrailContract? auditTrail = null, IRepository<InvDrugPriceLog>? priceLogRepo = null, IRepository<InvTransferOrder>? transferRepo = null, IUserSession? userSession = null, IIdempotencyContract? idempotency = null)
+	public InventoryController(
+		IRepository<InvDrug> drugRepo,
+		IRepository<InvDrugBatch> batchRepo,
+		IRepository<InvStockLedger> ledgerRepo,
+		IDbConnectionFactory connFactory,
+		IAuditTrailContract? auditTrail = null,
+		IRepository<InvDrugPriceLog>? priceLogRepo = null,
+		IRepository<InvTransferOrder>? transferRepo = null,
+		IRepository<InvDrugTraceCode>? traceCodeRepo = null,
+		IRepository<InvStockTake>? stockTakeRepo = null,
+		IRepository<InvStockTakeLine>? stockTakeLineRepo = null,
+		IUserSession? userSession = null,
+		IIdempotencyContract? idempotency = null)
 	{
 		_drugRepo = drugRepo;
 		_batchRepo = batchRepo;
@@ -65,6 +95,9 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 		_auditTrail = auditTrail;
 		_priceLogRepo = priceLogRepo ?? new DapperRepository<InvDrugPriceLog>(connFactory, "inv_drug_price_logs");
 		_transferRepo = transferRepo ?? new DapperRepository<InvTransferOrder>(connFactory, "inv_transfer_orders");
+		_traceCodeRepo = traceCodeRepo ?? new DapperRepository<InvDrugTraceCode>(connFactory, "inv_drug_trace_codes");
+		_stockTakeRepo = stockTakeRepo ?? new DapperRepository<InvStockTake>(connFactory, "inv_stock_takes");
+		_stockTakeLineRepo = stockTakeLineRepo ?? new DapperRepository<InvStockTakeLine>(connFactory, "inv_stock_take_lines");
 		_userSession = userSession;
 		_idempotency = idempotency;
 	}
@@ -979,5 +1012,242 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 		using var conn = _connFactory.CreateConnection();
 		return await conn.ExecuteScalarAsync<int>("SELECT count(*) FROM sys_user_dept_posts WHERE user_id = @UserId AND dept_id = @DeptId AND dept_category = 'WAREHOUSE'",
 			new { UserId = _userSession.UserId, DeptId = warehouseId.Trim() }) > 0;
+	}
+
+	[HttpGet("trace-codes")]
+	public async Task<ApiResponse<IReadOnlyList<InvDrugTraceCode>>> GetTraceCodes(
+		[FromQuery] string? traceCode = null,
+		[FromQuery] string? batchNo = null,
+		[FromQuery] string? drugId = null,
+		[FromQuery] string? status = null)
+	{
+		string sql = @"
+SELECT * FROM inv_drug_trace_codes
+WHERE (@TraceCode IS NULL OR trace_code = @TraceCode)
+  AND (@BatchNo IS NULL OR batch_no = @BatchNo)
+  AND (@DrugId IS NULL OR drug_id = @DrugId)
+  AND (@Status IS NULL OR status = @Status)
+ORDER BY created_at_ms DESC LIMIT 200";
+
+		var list = await _traceCodeRepo.QueryAsync(sql, new { TraceCode = traceCode, BatchNo = batchNo, DrugId = drugId, Status = status });
+		return ApiResponse<IReadOnlyList<InvDrugTraceCode>>.Success(list);
+	}
+
+	[HttpPost("trace-codes/scan-in")]
+	public async Task<ApiResponse<int>> ScanInTraceCodes([FromBody] ScanInTraceCodeRequestDto req)
+	{
+		if (req.TraceCodes == null || req.TraceCodes.Count == 0)
+			return ApiResponse<int>.Fail(400, "追溯码列表不能为空");
+
+		string op = _userSession?.UserId ?? "USER-ADMIN";
+		int count = 0;
+
+		foreach (var code in req.TraceCodes.Where(c => !string.IsNullOrWhiteSpace(c)))
+		{
+			var trace = new InvDrugTraceCode
+			{
+				TraceCode = code.Trim(),
+				NationalInsCode = req.NationalInsCode,
+				DrugId = req.DrugId,
+				BatchId = req.BatchId,
+				BatchNo = req.BatchNo,
+				WarehouseOrPharmacyId = req.WarehouseOrPharmacyId,
+				StockInOrderId = req.StockInOrderId,
+				Status = "IN_STOCK",
+				IsRecalled = 0,
+				CreatedBy = op,
+				UpdatedBy = op
+			};
+			await _traceCodeRepo.InsertAsync(trace);
+			count++;
+		}
+
+		if (_auditTrail != null)
+		{
+			await _auditTrail.RecordAuditAsync("DRUG_TRACE_SCAN_IN", "inv_drug_trace_codes", req.BatchNo, $"药品追溯码扫码入库: {count} 件", _userSession?.UserId, _userSession?.DisplayName, req.WarehouseOrPharmacyId);
+		}
+
+		return ApiResponse<int>.Success(count, $"成功录入 {count} 条药品追溯码");
+	}
+
+	[HttpPost("trace-codes/scan-dispense")]
+	public async Task<ApiResponse<int>> ScanDispenseTraceCodes([FromBody] ScanDispenseTraceCodeRequestDto req)
+	{
+		if (req.TraceCodes == null || req.TraceCodes.Count == 0)
+			return ApiResponse<int>.Fail(400, "追溯码列表不能为空");
+
+		long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		string op = _userSession?.UserId ?? "USER-PHARMACIST";
+		int updated = 0;
+
+		foreach (var code in req.TraceCodes.Where(c => !string.IsNullOrWhiteSpace(c)))
+		{
+			var existing = await _traceCodeRepo.QuerySingleOrDefaultAsync(
+				"SELECT * FROM inv_drug_trace_codes WHERE trace_code = @Code",
+				new { Code = code.Trim() });
+			if (existing != null)
+			{
+				existing.DispenseOrderId = req.DispenseOrderId;
+				existing.DispenseOrderLineId = req.DispenseOrderLineId;
+				existing.Status = "DISPENSED";
+				existing.UpdatedAtMs = nowMs;
+				existing.UpdatedBy = op;
+				await _traceCodeRepo.UpdateAsync(existing);
+				updated++;
+			}
+		}
+
+		return ApiResponse<int>.Success(updated, $"成功关联 {updated} 条药品发药追溯码");
+	}
+
+	[HttpPost("trace-codes/{id}/recall")]
+	public async Task<ApiResponse<bool>> RecallTraceCode(string id)
+	{
+		var existing = await _traceCodeRepo.GetByIdAsync(id)
+			?? await _traceCodeRepo.QuerySingleOrDefaultAsync("SELECT * FROM inv_drug_trace_codes WHERE trace_code = @Code", new { Code = id });
+		if (existing == null)
+			return ApiResponse<bool>.Fail(404, "未找到追溯码");
+
+		existing.IsRecalled = 1;
+		existing.Status = "RECALLED";
+		existing.UpdatedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		existing.UpdatedBy = _userSession?.UserId ?? "USER-ADMIN";
+		await _traceCodeRepo.UpdateAsync(existing);
+
+		if (_auditTrail != null)
+		{
+			await _auditTrail.RecordAuditAsync("DRUG_TRACE_RECALL", "inv_drug_trace_codes", existing.Id, $"标记召回药品追溯码 [{existing.TraceCode}]", _userSession?.UserId, _userSession?.DisplayName);
+		}
+
+		return ApiResponse<bool>.Success(true, "药品追溯码已标记召回");
+	}
+
+	[HttpPost("stock-takes")]
+	public async Task<ApiResponse<InvStockTake>> CreateStockTake([FromBody] CreateStockTakeRequestDto req)
+	{
+		if (string.IsNullOrWhiteSpace(req.WarehouseOrPharmacyId))
+			return ApiResponse<InvStockTake>.Fail(400, "库房或药房 ID 不能为空");
+
+		string userId = _userSession?.UserId ?? "USER-ADMIN";
+		var stockTake = new InvStockTake
+		{
+			StockTakeNo = "STK-" + DateTime.Now.ToString("yyyyMMddHHmmssfff"),
+			WarehouseOrPharmacyId = req.WarehouseOrPharmacyId.Trim(),
+			DeptName = req.DeptName ?? "库房/药房",
+			StockTakeType = string.IsNullOrWhiteSpace(req.StockTakeType) ? "ROUTINE" : req.StockTakeType.Trim(),
+			Status = "DRAFT",
+			CreatedByUserId = userId,
+			Remark = req.Remark,
+			CreatedBy = userId,
+			UpdatedBy = userId
+		};
+		await _stockTakeRepo.InsertAsync(stockTake);
+
+		if (_auditTrail != null)
+		{
+			await _auditTrail.RecordAuditAsync("STOCK_TAKE_CREATE", "inv_stock_takes", stockTake.Id, $"新建盘点单 [{stockTake.StockTakeNo}]", userId, _userSession?.DisplayName, req.WarehouseOrPharmacyId);
+		}
+
+		return ApiResponse<InvStockTake>.Success(stockTake, "盘点单已创建");
+	}
+
+	[HttpGet("stock-takes")]
+	public async Task<ApiResponse<IReadOnlyList<InvStockTake>>> GetStockTakes([FromQuery] string? warehouseOrPharmacyId = null, [FromQuery] string? status = null)
+	{
+		string sql = @"
+SELECT * FROM inv_stock_takes
+WHERE (@WhId IS NULL OR warehouse_or_pharmacy_id = @WhId)
+  AND (@Status IS NULL OR status = @Status)
+ORDER BY created_at_ms DESC LIMIT 100";
+		var list = await _stockTakeRepo.QueryAsync(sql, new { WhId = warehouseOrPharmacyId, Status = status });
+		return ApiResponse<IReadOnlyList<InvStockTake>>.Success(list);
+	}
+
+	[HttpGet("stock-takes/{id}")]
+	public async Task<ApiResponse<StockTakeDetailDto>> GetStockTakeDetail(string id)
+	{
+		var take = await _stockTakeRepo.GetByIdAsync(id)
+			?? await _stockTakeRepo.QuerySingleOrDefaultAsync("SELECT * FROM inv_stock_takes WHERE stock_take_no = @No", new { No = id });
+		if (take == null)
+			return ApiResponse<StockTakeDetailDto>.Fail(404, "未找到盘点单");
+
+		var lines = await _stockTakeLineRepo.QueryAsync("SELECT * FROM inv_stock_take_lines WHERE stock_take_id = @Id ORDER BY created_at_ms ASC", new { Id = take.Id });
+		return ApiResponse<StockTakeDetailDto>.Success(new StockTakeDetailDto(take, lines));
+	}
+
+	[HttpPost("stock-takes/{id}/lines")]
+	public async Task<ApiResponse<InvStockTakeLine>> AddStockTakeLine(string id, [FromBody] AddStockTakeLineRequestDto req)
+	{
+		var take = await _stockTakeRepo.GetByIdAsync(id)
+			?? await _stockTakeRepo.QuerySingleOrDefaultAsync("SELECT * FROM inv_stock_takes WHERE stock_take_no = @No", new { No = id });
+		if (take == null)
+			return ApiResponse<InvStockTakeLine>.Fail(404, "未找到盘点单");
+		if (take.Status != "DRAFT")
+			return ApiResponse<InvStockTakeLine>.Fail(400, "仅草稿状态盘点单可编辑明细");
+
+		int diff = req.ActualQty - req.SystemQty;
+		decimal diffCost = diff * req.UnitCostPrice;
+		string userId = _userSession?.UserId ?? "USER-ADMIN";
+
+		var line = new InvStockTakeLine
+		{
+			StockTakeId = take.Id,
+			DrugId = req.DrugId,
+			BatchId = req.BatchId,
+			DrugCode = req.DrugCode,
+			DrugName = req.DrugName,
+			Spec = req.Spec,
+			UnitName = req.UnitName,
+			BatchNo = req.BatchNo,
+			SystemQty = req.SystemQty,
+			ActualQty = req.ActualQty,
+			DiffQty = diff,
+			UnitCostPrice = req.UnitCostPrice,
+			DiffCostAmount = diffCost,
+			Reason = req.Reason,
+			CreatedBy = userId,
+			UpdatedBy = userId
+		};
+		await _stockTakeLineRepo.InsertAsync(line);
+
+		// Recalculate totals on header
+		take.TotalSystemQty += req.SystemQty;
+		take.TotalActualQty += req.ActualQty;
+		take.TotalDiffQty += diff;
+		take.TotalDiffAmount += diffCost;
+		take.UpdatedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		take.UpdatedBy = userId;
+		await _stockTakeRepo.UpdateAsync(take);
+
+		return ApiResponse<InvStockTakeLine>.Success(line, "盘点明细已记录");
+	}
+
+	[HttpPost("stock-takes/{id}/approve")]
+	public async Task<ApiResponse<InvStockTake>> ApproveStockTake(string id, [FromBody] ApproveStockTakeRequestDto? req = null)
+	{
+		var take = await _stockTakeRepo.GetByIdAsync(id)
+			?? await _stockTakeRepo.QuerySingleOrDefaultAsync("SELECT * FROM inv_stock_takes WHERE stock_take_no = @No", new { No = id });
+		if (take == null)
+			return ApiResponse<InvStockTake>.Fail(404, "未找到盘点单");
+		if (take.Status != "DRAFT")
+			return ApiResponse<InvStockTake>.Fail(400, "该盘点单已审核或已关闭");
+
+		string userId = _userSession?.UserId ?? "USER-ADMIN";
+		long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+		take.Status = "APPROVED";
+		take.ApprovedByUserId = userId;
+		take.ApprovedAtMs = nowMs;
+		take.Remark = req?.Remark ?? take.Remark;
+		take.UpdatedAtMs = nowMs;
+		take.UpdatedBy = userId;
+		await _stockTakeRepo.UpdateAsync(take);
+
+		if (_auditTrail != null)
+		{
+			await _auditTrail.RecordAuditAsync("STOCK_TAKE_APPROVE", "inv_stock_takes", take.Id, $"审核通过盘点单 [{take.StockTakeNo}]，差异数量: {take.TotalDiffQty}，差异金额: {take.TotalDiffAmount}", userId, _userSession?.DisplayName, take.WarehouseOrPharmacyId);
+		}
+
+		return ApiResponse<InvStockTake>.Success(take, "盘点单已审核生效");
 	}
 }

@@ -31,6 +31,8 @@ public class MedTechController : ControllerBase
 
 	private readonly IRepository<MtcBloodRequest> _bloodRepo;
 
+	private readonly IRepository<MedtechCriticalValue> _criticalValueRepo;
+
 	private readonly IMedTechRoutingContract _routingService;
 
 	private readonly IPriceTableContract? _priceTable;
@@ -55,7 +57,8 @@ public class MedTechController : ControllerBase
 		IUserSession? session = null,
 		IPatientReadOnlyContract? patientContract = null,
 		IDepartmentReadOnlyContract? departmentContract = null,
-		IDbConnectionFactory? connFactory = null)
+		IDbConnectionFactory? connFactory = null,
+		IRepository<MedtechCriticalValue>? criticalValueRepo = null)
 	{
 		_requestRepo = requestRepo;
 		_surgeryRepo = surgeryRepo;
@@ -67,6 +70,7 @@ public class MedTechController : ControllerBase
 		_patientContract = patientContract;
 		_departmentContract = departmentContract;
 		_connFactory = connFactory ?? new SqliteConnectionFactory();
+		_criticalValueRepo = criticalValueRepo ?? new DapperRepository<MedtechCriticalValue>(_connFactory, "medtech_critical_values");
 	}
 
 	[HttpGet("requests")]
@@ -386,9 +390,29 @@ public class MedTechController : ControllerBase
 			if (updated != 1)
 				return ApiResponse<MtcServiceRequest>.Fail(409, "医技报告状态已变更或记录已被其他人处理，请刷新后重试");
 		}
-		if (dto.IsCriticalValue && _auditTrail != null)
+		if (dto.IsCriticalValue)
 		{
-			await _auditTrail.RecordAuditAsync("MTC_CRITICAL_VALUE_ALERT", "MtcServiceRequest", req.Id, $"医技危急值强广播：申请单 [{req.RequestNo}] 结论：{req.ReportSummary}，等待管床医师与护士双签收", CurrentUserId, _session?.DisplayName, req.ExecMedTechDeptId);
+			var cv = new MedtechCriticalValue
+			{
+				ReportId = req.Id,
+				SourceType = req.SourceType ?? "LAB",
+				VisitOrEncounterId = req.SourceVisitId ?? req.SourceOrderId ?? req.Id,
+				PatientId = req.PatientId,
+				ItemCode = req.ServiceItemCode,
+				ItemName = req.ServiceItemCode,
+				CriticalValueText = req.ReportSummary ?? "医技危急值报警",
+				PublishedBy = CurrentUserId,
+				PublishedAtMs = SystemTime.UtcNowMs,
+				Status = "PENDING_ACK",
+				CreatedBy = CurrentUserId,
+				UpdatedBy = CurrentUserId
+			};
+			await _criticalValueRepo.InsertAsync(cv);
+
+			if (_auditTrail != null)
+			{
+				await _auditTrail.RecordAuditAsync("MTC_CRITICAL_VALUE_ALERT", "MtcServiceRequest", req.Id, $"医技危急值强广播：申请单 [{req.RequestNo}] 结论：{req.ReportSummary}，等待管床医师与护士双签收", CurrentUserId, _session?.DisplayName, req.ExecMedTechDeptId);
+			}
 		}
 		await RecordAuditAsync("MTC_REPORT_PUBLISH", req, $"医技报告发布：{req.ReportSummary}" + (dto.IsCriticalValue ? "（危急值）" : ""));
 		return ApiResponse<MtcServiceRequest>.Success(req, dto.IsCriticalValue ? "医技报告已发布并触发【危急值】全院声光强推送，需临床医生与病区护士双签收闭环！" : "医技报告已审核发布并生成国标 OFD 归档");
@@ -466,12 +490,48 @@ public class MedTechController : ControllerBase
 			if (updated != 1)
 				return ApiResponse<MtcServiceRequest>.Fail(409, "危急值签收状态已变更，请刷新后重试");
 		}
+
+		var cvs = await _criticalValueRepo.QueryAsync("SELECT * FROM medtech_critical_values WHERE report_id = @ReportId", new { ReportId = req.Id });
+		if (cvs.Count > 0)
+		{
+			var cv = cvs[0];
+			if (isDoctor)
+			{
+				cv.DocAckedBy = operatorId;
+				cv.DocAckedAtMs = SystemTime.UtcNowMs;
+			}
+			else
+			{
+				cv.NurseAckedBy = operatorId;
+				cv.NurseAckedAtMs = SystemTime.UtcNowMs;
+			}
+			if (!string.IsNullOrWhiteSpace(cv.DocAckedBy) && !string.IsNullOrWhiteSpace(cv.NurseAckedBy))
+			{
+				cv.Status = "ACKNOWLEDGED";
+			}
+			cv.UpdatedAtMs = SystemTime.UtcNowMs;
+			cv.UpdatedBy = operatorId;
+			await _criticalValueRepo.UpdateAsync(cv);
+		}
+
 		bool isDualCompleted = !string.IsNullOrWhiteSpace(req.CriticalAckDocId) && !string.IsNullOrWhiteSpace(req.CriticalAckNurseId);
 		if (_auditTrail != null)
 		{
 			await _auditTrail.RecordAuditAsync("MTC_CRITICAL_VALUE_ACK", "MtcServiceRequest", req.Id, $"危急值签收更新：医师={req.CriticalAckDocId ?? "待签"}, 护士={req.CriticalAckNurseId ?? "待签"}, 处置={dto.ClinicalActionNote ?? "已处置"}", operatorId, _session.DisplayName);
 		}
 		return ApiResponse<MtcServiceRequest>.Success(req, isDualCompleted ? "危急值【医师+护士】双签收闭环已完成！" : "危急值单方签收已记录，请继续完成医护双签收闭环");
+	}
+
+	[HttpGet("critical-values")]
+	public async Task<ApiResponse<IReadOnlyList<MedtechCriticalValue>>> GetCriticalValues([FromQuery] string? encounterId = null, [FromQuery] string? status = null)
+	{
+		string sql = @"
+SELECT * FROM medtech_critical_values
+WHERE (@EncId IS NULL OR visit_or_encounter_id = @EncId)
+  AND (@Status IS NULL OR status = @Status)
+ORDER BY published_at_ms DESC LIMIT 100";
+		var list = await _criticalValueRepo.QueryAsync(sql, new { EncId = encounterId, Status = status });
+		return ApiResponse<IReadOnlyList<MedtechCriticalValue>>.Success(list);
 	}
 
 	[HttpPost("requests/{reqId}/cancel")]

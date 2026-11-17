@@ -78,6 +78,7 @@ public sealed class LoginContextOption : ClientModelBase
 				"WARD" => "病区", 
 				"MEDTECH" => "医技", 
 				"PHARMACY" => "药房", 
+				"WAREHOUSE" => "药库", 
 				"FINANCE" => "财务", 
 				"ADMIN" => "管理", 
 				_ => DeptCategory, 

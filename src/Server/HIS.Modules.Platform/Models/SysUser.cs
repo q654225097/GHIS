@@ -24,5 +24,13 @@ public class SysUser : BaseEntity
 
 	public int SessionVersion { get; set; } = 1;
 
+	public int FailedLoginCount { get; set; } = 0;
+
+	public long? LockoutUntilMs { get; set; }
+
+	public long? PasswordChangedAtMs { get; set; }
+
+	public short MustChangePassword { get; set; } = 0;
+
 	public short IsActive { get; set; } = 1;
 }

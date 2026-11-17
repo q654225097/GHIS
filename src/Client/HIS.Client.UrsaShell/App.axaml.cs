@@ -36,6 +36,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+#if DEBUG
             var isCaptureMode = Environment.GetEnvironmentVariable("CAPTURE_SCREENSHOTS") == "1";
             if (isCaptureMode)
             {
@@ -47,11 +48,17 @@ public partial class App : Application
                 desktop.MainWindow = loginWindow;
                 loginWindow.Show();
             }
+#else
+            var loginWindow = new LoginWindow();
+            desktop.MainWindow = loginWindow;
+            loginWindow.Show();
+#endif
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
+#if DEBUG
     private void RunCaptureAutomation(IClassicDesktopStyleApplicationLifetime desktop)
     {
         var workbench = new WorkbenchModel();
@@ -215,4 +222,5 @@ public partial class App : Application
             }
         };
     }
+#endif
 }

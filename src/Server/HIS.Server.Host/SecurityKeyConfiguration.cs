@@ -24,6 +24,16 @@ public static class SecurityKeyConfiguration
         Validate(hmacKey, "HIS_HMAC_KEY", scope);
         Validate(aesKey, "HIS_AES_KEY", scope);
 
+        if (environment.IsProduction())
+        {
+            if (jwtKey!.StartsWith("HIS-DEV-ONLY", StringComparison.OrdinalIgnoreCase) ||
+                hmacKey!.StartsWith("HIS-DEV-ONLY", StringComparison.OrdinalIgnoreCase) ||
+                aesKey!.StartsWith("HIS-DEV-ONLY", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("生产环境严禁使用 HIS-DEV-ONLY 演示开发密钥！必须通过环境变量或安全 KMS 服务注入生产密钥。");
+            }
+        }
+
         return new SecurityKeys(jwtKey!.Trim(), hmacKey!.Trim(), aesKey!.Trim());
     }
 

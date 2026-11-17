@@ -216,10 +216,23 @@ LIMIT @Limit", new
                 _userSession?.ActiveDeptId);
         }
 
+        foreach (var p in list)
+        {
+            SanitizePatientPii(p);
+        }
+
         return ApiResponse<IReadOnlyList<PatPatient>>.Success(list);
     }
 
     public sealed record MergeRequestDto(string TempPatientId, string TargetPatientId);
+
+    [RequireRole(RoleCode.Admin, RoleCode.DoctorOpd, RoleCode.DoctorIpd)]
+    [HttpPost("{tempId}/merge")]
+    public async Task<ApiResponse<bool>> MergeTempPatientByRoute(string tempId, [FromBody] MergeRequestDto? req)
+    {
+        string targetId = !string.IsNullOrWhiteSpace(req?.TargetPatientId) ? req.TargetPatientId : (req?.TempPatientId ?? string.Empty);
+        return await MergeTempPatient(new MergeRequestDto(tempId, targetId));
+    }
 
     [RequireRole(RoleCode.Admin, RoleCode.DoctorOpd, RoleCode.DoctorIpd)]
     [HttpPost("merge")]
@@ -335,6 +348,83 @@ LIMIT @Limit", new
                 _userSession?.DisplayName);
         }
 
+        SanitizePatientPii(p);
         return ApiResponse<PatPatient>.Success(p);
+    }
+
+    public sealed record DecryptPiiRequestDto(string FieldName, string Reason);
+
+    [HttpPost("{id}/decrypt-pii")]
+    public async Task<ApiResponse<string>> DecryptPii(string id, [FromBody] DecryptPiiRequestDto req)
+    {
+        if (_userSession == null || string.IsNullOrWhiteSpace(_userSession.UserId))
+        {
+            return ApiResponse<string>.Fail(401, "请先登录");
+        }
+        if (string.IsNullOrWhiteSpace(req.Reason))
+        {
+            return ApiResponse<string>.Fail(400, "查阅未脱敏敏感个人信息必须说明业务原因");
+        }
+
+        var p = await _patientRepo.GetByIdAsync(id);
+        if (p == null)
+        {
+            return ApiResponse<string>.Fail(404, "患者不存在");
+        }
+
+        string result;
+        if (string.Equals(req.FieldName, "ID_CARD", StringComparison.OrdinalIgnoreCase))
+        {
+            result = DecryptCipher(p.IdCardCipher);
+        }
+        else if (string.Equals(req.FieldName, "PHONE", StringComparison.OrdinalIgnoreCase))
+        {
+            result = DecryptCipher(p.PhoneCipher);
+        }
+        else
+        {
+            return ApiResponse<string>.Fail(400, "仅支持解密 ID_CARD 或 PHONE");
+        }
+
+        if (_auditTrail != null)
+        {
+            await _auditTrail.RecordAuditAsync(
+                "PATIENT_PII_DECRYPT",
+                "PatPatient",
+                p.Id,
+                $"解密患者敏感字段 [{req.FieldName}]，原因: {req.Reason}",
+                _userSession?.UserId,
+                _userSession?.DisplayName,
+                _userSession?.ActiveDeptId);
+        }
+
+        return ApiResponse<string>.Success(result, "敏感信息解密已审批留痕");
+    }
+
+    private static string DecryptCipher(string? cipher)
+    {
+        if (string.IsNullOrWhiteSpace(cipher))
+            return string.Empty;
+        try
+        {
+            return CryptoHelper.DecryptAesGcm(cipher);
+        }
+        catch
+        {
+            return CryptoHelper.DecryptSm4Gcm(cipher);
+        }
+    }
+
+    private PatPatient SanitizePatientPii(PatPatient p)
+    {
+        bool canViewRawPii = _userSession?.IsAdmin == true;
+        if (!canViewRawPii)
+        {
+            p.IdCardCipher = string.Empty;
+            p.PhoneCipher = string.Empty;
+            p.IdCardHash = string.Empty;
+            p.GuardianIdHash = string.Empty;
+        }
+        return p;
     }
 }

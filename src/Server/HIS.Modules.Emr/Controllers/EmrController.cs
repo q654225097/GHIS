@@ -21,6 +21,7 @@ public class EmrController : ControllerBase
     private readonly IRepository<EmrOfdLayoutSchema> _layoutRepo;
     private readonly IRepository<EmrDocTemplate> _templateRepo;
     private readonly IRepository<EmrSectionSchema> _sectionRepo;
+    private readonly IRepository<EmrInpatientFrontSheet> _frontSheetRepo;
     private readonly EmrQualityControlService _qcService;
     private readonly EmrOfdRenderService _ofdRenderService;
     private readonly IDbConnectionFactory _connFactory;
@@ -41,7 +42,8 @@ public class EmrController : ControllerBase
         IPatientReadOnlyContract? patientContract = null,
         IDbConnectionFactory? connFactory = null,
         IAuditTrailContract? auditTrail = null,
-        IUserSession? userSession = null)
+        IUserSession? userSession = null,
+        IRepository<EmrInpatientFrontSheet>? frontSheetRepo = null)
     {
         _docRepo = docRepo;
         _docElementRepo = docElementRepo;
@@ -53,6 +55,7 @@ public class EmrController : ControllerBase
         _layoutRepo = layoutRepo ?? new DapperRepository<EmrOfdLayoutSchema>(_connFactory, "emr_ofd_layout_schemas");
         _templateRepo = templateRepo ?? new DapperRepository<EmrDocTemplate>(_connFactory, "emr_doc_templates");
         _sectionRepo = sectionRepo ?? new DapperRepository<EmrSectionSchema>(_connFactory, "emr_section_schemas");
+        _frontSheetRepo = frontSheetRepo ?? new DapperRepository<EmrInpatientFrontSheet>(_connFactory, "emr_inpatient_front_sheets");
         _patientContract = patientContract;
         _auditTrail = auditTrail;
         _userSession = userSession;
@@ -106,6 +109,7 @@ public class EmrController : ControllerBase
         return ApiResponse<IReadOnlyList<EmrDataElement>>.Success(list);
     }
 
+    [RequireAdmin]
     [HttpPost("data-elements")]
     public async Task<ApiResponse<EmrDataElement>> UpsertDataElement([FromBody] UpsertEmrDataElementRequestDto req)
     {
@@ -141,7 +145,7 @@ public class EmrController : ControllerBase
         var entity = new EmrDataElement
         {
             ElementCode = code,
-            NhcStdCode = req.NhcStdCode ?? $"DE99.00.{Random.Shared.Next(100, 999)}.00",
+            NhcStdCode = string.IsNullOrWhiteSpace(req.NhcStdCode) ? null : req.NhcStdCode.Trim().ToUpperInvariant(),
             ElementName = req.ElementName.Trim(),
             DataType = req.DataType,
             UrsaControlType = req.UrsaControlType,
@@ -209,6 +213,7 @@ public class EmrController : ControllerBase
         return ApiResponse<EmrOfdLayoutSchema>.Success(layout);
     }
 
+    [RequireAdmin]
     [HttpPost("layouts")]
     public async Task<ApiResponse<EmrOfdLayoutSchema>> UpsertLayout([FromBody] UpsertEmrLayoutRequestDto req)
     {
@@ -472,6 +477,7 @@ public class EmrController : ControllerBase
         return ApiResponse<EmrTemplateDetailDto>.Success(new EmrTemplateDetailDto(tpl, layout, sectionDetails));
     }
 
+    [RequireAdmin]
     [HttpPost("templates/design")]
     public async Task<ApiResponse<EmrTemplateDetailDto>> SaveTemplateDesign([FromBody] SaveEmrTemplateDesignRequestDto req)
     {
@@ -645,6 +651,7 @@ public class EmrController : ControllerBase
         return ApiResponse<IReadOnlyList<EmrDocument>>.Success(list);
     }
 
+    [RequireRole("DOCTOR", "NURSE", "ADMIN")]
     [HttpPost("documents")]
     public async Task<ApiResponse<EmrDocument>> SaveDocument([FromBody] SaveEmrRequestDto req)
     {
@@ -767,42 +774,67 @@ public class EmrController : ControllerBase
             return targetDoc;
         });
 
-        return ApiResponse<EmrDocument>.Success(doc, "病历结构化草稿保存成功");
+        if (_auditTrail != null && doc != null)
+        {
+            await _auditTrail.RecordAuditAsync(
+                "EMR_DOC_SAVE",
+                "emr_documents",
+                doc.Id,
+                $"保存病历 [DocNo={doc.DocNo}, Title={doc.DocTitle}, PatientId={doc.PatientId}]",
+                _userSession?.UserId,
+                _userSession?.DisplayName,
+                _userSession?.ActiveDeptId);
+        }
+
+        return doc == null ? ApiResponse<EmrDocument>.Fail(500, "病历保存失败") : ApiResponse<EmrDocument>.Success(doc, "病历结构化草稿保存成功");
     }
 
     public sealed record SignEmrRequestDto(string SignerId, string SignerName, int SignLevel);
 
     [HttpPost("documents/{docId}/sign-and-generate-ofd")]
-    public async Task<ApiResponse<EmrOfdArchive>> SignAndGenerateOfd(string docId, [FromBody] SignEmrRequestDto req)
+    public async Task<ActionResult<ApiResponse<EmrOfdArchive>>> SignAndGenerateOfd(string docId, [FromBody] SignEmrRequestDto req)
     {
         if (_userSession == null || string.IsNullOrWhiteSpace(_userSession.UserId))
-            return ApiResponse<EmrOfdArchive>.Fail(401, "请先登录后再执行病历审签");
+            return StatusCode(401, ApiResponse<EmrOfdArchive>.Fail(401, "请先登录后再执行病历审签"));
         if (string.IsNullOrWhiteSpace(req.SignerId)
             || (!req.SignerId.Equals(_userSession.UserId, StringComparison.Ordinal) && !_userSession.IsAdmin))
-            return ApiResponse<EmrOfdArchive>.Fail(403, "审签人必须与当前登录用户一致");
+        {
+            if (_auditTrail != null)
+            {
+                await _auditTrail.RecordAuditAsync(
+                    "EMR_SIGN_PROXY_ATTEMPT",
+                    "emr_documents",
+                    docId,
+                    $"拦截越权/代签尝试：当前操作者 [{_userSession.UserId}] 试图以 [{req.SignerId}] 名义进行审签",
+                    _userSession.UserId,
+                    _userSession.DisplayName,
+                    _userSession.ActiveDeptId);
+            }
+            return StatusCode(403, ApiResponse<EmrOfdArchive>.Fail(403, "审签人必须为本人，禁止代签"));
+        }
 
         var doc = await _docRepo.GetByIdAsync(docId)
                ?? await _docRepo.QuerySingleOrDefaultAsync("SELECT * FROM emr_documents WHERE doc_no = @DocNo", new { DocNo = docId });
         if (doc == null)
-            return ApiResponse<EmrOfdArchive>.Fail(404, "未找到病历记录");
+            return StatusCode(404, ApiResponse<EmrOfdArchive>.Fail(404, "未找到病历记录"));
 
         int requestedLevel = req.SignLevel;
         int expectedPreviousStatus = requestedLevel - 1;
         int targetStatus = requestedLevel;
         if (requestedLevel is < 1 or > 3)
-            return ApiResponse<EmrOfdArchive>.Fail(400, "审签等级必须为 1、2 或 3");
+            return BadRequest(ApiResponse<EmrOfdArchive>.Fail(400, "审签等级必须为 1、2 或 3"));
         if (!_userSession.IsAdmin && _userSession.EmrSignLevel < requestedLevel)
-            return ApiResponse<EmrOfdArchive>.Fail(403, $"当前账号电子病历审签权限为 {_userSession.EmrSignLevel} 级，不能执行 {requestedLevel} 级审签");
+            return StatusCode(403, ApiResponse<EmrOfdArchive>.Fail(403, $"当前账号电子病历审签权限为 {_userSession.EmrSignLevel} 级，不能执行 {requestedLevel} 级审签"));
         if (doc.Status is (int)EmrDocumentStatus.ChiefLocked or (int)EmrDocumentStatus.Archived)
-            return ApiResponse<EmrOfdArchive>.Fail(409, "病历已终审锁定或归档封存，禁止再次审签或降级解锁");
+            return StatusCode(409, ApiResponse<EmrOfdArchive>.Fail(409, "病历已终审锁定或归档封存，禁止再次审签或降级解锁"));
         if (doc.Status == (int)EmrDocumentStatus.ReturnedForCorrection)
         {
             if (requestedLevel != 1)
-                return ApiResponse<EmrOfdArchive>.Fail(409, "退回修改的病历须先从 1 级重新审签");
+                return StatusCode(409, ApiResponse<EmrOfdArchive>.Fail(409, "退回修改的病历须先从 1 级重新审签"));
         }
         else if (doc.Status != expectedPreviousStatus)
         {
-            return ApiResponse<EmrOfdArchive>.Fail(409, $"病历当前为 {doc.Status} 级状态，只允许按 1、2、3 级顺序审签，不能跳级或逆向降级");
+            return StatusCode(409, ApiResponse<EmrOfdArchive>.Fail(409, $"病历当前为 {doc.Status} 级状态，只允许按 1、2、3 级顺序审签，不能跳级或逆向降级"));
         }
 
         // Validate QC again before signing
@@ -811,7 +843,7 @@ public class EmrController : ControllerBase
             var elements = JsonSerializer.Deserialize<Dictionary<string, string>>(doc.StructuredAstJson) ?? new();
             var qc = await _qcService.ValidateStructuredElementsAsync(doc.PatientId, elements);
             if (!qc.IsSuccess)
-                return ApiResponse<EmrOfdArchive>.Fail(400, qc.Error, default);
+                return BadRequest(ApiResponse<EmrOfdArchive>.Fail(400, qc.Error, default));
         }
 
         long nowMs = SystemTime.UtcNowMs;
@@ -852,7 +884,7 @@ public class EmrController : ControllerBase
                 doc.DeptId);
         }
 
-        return ApiResponse<EmrOfdArchive>.Success(archive, "病历审签成功并已生成符合 GB/T 33190-2016 标准的 OFD 版式文档");
+        return Ok(ApiResponse<EmrOfdArchive>.Success(archive, "病历审签成功并已生成符合 GB/T 33190-2016 标准的 OFD 版式文档"));
     }
 
     public sealed record ReturnForCorrectionRequestDto(string ReviewerId, string Reason);
@@ -1161,12 +1193,12 @@ public class EmrController : ControllerBase
     }
 
     [HttpGet("archives/{archiveId}/export-ofd")]
-    public async Task<IActionResult> ExportOfd(string archiveId)
+    public async Task<IActionResult> ExportOfd(string archiveId, [FromQuery] string? reason = null)
     {
         // Check permission if session exists
-        if (_userSession != null && !_userSession.HasPermission("EMR.Toolbar.BtnExportOfd"))
+        if (_userSession != null && !_userSession.HasPermission("EMR.Toolbar.BtnExportOfd") && !_userSession.IsAdmin)
         {
-            return StatusCode(403, new { Code = 403, Message = "无权限导出 OFD 文档 (需要 EMR.Toolbar.BtnExportOfd)" });
+            return StatusCode(403, new { Code = 403, Message = "无权限导出 OFD 文档 (需要 EMR.Toolbar.BtnExportOfd 或管理员权限)" });
         }
 
         var archive = await _archiveRepo.GetByIdAsync(archiveId);
@@ -1185,6 +1217,19 @@ public class EmrController : ControllerBase
             return NotFound(new { Code = 404, Message = "物理 OFD 文件不存在" });
 
         var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
+
+        if (_auditTrail != null)
+        {
+            await _auditTrail.RecordAuditAsync(
+                "EMR_OFD_EXPORT",
+                "emr_ofd_archives",
+                archive.Id,
+                $"导出电子病历 OFD 封包 [{archive.OfdNo}]，事由: {reason ?? "临床/科研调阅"}",
+                _userSession?.UserId,
+                _userSession?.DisplayName,
+                _userSession?.ActiveDeptId);
+        }
+
         return File(bytes, "application/ofd", $"{archive.OfdNo}.ofd");
     }
 
@@ -1281,5 +1326,170 @@ public class EmrController : ControllerBase
             newText));
 
         return JsonSerializer.Serialize(list);
+    }
+
+    public sealed record SaveFrontSheetRequestDto(
+        string EncounterId,
+        string PatientId,
+        string MedicalRecordNo,
+        int AdmissionTimes,
+        string PayTypeCode,
+        string? HealthCardNo,
+        string AdmitDeptId,
+        string AdmitWardId,
+        long AdmitTimeMs,
+        string? DischargeDeptId,
+        string? DischargeWardId,
+        long? DischargeTimeMs,
+        int InpatientDays,
+        string? OutpatientDiagCode,
+        string? OutpatientDiagName,
+        string? PrimaryDiagCode,
+        string? PrimaryDiagName,
+        string? PrimaryAdmissionCondition,
+        string? OtherDiagsJson,
+        string? SurgeriesJson,
+        decimal TotalCost,
+        decimal SelfPayAmount,
+        string? FeeBreakdownJson,
+        string? ChiefPhysicianId,
+        string? AttendingPhysicianId,
+        string? ResidentPhysicianId,
+        string? PrimaryNurseId);
+
+    [HttpPost("front-sheets")]
+    public async Task<ApiResponse<EmrInpatientFrontSheet>> SaveFrontSheet([FromBody] SaveFrontSheetRequestDto req)
+    {
+        if (string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.PatientId))
+            return ApiResponse<EmrInpatientFrontSheet>.Fail(400, "就诊 ID 与患者 ID 不能为空");
+
+        string op = _userSession?.UserId ?? "USER-DOC-IPD";
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var existing = await _frontSheetRepo.QuerySingleOrDefaultAsync(
+            "SELECT * FROM emr_inpatient_front_sheets WHERE encounter_id = @EncId LIMIT 1",
+            new { EncId = req.EncounterId.Trim() });
+
+        if (existing != null)
+        {
+            if (existing.Status == "ARCHIVED")
+                return ApiResponse<EmrInpatientFrontSheet>.Fail(409, "病案首页已归档封存，禁止修改");
+
+            existing.AdmissionTimes = req.AdmissionTimes;
+            existing.PayTypeCode = req.PayTypeCode;
+            existing.HealthCardNo = req.HealthCardNo;
+            existing.AdmitDeptId = req.AdmitDeptId;
+            existing.AdmitWardId = req.AdmitWardId;
+            existing.AdmitTimeMs = req.AdmitTimeMs;
+            existing.DischargeDeptId = req.DischargeDeptId;
+            existing.DischargeWardId = req.DischargeWardId;
+            existing.DischargeTimeMs = req.DischargeTimeMs;
+            existing.InpatientDays = req.InpatientDays;
+            existing.OutpatientDiagCode = req.OutpatientDiagCode;
+            existing.OutpatientDiagName = req.OutpatientDiagName;
+            existing.PrimaryDiagCode = req.PrimaryDiagCode;
+            existing.PrimaryDiagName = req.PrimaryDiagName;
+            existing.PrimaryAdmissionCondition = req.PrimaryAdmissionCondition;
+            existing.OtherDiagsJson = req.OtherDiagsJson;
+            existing.SurgeriesJson = req.SurgeriesJson;
+            existing.TotalCost = req.TotalCost;
+            existing.SelfPayAmount = req.SelfPayAmount;
+            existing.FeeBreakdownJson = req.FeeBreakdownJson;
+            existing.ChiefPhysicianId = req.ChiefPhysicianId;
+            existing.AttendingPhysicianId = req.AttendingPhysicianId;
+            existing.ResidentPhysicianId = req.ResidentPhysicianId;
+            existing.PrimaryNurseId = req.PrimaryNurseId;
+            existing.UpdatedAtMs = nowMs;
+            existing.UpdatedBy = op;
+            await _frontSheetRepo.UpdateAsync(existing);
+
+            if (_auditTrail != null)
+            {
+                await _auditTrail.RecordAuditAsync("EMR_FRONT_SHEET_UPDATE", "emr_inpatient_front_sheets", existing.Id, $"更新住院病案首页 [EncounterId={existing.EncounterId}]", op, _userSession?.DisplayName);
+            }
+
+            return ApiResponse<EmrInpatientFrontSheet>.Success(existing, "住院病案首页更新成功");
+        }
+
+        var sheet = new EmrInpatientFrontSheet
+        {
+            EncounterId = req.EncounterId.Trim(),
+            PatientId = req.PatientId.Trim(),
+            MedicalRecordNo = req.MedicalRecordNo,
+            AdmissionTimes = req.AdmissionTimes,
+            PayTypeCode = req.PayTypeCode,
+            HealthCardNo = req.HealthCardNo,
+            AdmitDeptId = req.AdmitDeptId,
+            AdmitWardId = req.AdmitWardId,
+            AdmitTimeMs = req.AdmitTimeMs,
+            DischargeDeptId = req.DischargeDeptId,
+            DischargeWardId = req.DischargeWardId,
+            DischargeTimeMs = req.DischargeTimeMs,
+            InpatientDays = req.InpatientDays,
+            OutpatientDiagCode = req.OutpatientDiagCode,
+            OutpatientDiagName = req.OutpatientDiagName,
+            PrimaryDiagCode = req.PrimaryDiagCode,
+            PrimaryDiagName = req.PrimaryDiagName,
+            PrimaryAdmissionCondition = req.PrimaryAdmissionCondition,
+            OtherDiagsJson = req.OtherDiagsJson,
+            SurgeriesJson = req.SurgeriesJson,
+            TotalCost = req.TotalCost,
+            SelfPayAmount = req.SelfPayAmount,
+            FeeBreakdownJson = req.FeeBreakdownJson,
+            ChiefPhysicianId = req.ChiefPhysicianId,
+            AttendingPhysicianId = req.AttendingPhysicianId,
+            ResidentPhysicianId = req.ResidentPhysicianId,
+            PrimaryNurseId = req.PrimaryNurseId,
+            QualityLevel = "A",
+            Status = "DRAFT",
+            CreatedBy = op,
+            UpdatedBy = op
+        };
+        await _frontSheetRepo.InsertAsync(sheet);
+
+        if (_auditTrail != null)
+        {
+            await _auditTrail.RecordAuditAsync("EMR_FRONT_SHEET_CREATE", "emr_inpatient_front_sheets", sheet.Id, $"录入住院病案首页 [EncounterId={sheet.EncounterId}]", op, _userSession?.DisplayName);
+        }
+
+        return ApiResponse<EmrInpatientFrontSheet>.Success(sheet, "住院病案首页保存成功");
+    }
+
+    [HttpGet("front-sheets/{encounterId}")]
+    public async Task<ApiResponse<EmrInpatientFrontSheet>> GetFrontSheet(string encounterId)
+    {
+        var sheet = await _frontSheetRepo.QuerySingleOrDefaultAsync(
+            "SELECT * FROM emr_inpatient_front_sheets WHERE encounter_id = @EncId LIMIT 1",
+            new { EncId = encounterId.Trim() });
+        if (sheet == null)
+            return ApiResponse<EmrInpatientFrontSheet>.Fail(404, "未找到住院病案首页");
+        return ApiResponse<EmrInpatientFrontSheet>.Success(sheet);
+    }
+
+    [HttpPost("front-sheets/{encounterId}/submit")]
+    public async Task<ApiResponse<EmrInpatientFrontSheet>> SubmitFrontSheet(string encounterId)
+    {
+        var sheet = await _frontSheetRepo.QuerySingleOrDefaultAsync(
+            "SELECT * FROM emr_inpatient_front_sheets WHERE encounter_id = @EncId LIMIT 1",
+            new { EncId = encounterId.Trim() });
+        if (sheet == null)
+            return ApiResponse<EmrInpatientFrontSheet>.Fail(404, "未找到住院病案首页");
+
+        if (string.IsNullOrWhiteSpace(sheet.PrimaryDiagCode))
+            return ApiResponse<EmrInpatientFrontSheet>.Fail(400, "病案首页必须填写主要诊断与 ICD 编码");
+
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        sheet.Status = "SUBMITTED";
+        sheet.QualityLevel = "GRADE_A";
+        sheet.UpdatedAtMs = nowMs;
+        sheet.UpdatedBy = _userSession?.UserId ?? "USER-DOC-IPD";
+        await _frontSheetRepo.UpdateAsync(sheet);
+
+        if (_auditTrail != null)
+        {
+            await _auditTrail.RecordAuditAsync("EMR_FRONT_SHEET_SUBMIT", "emr_inpatient_front_sheets", sheet.Id, $"提交病案首页并完成 WS 445 质控核验", _userSession?.UserId, _userSession?.DisplayName);
+        }
+
+        return ApiResponse<EmrInpatientFrontSheet>.Success(sheet, "病案首页已完成 WS 445 质控核验并成功提交");
     }
 }

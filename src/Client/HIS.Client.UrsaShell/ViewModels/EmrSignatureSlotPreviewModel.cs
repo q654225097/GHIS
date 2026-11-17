@@ -4,19 +4,113 @@ namespace HIS.Client.UrsaShell.ViewModels;
 
 public class EmrSignatureSlotPreviewModel : ClientModelBase
 {
-	public int Level { get; set; } = 1;
+	private int _level = 1;
+	private string _roleName = "经治医师";
+	private string _label = "医师签名";
+	private string _signerDisplay = "张建国 (EMP002)";
+	private string _signedTimeText = "2026-11-05 15:48";
+	private bool _isSigned = true;
+	private string? _caSignSerialNo = "CA-2026-SM2-EMP002";
+	private bool _isSignatureVerified = true;
 
-	public string RoleName { get; set; } = "经治医师";
+	public int Level
+	{
+		get => _level;
+		set => SetField(ref _level, value);
+	}
 
-	public string Label { get; set; } = "医师签名";
+	public string RoleName
+	{
+		get => _roleName;
+		set => SetField(ref _roleName, value);
+	}
 
-	public string SignerDisplay { get; set; } = "张建国 (EMP002)";
+	public string Label
+	{
+		get => _label;
+		set => SetField(ref _label, value);
+	}
 
-	public string SignedTimeText { get; set; } = "2026-11-05 15:48";
+	public string SignerDisplay
+	{
+		get => _signerDisplay;
+		set => SetField(ref _signerDisplay, value);
+	}
 
-	public bool IsSigned { get; set; } = true;
+	public string SignedTimeText
+	{
+		get => _signedTimeText;
+		set => SetField(ref _signedTimeText, value);
+	}
 
-	public string StatusBadge => IsSigned ? "✓ SM2已签" : "待审签";
+	public bool IsSigned
+	{
+		get => _isSigned;
+		set
+		{
+			if (SetField(ref _isSigned, value))
+			{
+				OnPropertyChanged(nameof(StatusBadge));
+				OnPropertyChanged(nameof(StatusBrush));
+			}
+		}
+	}
 
-	public string StatusBrush => IsSigned ? "#059669" : "#D97706";
+	public string? CaSignSerialNo
+	{
+		get => _caSignSerialNo;
+		set
+		{
+			if (SetField(ref _caSignSerialNo, value))
+			{
+				OnPropertyChanged(nameof(StatusBadge));
+				OnPropertyChanged(nameof(StatusBrush));
+			}
+		}
+	}
+
+	public bool IsSignatureVerified
+	{
+		get => _isSignatureVerified;
+		set
+		{
+			if (SetField(ref _isSignatureVerified, value))
+			{
+				OnPropertyChanged(nameof(StatusBadge));
+				OnPropertyChanged(nameof(StatusBrush));
+			}
+		}
+	}
+
+	public string StatusBadge
+	{
+		get
+		{
+			if (IsSigned && !string.IsNullOrWhiteSpace(CaSignSerialNo) && IsSignatureVerified)
+			{
+				return "✓ SM2已签";
+			}
+			if (IsSigned)
+			{
+				return "已签(待验签)";
+			}
+			return "待审签";
+		}
+	}
+
+	public string StatusBrush
+	{
+		get
+		{
+			if (IsSigned && !string.IsNullOrWhiteSpace(CaSignSerialNo) && IsSignatureVerified)
+			{
+				return "#059669";
+			}
+			if (IsSigned)
+			{
+				return "#2563EB";
+			}
+			return "#D97706";
+		}
+	}
 }

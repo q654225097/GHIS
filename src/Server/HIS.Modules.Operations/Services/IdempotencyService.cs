@@ -129,7 +129,7 @@ public class IdempotencyService : IIdempotencyContract
 	private async Task<(bool IsDuplicate, string? CachedResponseJson, bool IsConflict)> TryAcquireLegacyAsync(string key, string hash, long ttlMs, CancellationToken ct)
 	{
 		long nowMs = SystemTime.UtcNowMs;
-		OpsIdempotencyKey existing = await _idempotencyRepo.QuerySingleOrDefaultAsync("SELECT * FROM ops_idempotency_keys WHERE request_key = @Key", new
+		OpsIdempotencyKey? existing = await _idempotencyRepo.QuerySingleOrDefaultAsync("SELECT * FROM ops_idempotency_keys WHERE request_key = @Key", new
 		{
 			Key = key
 		}, ct);
@@ -168,7 +168,7 @@ public class IdempotencyService : IIdempotencyContract
 		}
 		else if (!string.IsNullOrWhiteSpace(requestKey))
 		{
-			OpsIdempotencyKey existing = await _idempotencyRepo.QuerySingleOrDefaultAsync("SELECT * FROM ops_idempotency_keys WHERE request_key = @Key", new
+			OpsIdempotencyKey? existing = await _idempotencyRepo.QuerySingleOrDefaultAsync("SELECT * FROM ops_idempotency_keys WHERE request_key = @Key", new
 			{
 				Key = requestKey.Trim()
 			}, ct);

@@ -281,6 +281,12 @@ public class PharmacyController : ControllerBase
 		{
 			PharmacyId = pharmacyId
 		})).Where((PhmDispenseOrder d) => !string.IsNullOrWhiteSpace(d.PrescriptionId)).GroupBy((PhmDispenseOrder d) => d.PrescriptionId, StringComparer.OrdinalIgnoreCase).ToDictionary((IGrouping<string, PhmDispenseOrder> g) => g.Key, (IGrouping<string, PhmDispenseOrder> g) => g.First(), StringComparer.OrdinalIgnoreCase);
+
+		var skinTestMap = (await conn.QueryAsync<(string rxId, int skinTest)>(
+			"SELECT prescription_id AS rxId, skin_test_flag AS skinTest FROM opd_prescription_items WHERE is_deleted = 0 AND skin_test_flag IN (1, 2, 4)"))
+			.GroupBy(x => x.rxId, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(g => g.Key, g => g.Max(x => x.skinTest), StringComparer.OrdinalIgnoreCase);
+
 		List<PharmacyReadyNotificationDto> result = new List<PharmacyReadyNotificationDto>();
 		foreach (RxHeaderRow rx in prescriptions)
 		{
@@ -313,6 +319,11 @@ public class PharmacyController : ControllerBase
 					6 => "待药师审方，禁止发药",
 					_ => "未知状态", 
 				};
+				if (skinTestMap.TryGetValue(rx.Id, out int stFlag))
+				{
+					canDispense = false;
+					text = (stFlag == 4) ? "皮试阳性(+)强阻断，处方锁定，严禁发药" : "需皮试药品尚未录入阴性结果，禁止发药";
+				}
 				if (1 == 0)
 				{
 				}

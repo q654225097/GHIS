@@ -406,28 +406,24 @@ public sealed class PrescriptionCellModel : ClientModelBase
 		{
 			return string.Empty;
 		}
-		int num = -1;
-		for (int i = 0; i < text.Length; i++)
+		text = text.Trim();
+		if (decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out _))
 		{
-			if (char.IsDigit(text[i]))
-			{
-				num = i;
-				break;
-			}
+			return text;
 		}
-		if (num < 0)
+		// Strip percentage concentration tokens like 0.9%, 5%, 10%
+		string filtered = System.Text.RegularExpressions.Regex.Replace(text, @"\d+(?:\.\d+)?%", " ");
+		// Match number adjacent to dose/quantity unit or at the end
+		var match = System.Text.RegularExpressions.Regex.Match(
+			filtered,
+			@"(?<!\S)(\d+(?:\.\d+)?)\s*(?:mg|g|ml|l|u|单位|片|粒|支|袋|瓶|丸|次|盒)?(?!\S)",
+			System.Text.RegularExpressions.RegexOptions.RightToLeft | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		if (match.Success)
 		{
-			return string.Empty;
+			return match.Groups[1].Value;
 		}
-		int j = num;
-		for (bool flag = false; j < text.Length && (char.IsDigit(text[j]) || (text[j] == '.' && !flag)); j++)
-		{
-			if (text[j] == '.')
-			{
-				flag = true;
-			}
-		}
-		return text.Substring(num, j - num);
+		var fallback = System.Text.RegularExpressions.Regex.Match(filtered, @"\d+(?:\.\d+)?");
+		return fallback.Success ? fallback.Value : string.Empty;
 	}
 
 	private static bool IsTruthy(string? value)

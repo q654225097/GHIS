@@ -572,6 +572,61 @@ VALUES
             await LoadRequestAsync(request.Id), "出院申请已撤回");
     }
 
+    [HttpPost("discharge-requests/{requestId}/recall")]
+    public async Task<ApiResponse<IpdDischargeRequestView>> RecallSettledDischarge(string requestId, [FromBody] CancelDischargeRequest? req = null)
+    {
+        if (!HasAnyRole("IPD_RESIDENT", "IPD_ATTENDING", "ADMIN", "CASHIER"))
+        {
+            return ApiResponse<IpdDischargeRequestView>.Fail(403, "仅住院医护、收费员或系统管理员可以执行出院召回");
+        }
+        IpdDischargeRequest? request = await _requestRepo.GetByIdAsync(requestId);
+        if (request == null)
+        {
+            return ApiResponse<IpdDischargeRequestView>.Fail(404, "出院申请不存在");
+        }
+        if (request.Status != "SETTLED")
+        {
+            return ApiResponse<IpdDischargeRequestView>.Fail(409, "仅已结算完成的住院患者可以执行出院召回");
+        }
+        string userId = CurrentUserId();
+        try
+        {
+            await _connFactory.ExecuteInTransactionAsync(async ct =>
+            {
+                request.Status = "CANCELLED";
+                request.UpdatedBy = userId;
+                await _requestRepo.UpdateAsync(request, ct);
+
+                IpdEncounter? encounter = await _encounterRepo.GetByIdAsync(request.EncounterId, ct);
+                if (encounter != null)
+                {
+                    encounter.Status = 1;
+                    encounter.UpdatedBy = userId;
+                    await _encounterRepo.UpdateAsync(encounter, ct);
+
+                    if (!string.IsNullOrWhiteSpace(encounter.ActiveBedToken))
+                    {
+                        using DbConnection conn = _connFactory.CreateConnection();
+                        await conn.ExecuteAsync(new CommandDefinition(
+                            "UPDATE ipd_beds SET bed_status = 1, current_encounter_id = @EncId, updated_by = @UserId WHERE id = @BedId OR bed_code = @BedId",
+                            new { EncId = encounter.Id, UserId = userId, BedId = encounter.ActiveBedToken },
+                            _connFactory.CurrentTransaction, cancellationToken: ct));
+                    }
+                }
+                return true;
+            });
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<IpdDischargeRequestView>.Fail(500, "出院召回执行失败：" + ex.Message);
+        }
+
+        await RecordAuditAsync("IPD_DISCHARGE_RECALL", request.Id,
+            "执行出院召回恢复在院：" + (NullIfBlank(req?.Reason) ?? "临床撤销出院召回"));
+        return ApiResponse<IpdDischargeRequestView>.Success(
+            await LoadRequestAsync(request.Id), "出院召回成功，患者已恢复在院状态并重新分配占用原床位");
+    }
+
     private async Task<IpdSettlementPreviewView> BuildPreviewAsync(IpdEncounter encounter, string? requestId)
     {
         using DbConnection conn = _connFactory.CreateConnection();
@@ -658,54 +713,30 @@ WHERE e.id = @EncounterId", new { EncounterId = encounter.Id, PatientId = encoun
 
     private string? ValidateAmounts(SettleIpdDischargeRequest req, IpdSettlementPreviewView preview)
     {
-        if (req.TotalAmount != preview.ChargeTotal)
+        if (req.InsuranceAmount < 0 || req.InsuranceAmount > preview.ChargeTotal)
         {
-            return $"结算总金额与服务器费用总额不一致，请刷新后重试（当前费用 ¥{preview.ChargeTotal:0.00}）";
+            return $"医保统筹金额必须在 0 ~ ¥{preview.ChargeTotal:0.00} 之间";
         }
-        if (req.InsuranceAmount < 0 || req.PrepaymentDeduct < 0 || req.SelfPayAmount < 0 || req.RefundAmount < 0)
+        decimal maxDeduct = Math.Min(preview.PrepaymentBalance, Math.Max(0m, preview.ChargeTotal - req.InsuranceAmount));
+        if (req.PrepaymentDeduct < 0 || req.PrepaymentDeduct > maxDeduct + 0.001m)
+        {
+            return $"预交金抵扣金额必须在 0 ~ ¥{maxDeduct:0.00} 之间";
+        }
+        if (req.InsuranceAmount + req.PrepaymentDeduct > preview.ChargeTotal + 0.001m)
+        {
+            return "医保统筹与预交金抵扣合计不能超过总费用";
+        }
+        if (req.SelfPayAmount < 0 || req.RefundAmount < 0)
         {
             return "结算金额不能为负数";
         }
-        if (Math.Abs(req.InsuranceAmount + req.PrepaymentDeduct + req.SelfPayAmount - req.TotalAmount) > 0.01m)
+        if (Math.Abs(req.InsuranceAmount + req.PrepaymentDeduct + req.SelfPayAmount - preview.ChargeTotal) > 0.01m)
         {
             return "金额勾稽失败：总金额应等于医保统筹、预交金抵扣与个人自付之和";
-        }
-        if (req.PrepaymentDeduct > preview.PrepaymentBalance + 0.001m)
-        {
-            return $"预交金抵扣超过可用余额 ¥{preview.PrepaymentBalance:0.00}";
         }
         if (Math.Abs(req.RefundAmount - (preview.PrepaymentBalance - req.PrepaymentDeduct)) > 0.01m)
         {
             return $"退款金额应为预交金余额减去抵扣额（应退 ¥{preview.PrepaymentBalance - req.PrepaymentDeduct:0.00}）";
-        }
-        if (req.ChargeItems.Count > 0)
-        {
-            Dictionary<string, IpdSettlementChargeView> serverItems = preview.ChargeItems
-                .GroupBy(x => x.ItemCode.Trim(), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
-            HashSet<string> clientCodes = new(StringComparer.OrdinalIgnoreCase);
-            foreach (IpdSettlementChargeView item in req.ChargeItems)
-            {
-                string code = (item.ItemCode ?? string.Empty).Trim();
-                if (code.Length == 0 || !clientCodes.Add(code))
-                {
-                    return "费用明细中存在空项目编码或重复项目，请刷新后重试";
-                }
-                if (!serverItems.TryGetValue(code, out IpdSettlementChargeView? serverItem))
-                {
-                    return $"费用明细 [{code}] 不属于该住院患者，不能纳入结算";
-                }
-                if (Math.Abs(item.Quantity - serverItem.Quantity) > 0.0001m
-                    || Math.Abs(item.UnitPrice - serverItem.UnitPrice) > 0.01m
-                    || Math.Abs(item.TotalAmount - serverItem.TotalAmount) > 0.01m)
-                {
-                    return $"费用明细 [{code}] 的数量、单价或金额与服务器记录不一致，请刷新后重试";
-                }
-            }
-            if (clientCodes.Count != serverItems.Count)
-            {
-                return "费用明细不完整，不能遗漏服务器计费项目";
-            }
         }
         return null;
     }

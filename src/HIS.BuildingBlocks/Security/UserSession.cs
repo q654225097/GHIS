@@ -108,12 +108,12 @@ public class UserSession : IUserSession
 		userSession.ActiveDeptId = principal.FindFirst("active_dept_id")?.Value ?? string.Empty;
 		userSession.ActivePostId = principal.FindFirst("active_post_id")?.Value ?? string.Empty;
 		userSession.ActiveWardId = principal.FindFirst("active_ward_id")?.Value ?? string.Empty;
-		string text = principal.FindFirst("linked_ward_ids")?.Value;
+		string? text = principal.FindFirst("linked_ward_ids")?.Value;
 		if (!string.IsNullOrEmpty(text))
 		{
 			userSession.LinkedWardIds = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 		}
-		string text2 = principal.FindFirst("roles")?.Value
+		string? text2 = principal.FindFirst("roles")?.Value
 			?? principal.FindAll(ClaimTypes.Role).Select(x => x.Value)
 				.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 		if (!string.IsNullOrEmpty(text2))

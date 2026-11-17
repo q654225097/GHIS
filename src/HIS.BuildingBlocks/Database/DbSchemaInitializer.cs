@@ -67,6 +67,8 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS opd_schedule_templates (id VARCHAR(36) PRIMARY KEY, campus_id VARCHAR(36) NOT NULL, opd_dept_id VARCHAR(36) NOT NULL, clinic_room_id VARCHAR(36), doctor_id VARCHAR(36) NOT NULL, template_name VARCHAR(128) NOT NULL, weekday_codes VARCHAR(20) NOT NULL, slot_period_code VARCHAR(32) NOT NULL, start_minute INT NOT NULL, end_minute INT NOT NULL, reg_level_code VARCHAR(32) NOT NULL, registration_fee DECIMAL(18,4) NOT NULL, total_capacity INT NOT NULL, is_active SMALLINT NOT NULL, ext_data_json VARCHAR(4000), schema_version INT NOT NULL, created_at_ms BIGINT NOT NULL, created_by VARCHAR(36), updated_at_ms BIGINT NOT NULL, updated_by VARCHAR(36), version_no INT NOT NULL)");
 		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_opd_schedule_slots_date_dept ON opd_schedule_slots (schedule_date_int, opd_dept_id)");
 		await EnsureRegistrationColumnsAsync(conn);
+		await EnsureSchemaExtensionsAsync(conn);
+		await CleanUpDirtyDataAsync(conn);
 	}
 
 	private static async Task EnsureColumnAsync(DbConnection conn, string table, string column, string definition)
@@ -213,6 +215,295 @@ CREATE INDEX IF NOT EXISTS ix_phm_dispense_order_lines_drug
 CREATE UNIQUE INDEX IF NOT EXISTS ux_phm_dispense_order_lines_medical_order
     ON phm_dispense_order_lines (medical_order_id)
     WHERE medical_order_id IS NOT NULL;
+");
+	}
+
+	private static async Task EnsureSchemaExtensionsAsync(DbConnection conn)
+	{
+		// P1-05: inv_drugs medical insurance fields
+		await EnsureColumnAsync(conn, "inv_drugs", "national_ins_code", "VARCHAR(32)");
+		await EnsureColumnAsync(conn, "inv_drugs", "reimburse_type", "VARCHAR(16) NOT NULL DEFAULT 'CLASS_A'");
+		await EnsureColumnAsync(conn, "inv_drugs", "self_pay_ratio", "DECIMAL(5,4) NOT NULL DEFAULT 0");
+
+		// P2-01: inv_drugs packaging and split fields
+		await EnsureColumnAsync(conn, "inv_drugs", "min_dose", "DECIMAL(18,4) NOT NULL DEFAULT 1");
+		await EnsureColumnAsync(conn, "inv_drugs", "min_dose_unit", "VARCHAR(32) NOT NULL DEFAULT 'mg'");
+		await EnsureColumnAsync(conn, "inv_drugs", "base_unit_name", "VARCHAR(32) NOT NULL DEFAULT '片'");
+		await EnsureColumnAsync(conn, "inv_drugs", "pack_factor", "INT NOT NULL DEFAULT 1");
+		await EnsureColumnAsync(conn, "inv_drugs", "is_split_allowed_ipd", "SMALLINT NOT NULL DEFAULT 1");
+		await EnsureColumnAsync(conn, "inv_drugs", "approval_no", "VARCHAR(64)");
+		await EnsureColumnAsync(conn, "inv_drugs", "manufacturer", "VARCHAR(200)");
+
+		// P1-06: sys_users login lockout & password fields
+		await EnsureColumnAsync(conn, "sys_users", "failed_login_count", "INT NOT NULL DEFAULT 0");
+		await EnsureColumnAsync(conn, "sys_users", "lockout_until_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "sys_users", "password_changed_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "sys_users", "must_change_password", "SMALLINT NOT NULL DEFAULT 0");
+
+		// P2-01: ord_medical_orders extensions
+		await EnsureColumnAsync(conn, "ord_medical_orders", "dose_unit", "VARCHAR(32) NOT NULL DEFAULT 'mg'");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "total_quantity", "INT NOT NULL DEFAULT 1");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "unit_price", "DECIMAL(18,4) NOT NULL DEFAULT 0");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "skin_test_flag", "INT NOT NULL DEFAULT 0");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "verify_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "stop_doctor_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "stop_verify_nurse_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "actual_stop_at_ms", "BIGINT");
+
+		// P2-02: pat_patients reversible guardian ciphers and demographic fields
+		await EnsureColumnAsync(conn, "pat_patients", "guardian_id_type", "VARCHAR(32)");
+		await EnsureColumnAsync(conn, "pat_patients", "guardian_id_cipher", "VARCHAR(255)");
+		await EnsureColumnAsync(conn, "pat_patients", "guardian_phone_cipher", "VARCHAR(255)");
+		await EnsureColumnAsync(conn, "pat_patients", "guardian_relation_code", "VARCHAR(16)");
+		await EnsureColumnAsync(conn, "pat_patients", "nation_code", "VARCHAR(16)");
+		await EnsureColumnAsync(conn, "pat_patients", "marital_status_code", "VARCHAR(16)");
+		await EnsureColumnAsync(conn, "pat_patients", "occupation_code", "VARCHAR(32)");
+		await EnsureColumnAsync(conn, "pat_patients", "abo_blood_code", "VARCHAR(8)");
+		await EnsureColumnAsync(conn, "pat_patients", "rh_blood_code", "VARCHAR(8)");
+		await EnsureColumnAsync(conn, "pat_patients", "address_region_code", "VARCHAR(16)");
+		await EnsureColumnAsync(conn, "pat_patients", "address_detail", "VARCHAR(500)");
+
+		// P2-03: emr_documents nursing & resident sign fields
+		await EnsureColumnAsync(conn, "emr_documents", "resident_doctor_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "emr_documents", "primary_nurse_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "emr_documents", "primary_nurse_signed_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "emr_documents", "head_nurse_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "emr_documents", "head_nurse_signed_at_ms", "BIGINT");
+
+		// P4-03: semantic control_type for emr_data_elements and cfg_field_definitions
+		await EnsureColumnAsync(conn, "emr_data_elements", "control_type", "VARCHAR(32) NOT NULL DEFAULT 'SINGLE_TEXT'");
+		await EnsureColumnAsync(conn, "cfg_field_definitions", "control_type", "VARCHAR(32) NOT NULL DEFAULT 'SINGLE_TEXT'");
+		await conn.ExecuteAsync(@"
+UPDATE emr_data_elements SET control_type = CASE
+    WHEN ursa_control_type = 'u:TextArea' THEN 'MULTI_TEXT'
+    WHEN ursa_control_type = 'u:NumericIntUpDown' THEN 'INT_INPUT'
+    WHEN ursa_control_type = 'u:NumericDoubleUpDown' THEN 'DECIMAL_INPUT'
+    WHEN ursa_control_type = 'ComboBox' THEN 'SELECT'
+    WHEN ursa_control_type = 'DatePicker' THEN 'DATE'
+    WHEN ursa_control_type = 'CheckBox' THEN 'CHECKBOX'
+    ELSE 'SINGLE_TEXT'
+END WHERE control_type IS NULL OR control_type = 'SINGLE_TEXT';
+");
+
+		// P2-04: New clinical and financial tables
+		await conn.ExecuteAsync(@"
+CREATE TABLE IF NOT EXISTS fin_inpatient_fee_items (
+    id VARCHAR(36) PRIMARY KEY,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    fee_date_int INT NOT NULL,
+    item_category VARCHAR(32) NOT NULL,
+    item_code VARCHAR(64) NOT NULL,
+    item_name VARCHAR(200) NOT NULL,
+    spec VARCHAR(100),
+    unit_name VARCHAR(32) NOT NULL,
+    unit_price DECIMAL(18,4) NOT NULL,
+    quantity DECIMAL(18,4) NOT NULL,
+    total_amount DECIMAL(18,4) NOT NULL,
+    self_pay_ratio DECIMAL(5,4) NOT NULL DEFAULT 0,
+    reimburse_type VARCHAR(16) NOT NULL DEFAULT 'CLASS_A',
+    charge_dept_id VARCHAR(36) NOT NULL,
+    exec_dept_id VARCHAR(36) NOT NULL,
+    order_id VARCHAR(36),
+    is_settled SMALLINT NOT NULL DEFAULT 0,
+    settle_payment_id VARCHAR(36),
+    is_refunded SMALLINT NOT NULL DEFAULT 0,
+    original_fee_item_id VARCHAR(36),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_fin_inpatient_fee_encounter_date ON fin_inpatient_fee_items (encounter_id, fee_date_int);
+CREATE INDEX IF NOT EXISTS ix_fin_inpatient_fee_settle ON fin_inpatient_fee_items (is_settled, encounter_id);
+
+CREATE TABLE IF NOT EXISTS inv_drug_trace_codes (
+    id VARCHAR(36) PRIMARY KEY,
+    trace_code VARCHAR(64) NOT NULL UNIQUE,
+    national_ins_code VARCHAR(32) NOT NULL,
+    drug_id VARCHAR(36) NOT NULL,
+    batch_id VARCHAR(36) NOT NULL,
+    batch_no VARCHAR(80) NOT NULL,
+    warehouse_or_pharmacy_id VARCHAR(36) NOT NULL,
+    stock_in_order_id VARCHAR(36),
+    dispense_order_id VARCHAR(36),
+    dispense_order_line_id VARCHAR(36),
+    status VARCHAR(32) NOT NULL,
+    is_recalled SMALLINT NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_inv_drug_trace_batch ON inv_drug_trace_codes (batch_id);
+CREATE INDEX IF NOT EXISTS ix_inv_drug_trace_dispense ON inv_drug_trace_codes (dispense_order_line_id);
+
+CREATE TABLE IF NOT EXISTS inv_stock_takes (
+    id VARCHAR(36) PRIMARY KEY,
+    stock_take_no VARCHAR(40) NOT NULL UNIQUE,
+    warehouse_or_pharmacy_id VARCHAR(36) NOT NULL,
+    dept_name VARCHAR(128) NOT NULL,
+    stock_take_type VARCHAR(32) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    total_system_qty INT NOT NULL DEFAULT 0,
+    total_actual_qty INT NOT NULL DEFAULT 0,
+    total_diff_qty INT NOT NULL DEFAULT 0,
+    total_diff_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    created_by_user_id VARCHAR(36) NOT NULL,
+    approved_by_user_id VARCHAR(36),
+    approved_at_ms BIGINT,
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS inv_stock_take_lines (
+    id VARCHAR(36) PRIMARY KEY,
+    stock_take_id VARCHAR(36) NOT NULL,
+    drug_id VARCHAR(36) NOT NULL,
+    batch_id VARCHAR(36) NOT NULL,
+    drug_code VARCHAR(64) NOT NULL,
+    drug_name VARCHAR(200) NOT NULL,
+    spec VARCHAR(100),
+    unit_name VARCHAR(32),
+    batch_no VARCHAR(80) NOT NULL,
+    system_qty INT NOT NULL,
+    actual_qty INT NOT NULL,
+    diff_qty INT NOT NULL,
+    unit_cost_price DECIMAL(18,4) NOT NULL,
+    diff_cost_amount DECIMAL(18,4) NOT NULL,
+    reason VARCHAR(255),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_inv_stock_take_lines_take ON inv_stock_take_lines (stock_take_id);
+
+CREATE TABLE IF NOT EXISTS medtech_critical_values (
+    id VARCHAR(36) PRIMARY KEY,
+    report_id VARCHAR(36) NOT NULL,
+    source_type VARCHAR(16) NOT NULL,
+    visit_or_encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    item_code VARCHAR(64) NOT NULL,
+    item_name VARCHAR(200) NOT NULL,
+    critical_value_text VARCHAR(1000) NOT NULL,
+    published_by VARCHAR(36) NOT NULL,
+    published_at_ms BIGINT NOT NULL,
+    doc_acked_by VARCHAR(36),
+    doc_acked_at_ms BIGINT,
+    nurse_acked_by VARCHAR(36),
+    nurse_acked_at_ms BIGINT,
+    action_order_id VARCHAR(36),
+    status VARCHAR(32) NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_medtech_critical_values_enc ON medtech_critical_values (visit_or_encounter_id, status);
+
+CREATE TABLE IF NOT EXISTS opd_infectious_report_cards (
+    id VARCHAR(36) PRIMARY KEY,
+    report_no VARCHAR(40) NOT NULL UNIQUE,
+    visit_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    icd_code VARCHAR(32) NOT NULL,
+    disease_name VARCHAR(200) NOT NULL,
+    disease_category VARCHAR(16) NOT NULL,
+    diagnose_type VARCHAR(32) NOT NULL,
+    onset_date_int INT NOT NULL,
+    diagnosed_date_int INT NOT NULL,
+    report_doctor_id VARCHAR(36) NOT NULL,
+    reported_at_ms BIGINT NOT NULL,
+    cdc_sync_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    cdc_sync_at_ms BIGINT,
+    status VARCHAR(32) NOT NULL DEFAULT 'REPORTED',
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_opd_infectious_report_visit ON opd_infectious_report_cards (visit_id);
+
+CREATE TABLE IF NOT EXISTS emr_inpatient_front_sheets (
+    id VARCHAR(36) PRIMARY KEY,
+    encounter_id VARCHAR(36) NOT NULL UNIQUE,
+    patient_id VARCHAR(36) NOT NULL,
+    medical_record_no VARCHAR(32) NOT NULL,
+    admission_times INT NOT NULL DEFAULT 1,
+    pay_type_code VARCHAR(16) NOT NULL,
+    health_card_no VARCHAR(64),
+    admit_dept_id VARCHAR(36) NOT NULL,
+    admit_ward_id VARCHAR(36) NOT NULL,
+    admit_time_ms BIGINT NOT NULL,
+    discharge_dept_id VARCHAR(36),
+    discharge_ward_id VARCHAR(36),
+    discharge_time_ms BIGINT,
+    inpatient_days INT NOT NULL DEFAULT 0,
+    outpatient_diag_code VARCHAR(32),
+    outpatient_diag_name VARCHAR(200),
+    primary_diag_code VARCHAR(32),
+    primary_diag_name VARCHAR(200),
+    primary_admission_condition VARCHAR(16),
+    other_diags_json TEXT,
+    surgeries_json TEXT,
+    total_cost DECIMAL(18,4) NOT NULL DEFAULT 0,
+    self_pay_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    fee_breakdown_json TEXT,
+    chief_physician_id VARCHAR(36),
+    attending_physician_id VARCHAR(36),
+    resident_physician_id VARCHAR(36),
+    primary_nurse_id VARCHAR(36),
+    quality_level VARCHAR(16),
+    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+");
+	}
+
+	private static async Task CleanUpDirtyDataAsync(DbConnection conn)
+	{
+		// P0-03: Clean dirty data in opd_prescriptions and opd_prescription_items
+		await conn.ExecuteAsync(@"
+UPDATE opd_prescriptions 
+SET visit_id = 'VISIT-OPD-20261105001' 
+WHERE visit_id = 'OPD20261105001' AND id = '31a78448-614a-470c-993a-34787d01b7bb';
+
+UPDATE opd_prescription_items SET drug_id = 'DRUG-01' WHERE drug_id = 'DRUG-ANTI-001';
+UPDATE opd_prescription_items SET drug_id = 'DRUG-02' WHERE drug_id = 'DRUG-LOCAL';
+UPDATE opd_prescription_items SET drug_id = 'DRUG-05' WHERE drug_id = 'DRUG-CARD-005';
+
+UPDATE opd_prescription_items 
+SET is_deleted = 1, deleted_at_ms = 1731312000000, deleted_by = 'SYSTEM_CLEANUP' 
+WHERE id = 'ed6eb32f-0fea-44f4-9a8d-95e1c194fcc9' 
+   OR ext_data_json LIKE '%❌ 皮试阳性 (强阻断)%';
 ");
 	}
 }

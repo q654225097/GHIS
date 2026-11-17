@@ -652,13 +652,88 @@ public class PrescriptionItemModel : ClientModelBase
 		OnPropertyChanged("QuantityValue");
 	}
 
+	private static (decimal minDose, int packFactor) ParseSpec(string? spec)
+	{
+		if (string.IsNullOrWhiteSpace(spec)) return (1m, 1);
+		decimal minDose = 1m;
+		int packFactor = 1;
+
+		var packMatch = System.Text.RegularExpressions.Regex.Match(spec, @"\*\s*(\d+)\s*(?:片|粒|支|袋|丸|瓶|板)?");
+		if (packMatch.Success && int.TryParse(packMatch.Groups[1].Value, out int pf) && pf > 0)
+		{
+			packFactor = pf;
+		}
+
+		string dosePart = spec.Split('*')[0].Split('/')[0];
+		if (dosePart.Contains(':'))
+		{
+			dosePart = dosePart.Split(':')[1];
+		}
+		var doseMatch = System.Text.RegularExpressions.Regex.Match(dosePart, @"(\d+(?:\.\d+)?)\s*(?:mg|g|ml|l|u|单位|片|粒|支|袋)?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		if (doseMatch.Success && decimal.TryParse(doseMatch.Groups[1].Value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out decimal md) && md > 0)
+		{
+			if (dosePart.EndsWith("g", StringComparison.OrdinalIgnoreCase) && !dosePart.EndsWith("mg", StringComparison.OrdinalIgnoreCase))
+			{
+				md *= 1000m;
+			}
+			minDose = md;
+		}
+
+		return (minDose, packFactor);
+	}
+
+	private static decimal ParseDose(string? dose)
+	{
+		if (string.IsNullOrWhiteSpace(dose)) return 1m;
+		string trimmed = dose.Trim();
+		var match = System.Text.RegularExpressions.Regex.Match(trimmed, @"(\d+(?:\.\d+)?)\s*(?:mg|g|ml|l|u|单位|片|粒|支|袋)?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		if (match.Success && decimal.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out decimal val))
+		{
+			if (trimmed.EndsWith("g", StringComparison.OrdinalIgnoreCase) && !trimmed.EndsWith("mg", StringComparison.OrdinalIgnoreCase))
+			{
+				val *= 1000m;
+			}
+			return val > 0 ? val : 1m;
+		}
+		return 1m;
+	}
+
 	private void RecalculateQuantityFromFrequency(int? daysOverride = null)
 	{
-		// 数量 = 用药天数 x 每日给药次数；处方行内修改频次或天数时立即同步。
 		int days = daysOverride ?? Math.Max(ParseDraftInteger(EditDraft.GetValue("DAYS"), Days), 1);
 		int dailyCount = Math.Max(1, ParseDailyFrequencyCount(EditDraft.GetValue("FREQ", Freq)));
 		Days = days;
-		QuantityValue = days * dailyCount;
+
+		string specStr = EditDraft.GetValue("SPEC", Spec);
+		string doseStr = EditDraft.GetValue("DOSE", Dose);
+
+		var (minDose, packFactor) = ParseSpec(specStr);
+		decimal doseOnce = ParseDose(doseStr);
+
+		bool isPieceDose = !string.IsNullOrWhiteSpace(doseStr) &&
+			(doseStr.Contains("片") || doseStr.Contains("粒") || doseStr.Contains("支") || doseStr.Contains("袋") || doseStr.Contains("丸"));
+
+		int totalPackages;
+		if (isPieceDose)
+		{
+			decimal totalPieces = doseOnce * dailyCount * days;
+			totalPackages = Math.Max(1, (int)Math.Ceiling(totalPieces / Math.Max(1, packFactor)));
+		}
+		else
+		{
+			decimal totalDose = doseOnce * dailyCount * days;
+			decimal packDose = minDose * packFactor;
+			if (packDose > 0)
+			{
+				totalPackages = Math.Max(1, (int)Math.Ceiling(totalDose / packDose));
+			}
+			else
+			{
+				totalPackages = Math.Max(1, (int)Math.Ceiling((decimal)(dailyCount * days) / Math.Max(1, packFactor)));
+			}
+		}
+
+		QuantityValue = totalPackages;
 		EditDraft.SetValue("DAYS", days.ToString());
 		SetColumnValue("QUANTITY", QuantityValue.ToString());
 		EditDraft.SetValue("QUANTITY", QuantityValue.ToString());

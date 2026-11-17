@@ -86,9 +86,13 @@ public class PermissionAuthorizationFilter : IAsyncAuthorizationFilter
             // 系统管理员具备完全治理权限
             if (!userSession.IsAdmin)
             {
-                var allowedRoles = roleAttrs.SelectMany(a => a.Roles).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                bool hasRole = allowedRoles.Contains(userSession.RoleCode) ||
-                               userSession.Roles.Any(r => allowedRoles.Contains(r));
+                var allowedNormalized = roleAttrs.SelectMany(a => a.Roles)
+                    .Select(RoleCode.Normalize)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                string normUserRole = RoleCode.Normalize(userSession.RoleCode);
+                bool hasRole = allowedNormalized.Contains(normUserRole) ||
+                               userSession.Roles.Any(r => allowedNormalized.Contains(RoleCode.Normalize(r)));
 
                 if (!hasRole)
                 {

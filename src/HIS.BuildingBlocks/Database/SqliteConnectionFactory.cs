@@ -18,13 +18,13 @@ public class SqliteConnectionFactory : IDbConnectionFactory
 
 		private readonly DbTransaction _transaction;
 
+		[AllowNull]
 		public override string ConnectionString
 		{
 			get
 			{
 				return _inner.ConnectionString;
 			}
-			[param: AllowNull]
 			set
 			{
 				_inner.ConnectionString = value;
@@ -91,11 +91,11 @@ public class SqliteConnectionFactory : IDbConnectionFactory
 
 	static SqliteConnectionFactory()
 	{
-		CurrentScope = new AsyncLocal<AmbientTransactionScope>();
+		CurrentScope = new AsyncLocal<AmbientTransactionScope?>();
 		SqliteTypeHandlers.Initialize();
 	}
 
-	public SqliteConnectionFactory(string connectionString = "Data Source=his_v4.db;Mode=ReadWriteCreate")
+	public SqliteConnectionFactory(string connectionString = "Data Source=his_v4.db;Mode=ReadWriteCreate;Default Timeout=30")
 	{
 		if (connectionString.Contains("Memory", StringComparison.OrdinalIgnoreCase) && connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase))
 		{
@@ -104,24 +104,43 @@ public class SqliteConnectionFactory : IDbConnectionFactory
 		}
 		else
 		{
-			_connectionString = connectionString;
+			_connectionString = connectionString.Contains("Default Timeout", StringComparison.OrdinalIgnoreCase)
+				? connectionString
+				: connectionString + ";Default Timeout=30";
 		}
 		if (_connectionString.Contains("Memory", StringComparison.OrdinalIgnoreCase))
 		{
 			_sharedKeepAliveConnection = new SqliteConnection(_connectionString);
 			_sharedKeepAliveConnection.Open();
 		}
+
+		try
+		{
+			using var conn = new SqliteConnection(_connectionString);
+			conn.Open();
+			using var cmd = conn.CreateCommand();
+			cmd.CommandText = "PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 30000; PRAGMA synchronous = NORMAL;";
+			cmd.ExecuteNonQuery();
+		}
+		catch { }
 	}
 
 	public DbConnection CreateConnection()
 	{
-		AmbientTransactionScope value = CurrentScope.Value;
+		AmbientTransactionScope? value = CurrentScope.Value;
 		if (value != null)
 		{
 			return new NonDisposingDbConnection(value.Connection, value.Transaction);
 		}
 		SqliteConnection sqliteConnection = new SqliteConnection(_connectionString);
 		sqliteConnection.Open();
+		try
+		{
+			using var cmd = sqliteConnection.CreateCommand();
+			cmd.CommandText = "PRAGMA busy_timeout = 30000;";
+			cmd.ExecuteNonQuery();
+		}
+		catch { }
 		return sqliteConnection;
 	}
 

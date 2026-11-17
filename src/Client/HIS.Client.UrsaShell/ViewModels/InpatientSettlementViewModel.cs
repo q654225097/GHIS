@@ -389,10 +389,29 @@ public sealed class InpatientSettlementViewModel : ClientModelBase
             SetValidation("医保统筹和预交金抵扣必须是有效金额。");
             return;
         }
-        if (!TryParseMoney(SelfPayAmountText, out decimal selfPay)
-            || !TryParseMoney(RefundAmountText, out decimal refund))
+        decimal total = Preview.ChargeTotal;
+        decimal balance = Preview.PrepaymentBalance;
+        if (insurance < 0 || insurance > total)
         {
-            SetValidation("结算金额计算失败，请检查输入。");
+            SetValidation($"医保报销金额必须在 0 ~ ¥{total:F2} 之间。");
+            return;
+        }
+        decimal maxDeduct = Math.Min(balance, Math.Max(0m, total - insurance));
+        if (prepaymentDeduct < 0 || prepaymentDeduct > maxDeduct)
+        {
+            SetValidation($"预交金抵扣金额必须在 0 ~ ¥{maxDeduct:F2} 之间。");
+            return;
+        }
+        if (insurance + prepaymentDeduct > total)
+        {
+            SetValidation("医保报销加预交金抵扣不能超过住院总费用。");
+            return;
+        }
+        if (!TryParseMoney(SelfPayAmountText, out decimal selfPay)
+            || !TryParseMoney(RefundAmountText, out decimal refund)
+            || selfPay < 0 || refund < 0)
+        {
+            SetValidation("结算金额计算失败，自付或退款不能为负数。");
             return;
         }
 
@@ -462,6 +481,14 @@ public sealed class InpatientSettlementViewModel : ClientModelBase
         }
         decimal total = Preview?.ChargeTotal ?? 0m;
         decimal balance = Preview?.PrepaymentBalance ?? 0m;
+
+        if (insurance < 0) insurance = 0;
+        if (insurance > total) insurance = total;
+
+        decimal maxPrepaymentDeduct = Math.Min(balance, Math.Max(0m, total - insurance));
+        if (prepaymentDeduct < 0) prepaymentDeduct = 0;
+        if (prepaymentDeduct > maxPrepaymentDeduct) prepaymentDeduct = maxPrepaymentDeduct;
+
         decimal selfPay = total - insurance - prepaymentDeduct;
         decimal refund = balance - prepaymentDeduct;
         SelfPayAmountText = selfPay.ToString("F2");

@@ -119,11 +119,23 @@ public class PlatformController : ControllerBase
 		}));
 	}
 
-	[AllowAnonymous]
 	[HttpGet("auth/contexts")]
-	public async Task<ApiResponse<IReadOnlyList<LoginContextDto>>> GetLoginContexts([FromQuery] string userName)
+	public async Task<ApiResponse<IReadOnlyList<LoginContextDto>>> GetLoginContexts([FromQuery] string? userName = null)
 	{
-		SysUser? user = await FindUserAsync(userName);
+		string targetUser = string.IsNullOrWhiteSpace(userName) ? (_userSession?.UserName ?? "") : userName.Trim();
+		if (string.IsNullOrWhiteSpace(targetUser))
+		{
+			return ApiResponse<IReadOnlyList<LoginContextDto>>.Fail(400, "必须指定用户名或先登录");
+		}
+
+		if (!string.IsNullOrWhiteSpace(_userSession?.UserId)
+			&& !_userSession.IsAdmin
+			&& !string.Equals(_userSession.UserName, targetUser, StringComparison.OrdinalIgnoreCase))
+		{
+			return ApiResponse<IReadOnlyList<LoginContextDto>>.Fail(403, "非管理员仅可查询本人的执业身份列表");
+		}
+
+		SysUser? user = await FindUserAsync(targetUser);
 		if (user == null)
 		{
 			return ApiResponse<IReadOnlyList<LoginContextDto>>.Fail(404, "用户不存在");
@@ -139,6 +151,8 @@ public class PlatformController : ControllerBase
 		{
 			return BadRequest(ApiResponse<LoginResponseDto>.Fail(400, "用户名与密码不能为空"));
 		}
+
+		long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
 		if (_lockoutService != null)
 		{
@@ -165,30 +179,53 @@ public class PlatformController : ControllerBase
 			return Unauthorized(ApiResponse<LoginResponseDto>.Fail(401, "用户名或密码错误"));
 		}
 
+		if (user.LockoutUntilMs.HasValue && user.LockoutUntilMs.Value > nowMs)
+		{
+			int minutesLeft = Math.Max(1, (int)Math.Ceiling((user.LockoutUntilMs.Value - nowMs) / 60000.0));
+			if (_auditTrail != null)
+			{
+				await _auditTrail.RecordAuditAsync("AUTH_LOGIN_LOCKED", "SysUser", user.Id, $"账户处于持久化安全锁定状态，剩余 {minutesLeft} 分钟", user.Id, user.DisplayName);
+			}
+			return StatusCode(423, ApiResponse<LoginResponseDto>.Fail(423, $"账户已被安全锁定，请 {minutesLeft} 分钟后再试"));
+		}
+
 		var (isValid, needsUpgrade) = PasswordSecurityHelper.VerifyPassword(req.Password, user.PasswordHash);
 		if (!isValid)
 		{
-			if (_lockoutService != null)
+			user.FailedLoginCount++;
+			bool locked = false;
+			int lockMinutes = 15;
+			if (user.FailedLoginCount >= 5)
 			{
-				var (nowLocked, count, duration) = _lockoutService.RecordFailedAttempt(req.UserName);
-				if (nowLocked)
+				user.LockoutUntilMs = nowMs + lockMinutes * 60 * 1000;
+				locked = true;
+			}
+			await _userRepo.UpdateAsync(user);
+			_lockoutService?.RecordFailedAttempt(req.UserName);
+
+			if (locked)
+			{
+				if (_auditTrail != null)
 				{
-					int lockedMinutes = (int)duration.TotalMinutes;
-					if (_auditTrail != null)
-					{
-						await _auditTrail.RecordAuditAsync("AUTH_LOGIN_LOCKED", "SysUser", user.Id, $"连续 {count} 次密码错误，账户已被自动锁定 {lockedMinutes} 分钟", user.Id, user.DisplayName);
-					}
-					return StatusCode(423, ApiResponse<LoginResponseDto>.Fail(423, $"连续 {count} 次密码错误，账户已被锁定 {lockedMinutes} 分钟"));
+					await _auditTrail.RecordAuditAsync("AUTH_LOGIN_LOCKED", "SysUser", user.Id, $"连续 {user.FailedLoginCount} 次密码错误，账户已被持久化锁定 {lockMinutes} 分钟", user.Id, user.DisplayName);
 				}
+				return StatusCode(423, ApiResponse<LoginResponseDto>.Fail(423, $"连续 {user.FailedLoginCount} 次密码错误，账户已被安全锁定 {lockMinutes} 分钟"));
 			}
 
 			if (_auditTrail != null)
 			{
-				await _auditTrail.RecordAuditAsync("AUTH_LOGIN_FAILED", "SysUser", user.Id, "密码不匹配", user.Id, user.DisplayName);
+				await _auditTrail.RecordAuditAsync("AUTH_LOGIN_FAILED", "SysUser", user.Id, $"密码错误（第 {user.FailedLoginCount} 次尝试）", user.Id, user.DisplayName);
 			}
-			return Unauthorized(ApiResponse<LoginResponseDto>.Fail(401, "用户名或密码错误"));
+			return Unauthorized(ApiResponse<LoginResponseDto>.Fail(401, $"用户名或密码错误，剩余尝试次数: {Math.Max(0, 5 - user.FailedLoginCount)}"));
 		}
 
+		// 验证成功：重置锁定与错误计数
+		if (user.FailedLoginCount > 0 || user.LockoutUntilMs.HasValue)
+		{
+			user.FailedLoginCount = 0;
+			user.LockoutUntilMs = null;
+			await _userRepo.UpdateAsync(user);
+		}
 		_lockoutService?.ResetAttempts(req.UserName);
 
 		// 旧版无盐密码平滑升级为加盐 PBKDF2
@@ -422,9 +459,11 @@ public class PlatformController : ControllerBase
 
 	private async Task<SysUser?> FindUserAsync(string userName)
 	{
-		return (await _userRepo.QueryAsync("SELECT * FROM sys_users WHERE user_name = @UserName AND is_active = 1", new
+		string input = userName?.Trim() ?? string.Empty;
+		return (await _userRepo.QueryAsync(
+			"SELECT * FROM sys_users WHERE (user_name = @Input OR employee_no = @Input) AND is_active = 1 LIMIT 1", new
 		{
-			UserName = userName
+			Input = input
 		})).FirstOrDefault();
 	}
 

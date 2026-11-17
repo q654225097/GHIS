@@ -56,7 +56,7 @@ public class DischargeCheckDetailsModel : ClientModelBase
 	{
 		get
 		{
-			InpatientRecordModel patient = Patient;
+			InpatientRecordModel? patient = Patient;
 			return patient != null && patient.IsActiveInpatient && !OrdersAllStopped;
 		}
 	}
@@ -65,7 +65,7 @@ public class DischargeCheckDetailsModel : ClientModelBase
 	{
 		get
 		{
-			InpatientRecordModel patient = Patient;
+			InpatientRecordModel? patient = Patient;
 			return patient != null && patient.IsActiveInpatient && !MedTechReportsAllSigned;
 		}
 	}
@@ -74,7 +74,7 @@ public class DischargeCheckDetailsModel : ClientModelBase
 	{
 		get
 		{
-			InpatientRecordModel patient = Patient;
+			InpatientRecordModel? patient = Patient;
 			return patient != null && patient.IsActiveInpatient && OrdersAllStopped && !DischargeMedsDispensed;
 		}
 	}
@@ -83,7 +83,7 @@ public class DischargeCheckDetailsModel : ClientModelBase
 	{
 		get
 		{
-			InpatientRecordModel patient = Patient;
+			InpatientRecordModel? patient = Patient;
 			return patient != null && patient.IsActiveInpatient && !EmrAllThreeLevelsSigned;
 		}
 	}
@@ -92,7 +92,7 @@ public class DischargeCheckDetailsModel : ClientModelBase
 	{
 		get
 		{
-			InpatientRecordModel patient = Patient;
+			InpatientRecordModel? patient = Patient;
 			return patient != null && patient.IsActiveInpatient && ClinicalGatesAllPassed && !MedicalInsuranceSettled;
 		}
 	}
@@ -101,7 +101,7 @@ public class DischargeCheckDetailsModel : ClientModelBase
 	{
 		get
 		{
-			InpatientRecordModel patient = Patient;
+			InpatientRecordModel? patient = Patient;
 			return patient != null && patient.IsActiveInpatient && ClinicalGatesAllPassed && MedicalInsuranceSettled && !PrepaymentCleared;
 		}
 	}
