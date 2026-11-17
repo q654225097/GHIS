@@ -244,6 +244,50 @@ public partial class WorkbenchModel
 		}
 	}
 
+	public async Task<OpdActionOutcome> PreCheckCurrentPrescriptionAsync()
+	{
+		PatientQueueItemModel? patient = SelectedPatient;
+		if (patient == null)
+		{
+			return OpdActionOutcome.Failure("请先选择接诊患者");
+		}
+		List<PrescriptionItemModel> items = Prescriptions.Where(x => !x.IsDeleted).ToList();
+		if (items.Count == 0)
+		{
+			return OpdActionOutcome.Failure("处方暂无有效药品明细，请先加入药品");
+		}
+
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			var body = new
+			{
+				PatientId = patient.PatientId,
+				PrescribeLevel = SessionContext.Current.PrescribeLevel,
+				Items = items.Select(ToServerItem).ToList()
+			};
+
+			using HttpResponseMessage response = await http.PostAsJsonAsync("/api/v4/opd/prescriptions/pre-check", body, JsonOptions);
+			ClientApiEnvelope<JsonElement>? envelope =
+				await response.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOptions);
+
+			if (envelope is not { Code: 200 })
+			{
+				string msg = envelope?.Message ?? "前置审方服务响应失败";
+				SystemNotice = msg;
+				return OpdActionOutcome.Failure("前置审方拦截：" + msg);
+			}
+
+			string summary = envelope.Message ?? "前置审方完成";
+			SystemNotice = summary;
+			return OpdActionOutcome.Success(summary);
+		}
+		catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
+		{
+			return OpdActionOutcome.Failure("审方网络请求失败：" + ex.Message);
+		}
+	}
+
 	public async Task<OpdActionOutcome> SubmitCurrentPrescriptionAsync()
 	{
 		PatientQueueItemModel? patient = SelectedPatient;

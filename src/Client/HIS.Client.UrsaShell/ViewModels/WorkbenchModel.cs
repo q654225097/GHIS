@@ -2704,6 +2704,22 @@ public partial class WorkbenchModel : ClientModelBase
 		}
 	}
 
+	private int _vitalsWeekOffset;
+	public int VitalsWeekOffset
+	{
+		get => _vitalsWeekOffset;
+		set => SetField(ref _vitalsWeekOffset, value);
+	}
+
+	public System.Windows.Input.ICommand PreviousVitalsWeekCommand =>
+		new HIS.Client.UrsaShell.Shell.RelayCommand(() => VitalsWeekOffset--);
+
+	public System.Windows.Input.ICommand CurrentVitalsWeekCommand =>
+		new HIS.Client.UrsaShell.Shell.RelayCommand(() => VitalsWeekOffset = 0);
+
+	public System.Windows.Input.ICommand NextVitalsWeekCommand =>
+		new HIS.Client.UrsaShell.Shell.RelayCommand(() => VitalsWeekOffset++);
+
 	public string TemperatureText
 	{
 		get
@@ -3971,18 +3987,44 @@ public partial class WorkbenchModel : ClientModelBase
 		};
 	}
 
-	private static VitalSignModel NewVitals(string time, string temperature, string pulse, string respiration, string systolic, string diastolic, string spo2, string nurse, bool abnormal)
+	private static VitalSignModel NewVitals(
+		string time,
+		string temperature,
+		string pulse,
+		string respiration,
+		string systolic,
+		string diastolic,
+		string spo2,
+		string nurse,
+		bool abnormal,
+		string measureType = "AXILLARY",
+		string coolingTemp = "",
+		string milestone = "",
+		string stool = "1",
+		string urine = "1500",
+		string intake = "2200",
+		string output = "1900",
+		string weight = "65.0")
 	{
 		return new VitalSignModel
 		{
 			RecordedAt = time,
 			Temperature = temperature,
+			CoolingTemperature = coolingTemp,
 			Pulse = pulse,
+			HeartRate = pulse,
 			Respiration = respiration,
 			BloodPressure = systolic + "/" + diastolic,
 			Spo2 = spo2,
 			NurseName = nurse,
-			IsAbnormal = abnormal
+			IsAbnormal = abnormal,
+			MeasureType = measureType,
+			MilestoneEvent = milestone,
+			StoolCount = stool,
+			UrineOutput = urine,
+			TotalIntake = intake,
+			TotalOutput = output,
+			WeightKg = weight
 		};
 	}
 
@@ -4037,8 +4079,13 @@ public partial class WorkbenchModel : ClientModelBase
 		inpatientRecordModel.NursingTasks.Add(NewTask("NT-Z01", "08:00", "给药", "口服阿司匹林肠溶片 100mg", "长期医嘱", "高"));
 		inpatientRecordModel.NursingTasks.Add(NewTask("NT-Z02", "10:00", "监护", "测量血压并记录胸闷变化", "二级护理", "中"));
 		inpatientRecordModel.NursingTasks.Add(NewTask("NT-Z03", "14:00", "宣教", "胸痛发作自救与服药依从性宣教", "护理常规", "常规", "已执行", "14:04"));
-		inpatientRecordModel.VitalSigns.Add(NewVitals("2026-11-06 08:00", "36.6", "78", "18", "132", "84", "98", "陈劳", abnormal: false));
+		inpatientRecordModel.VitalSigns.Add(NewVitals("2026-11-05 10:15", "36.8", "84", "19", "142", "90", "98", "陈劳", abnormal: false, milestone: "入院十时十五分", stool: "0", urine: "600", intake: "800", output: "600", weight: "68.0"));
+		inpatientRecordModel.VitalSigns.Add(NewVitals("2026-11-05 14:00", "38.5", "102", "22", "138", "88", "96", "陈劳", abnormal: true, coolingTemp: "37.4", stool: "1", urine: "1200", intake: "1600", output: "1300", weight: "68.0"));
+		inpatientRecordModel.VitalSigns.Add(NewVitals("2026-11-05 18:00", "37.2", "88", "20", "136", "86", "97", "赵敏", abnormal: false, stool: "1", urine: "1800", intake: "2400", output: "1900", weight: "68.0"));
 		inpatientRecordModel.VitalSigns.Add(NewVitals("2026-11-05 20:00", "36.8", "82", "19", "141", "88", "97", "赵敏", abnormal: false));
+		inpatientRecordModel.VitalSigns.Add(NewVitals("2026-11-06 06:00", "36.5", "74", "17", "128", "80", "99", "陈劳", abnormal: false));
+		inpatientRecordModel.VitalSigns.Add(NewVitals("2026-11-06 08:00", "36.6", "78", "18", "132", "84", "98", "陈劳", abnormal: false));
+		inpatientRecordModel.VitalSigns.Add(NewVitals("2026-11-06 14:00", "36.7", "80", "18", "130", "82", "98", "陈劳", abnormal: false));
 		inpatientRecordModel.HandoverNotes.Add(NewHandover("白班 → 夜班", "陈劳 (责任护士)", "2026-11-05 18:00", "患者晚间偶有活动后胸闷，已告知值班医生；继续观察血压与心率。", confirmed: true));
 		InpatientRecordModel inpatientRecordModel2 = new InpatientRecordModel
 		{

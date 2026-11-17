@@ -2121,4 +2121,137 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
             NewPassword = "123"
         });
     }
+
+    [Fact]
+    public async Task OutpatientPrescription_PreCheck_Api_EvaluatesSafetyRulesCorrectly()
+    {
+        var doctorClient = await CreateAuthenticatedClientAsync("doc_opd", "OPD_DOC", "DEPT-OPD-01");
+
+        // 1. Valid safe item: Aspirin 100mg for clean patient PAT-PHM-DEMO-01
+        var passPayload = new
+        {
+            PatientId = "PAT-PHM-DEMO-01",
+            PrescribeLevel = 2,
+            Items = new[]
+            {
+                new
+                {
+                    DrugId = "DRUG-04", // 阿司匹林肠溶片
+                    DoseOnce = 100m,
+                    DoseUnit = "mg",
+                    FrequencyCode = "QD",
+                    RouteCode = "PO",
+                    Days = 7,
+                    TotalQuantity = 1,
+                    SkinTestFlag = 0
+                }
+            }
+        };
+
+        var passRes = await doctorClient.PostAsJsonAsync("/api/v4/opd/prescriptions/pre-check", passPayload);
+        Assert.True(passRes.IsSuccessStatusCode);
+        var passData = await passRes.Content.ReadFromJsonAsync<ApiResponse<HIS.Modules.Outpatient.Models.PrescriptionReviewResultDto>>();
+        Assert.NotNull(passData);
+        Assert.Equal(200, passData.Code);
+        Assert.Equal("PASS", passData.Data?.OverallStatus);
+        Assert.True(passData.Data?.CanProceed);
+
+        // 2. Overdose block: Aspirin 500mg (> 300mg limit)
+        var overdosePayload = new
+        {
+            PatientId = "PAT-PHM-DEMO-01",
+            PrescribeLevel = 2,
+            Items = new[]
+            {
+                new
+                {
+                    DrugId = "DRUG-04",
+                    DoseOnce = 500m,
+                    DoseUnit = "mg",
+                    FrequencyCode = "QD",
+                    RouteCode = "PO",
+                    Days = 3,
+                    TotalQuantity = 1,
+                    SkinTestFlag = 0
+                }
+            }
+        };
+
+        var overdoseRes = await doctorClient.PostAsJsonAsync("/api/v4/opd/prescriptions/pre-check", overdosePayload);
+        Assert.True(overdoseRes.IsSuccessStatusCode);
+        var overdoseData = await overdoseRes.Content.ReadFromJsonAsync<ApiResponse<HIS.Modules.Outpatient.Models.PrescriptionReviewResultDto>>();
+        Assert.NotNull(overdoseData);
+        Assert.Equal(200, overdoseData.Code);
+        Assert.Equal("BLOCK", overdoseData.Data?.OverallStatus);
+        Assert.False(overdoseData.Data?.CanProceed);
+        Assert.Contains(overdoseData.Data?.Issues ?? new(), x => x.RuleCode == "RULE_DOSE_LIMIT_ASPIRIN");
+
+        // 3. Positive skin test block: Penicillin (SkinTestFlag = 4)
+        var skinTestPayload = new
+        {
+            PatientId = "PAT-PHM-DEMO-01",
+            PrescribeLevel = 2,
+            Items = new[]
+            {
+                new
+                {
+                    DrugId = "DRUG-01", // 注射用青霉素钠
+                    DoseOnce = 800000m,
+                    DoseUnit = "单位",
+                    FrequencyCode = "QD",
+                    RouteCode = "IV",
+                    Days = 1,
+                    TotalQuantity = 1,
+                    SkinTestFlag = 4 // Positive
+                }
+            }
+        };
+
+        var skinTestRes = await doctorClient.PostAsJsonAsync("/api/v4/opd/prescriptions/pre-check", skinTestPayload);
+        Assert.True(skinTestRes.IsSuccessStatusCode);
+        var skinTestData = await skinTestRes.Content.ReadFromJsonAsync<ApiResponse<HIS.Modules.Outpatient.Models.PrescriptionReviewResultDto>>();
+        Assert.NotNull(skinTestData);
+        Assert.Equal("BLOCK", skinTestData.Data?.OverallStatus);
+        Assert.Contains(skinTestData.Data?.Issues ?? new(), x => x.RuleCode == "RULE_SKIN_TEST_POSITIVE");
+
+        // 4. Allergy conflict block: patient with Penicillin allergy tries to prescribe Amoxicillin DRUG-02
+        var allergyPatientId = "PAT-ALLERGY-" + Guid.NewGuid().ToString("N")[..8];
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var connFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
+            using var conn = connFactory.CreateConnection();
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            await conn.ExecuteAsync(@"
+                INSERT INTO pat_patients (id, medical_record_no, full_name, pinyin_code, gender_code, birth_date_int, id_card_type, id_card_cipher, id_card_hash, phone_masked, allergy_tags_json, is_temp_emergency, is_active, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                VALUES (@PatientId, 'MRN-' || @PatientId, '过敏测试者', 'GMCS', '1', 19900101, 'ID_CARD', NULL, 'HASH-' || @PatientId, '138****0000', '[""青霉素过敏""]', 0, 1, 1, @Now, 'TEST', @Now, 'TEST', 1)",
+                new { PatientId = allergyPatientId, Now = now });
+        }
+
+        var allergyPayload = new
+        {
+            PatientId = allergyPatientId,
+            PrescribeLevel = 2,
+            Items = new[]
+            {
+                new
+                {
+                    DrugId = "DRUG-02", // 阿莫西林胶囊
+                    DoseOnce = 250m,
+                    DoseUnit = "mg",
+                    FrequencyCode = "TID",
+                    RouteCode = "PO",
+                    Days = 3,
+                    TotalQuantity = 1,
+                    SkinTestFlag = 3 // Negative skin test, isolates allergy rule
+                }
+            }
+        };
+
+        var allergyRes = await doctorClient.PostAsJsonAsync("/api/v4/opd/prescriptions/pre-check", allergyPayload);
+        Assert.True(allergyRes.IsSuccessStatusCode);
+        var allergyData = await allergyRes.Content.ReadFromJsonAsync<ApiResponse<HIS.Modules.Outpatient.Models.PrescriptionReviewResultDto>>();
+        Assert.NotNull(allergyData);
+        Assert.Equal("BLOCK", allergyData.Data?.OverallStatus);
+        Assert.Contains(allergyData.Data?.Issues ?? new(), x => x.RuleCode == "RULE_ALLERGY");
+    }
 }

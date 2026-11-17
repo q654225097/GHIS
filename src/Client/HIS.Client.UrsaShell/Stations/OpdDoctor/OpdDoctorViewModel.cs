@@ -88,6 +88,7 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         });
 
         AutoReplaceBlockedDrugCommand = new RelayCommand(AutoReplaceBlockedDrug);
+        PreCheckPrescriptionCommand = new AsyncRelayCommand(PreCheckPrescriptionAsync, () => Workbench.CanEditOpdPrescription);
         SubmitPrescriptionCommand = new AsyncRelayCommand(SubmitPrescriptionAsync, () => Workbench.CanEditOpdPrescription);
 
         AddMedTechOrderCommand = new RelayCommand(AddSampleMedTechOrder);
@@ -117,6 +118,7 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
     public ICommand CancelEditItemCommand { get; }
     public ICommand DeleteItemWithUndoCommand { get; }
     public ICommand AutoReplaceBlockedDrugCommand { get; }
+    public ICommand PreCheckPrescriptionCommand { get; }
     public ICommand SubmitPrescriptionCommand { get; }
     public ICommand AddMedTechOrderCommand { get; }
     public ICommand OpenWhoSurgeryDrawerCommand { get; }
@@ -335,6 +337,13 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         Workbench.RefreshPrescriptionMetrics();
         Workbench.SystemNotice = "🛡️ 用药安全闭环: 已将青霉素阳性强阻断药物替换为安全替代药物 [阿奇霉素分散片]！";
         _ = Workbench.SyncReplacedPrescriptionItemAsync(blocked);
+        RefreshAllWorkflowState();
+    }
+
+    private async Task PreCheckPrescriptionAsync()
+    {
+        var outcome = await Workbench.PreCheckCurrentPrescriptionAsync();
+        NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Warning");
         RefreshAllWorkflowState();
     }
 
@@ -598,6 +607,7 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         OnPropertyChanged(nameof(IsFilterNormal));
         OnPropertyChanged(nameof(IsFilterAlert));
         (SignEmrCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (PreCheckPrescriptionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (SubmitPrescriptionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (RequestFinishVisitCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }

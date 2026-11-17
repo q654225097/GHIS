@@ -346,8 +346,25 @@
                             <Grid ColumnDefinitions="*,340">
                                 <!-- Standard 3-Check Sheet Graphical Temperature & Pulse Chart -->
                                 <Grid Grid.Column="0" RowDefinitions="Auto,*" Margin="0,0,12,0">
-                                    <TextBlock Grid.Row="0" Text="标准三测单 (35°C~42°C 体温/脉搏双曲线)" FontSize="13" FontWeight="Bold" Margin="0,0,0,8"/>
-                                    <ctrl:TemperatureChartControl Grid.Row="1" ItemsSource="{Binding Workbench.SelectedInpatient.VitalSigns}" MinHeight="260"/>
+                                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                                        <TextBlock Grid.Column="0" Text="标准三测单 (35°C~42°C 体温/脉搏双曲线 · 7天42时段规范)" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                                            <Button Content="‹ 上一周" Classes="Secondary" Height="26" Padding="8,2" Command="{Binding Workbench.PreviousVitalsWeekCommand}"/>
+                                            <Button Content="本周" Classes="Secondary" Height="26" Padding="8,2" Command="{Binding Workbench.CurrentVitalsWeekCommand}"/>
+                                            <Button Content="下一周 ›" Classes="Secondary" Height="26" Padding="8,2" Command="{Binding Workbench.NextVitalsWeekCommand}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <ctrl:TemperatureChartControl Grid.Row="1"
+                                        ItemsSource="{Binding Workbench.SelectedInpatient.VitalSigns}"
+                                        PatientName="{Binding Workbench.SelectedInpatient.PatientName}"
+                                        Gender="{Binding Workbench.SelectedInpatient.Gender}"
+                                        Age="{Binding Workbench.SelectedInpatient.Age}"
+                                        BedCode="{Binding Workbench.SelectedInpatient.BedCode}"
+                                        AdmissionNo="{Binding Workbench.SelectedInpatient.AdmissionNo}"
+                                        DeptName="{Binding Workbench.SelectedInpatient.AdmittingDept}"
+                                        AdmissionDate="{Binding Workbench.SelectedInpatient.AdmissionDate}"
+                                        WeekOffset="{Binding Workbench.VitalsWeekOffset}"
+                                        MinHeight="460"/>
                                 </Grid>
 
                                 <!-- Vitals Records List -->

@@ -181,6 +181,7 @@ public class Program
 		builder.Services.AddScoped((Func<IServiceProvider, IOutboxContract>)((IServiceProvider sp) => sp.GetRequiredService<OutboxService>()));
 		builder.Services.AddScoped<SecurityIntrusionDetectionService>();
 		builder.Services.AddScoped<KmsKeyLifecycleService>();
+		builder.Services.AddScoped<HIS.Modules.Outpatient.Services.IPrescriptionReviewEngine, HIS.Modules.Outpatient.Services.PrescriptionReviewEngine>();
 		builder.Services.AddCors((CorsOptions opt) =>
 		{
 			opt.AddDefaultPolicy((CorsPolicyBuilder p) =>

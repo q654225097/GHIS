@@ -5,6 +5,7 @@ using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
 using HIS.Modules.Outpatient.Models;
+using HIS.Modules.Outpatient.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HIS.Modules.Outpatient.Controllers;
@@ -34,6 +35,7 @@ public class OutpatientController : ControllerBase
     private readonly IAuditTrailContract? _auditTrail;
     private readonly IUserSession? _userSession;
     private readonly IPharmacyInventoryContract? _inventoryContract;
+    private readonly IPrescriptionReviewEngine _reviewEngine;
 
     public OutpatientController(
         IRepository<OpdScheduleSlot> slotRepo,
@@ -50,7 +52,8 @@ public class OutpatientController : ControllerBase
         IUserSession? userSession = null,
         IRepository<OpdScheduleTemplate>? templateRepo = null,
         IPharmacyInventoryContract? inventoryContract = null,
-        IRepository<OpdInfectiousReportCard>? infectiousRepo = null)
+        IRepository<OpdInfectiousReportCard>? infectiousRepo = null,
+        IPrescriptionReviewEngine? reviewEngine = null)
     {
         _slotRepo = slotRepo;
         _appointRepo = appointRepo;
@@ -67,6 +70,7 @@ public class OutpatientController : ControllerBase
         _inventoryContract = inventoryContract;
         _templateRepo = templateRepo ?? new DapperRepository<OpdScheduleTemplate>(_connFactory, "opd_schedule_templates");
         _infectiousRepo = infectiousRepo ?? new DapperRepository<OpdInfectiousReportCard>(_connFactory, "opd_infectious_report_cards");
+        _reviewEngine = reviewEngine ?? new PrescriptionReviewEngine(_patientContract, _connFactory);
     }
 
     public sealed record SaveScheduleTemplateRequestDto(
@@ -546,58 +550,77 @@ public class OutpatientController : ControllerBase
         if (_patientContract == null)
             return "患者过敏档案服务不可用，禁止开具处方";
 
-        var patient = await _patientContract.GetPatientSummaryAsync(patientId, ct);
-        if (patient == null || !patient.IsActive)
-            return "患者不存在或已停用，禁止开具处方";
-
         int doctorPrescribeLevel = _userSession?.PrescribeLevel ?? 0;
+        bool isAdmin = IsAdmin();
         var itemList = items?.ToList() ?? new List<OpdPrescriptionItem>();
+        var drugList = drugs.ToList();
 
-        foreach (var drug in drugs)
+        var result = await _reviewEngine.ReviewAsync(
+            patientId,
+            doctorPrescribeLevel,
+            isAdmin,
+            itemList,
+            drugList,
+            agentIdCard,
+            ct);
+
+        if (result.OverallStatus == "BLOCK")
         {
-            var conflict = FindAllergyConflict(patient.AllergyTags, drug);
-            if (conflict != null)
-                return $"患者存在 [{conflict}]，禁止开立 [{drug.DrugName}]";
-
-            var matchingItem = itemList.FirstOrDefault(x => x.DrugId == drug.DrugId);
-            if (matchingItem != null && matchingItem.SkinTestFlag == 4)
-            {
-                return $"药品 [{drug.DrugName}] 皮试结果为阳性，强阻断禁止开立";
-            }
-
-            if (drug.AntibioticLevel == 1 && doctorPrescribeLevel < 2 && !IsAdmin())
-            {
-                return $"当前医师处方权限等级为 {doctorPrescribeLevel}，不足以开具限制使用级抗菌药物 [{drug.DrugName}]（需主治医师及以上）";
-            }
-            if (drug.AntibioticLevel == 2)
-            {
-                if (doctorPrescribeLevel < 3 && !IsAdmin())
-                {
-                    return $"当前医师处方权限等级为 {doctorPrescribeLevel}，不足以开具特殊使用级抗菌药物 [{drug.DrugName}]（需副主任/主任医师）";
-                }
-                using var conn = _connFactory.CreateConnection();
-                int microCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
-                    "SELECT COUNT(1) FROM ord_medical_orders WHERE patient_id = @PatientId AND (order_category = 'MICROBIOLOGY' OR order_category = 'LAB' OR item_name LIKE '%微生物%' OR item_name LIKE '%细菌培养%')",
-                    new { PatientId = patientId }, cancellationToken: ct));
-                if (microCount == 0)
-                {
-                    return $"开具特殊使用级抗菌药物 [{drug.DrugName}] 必须预先或同时开具微生物培养与药敏送检医嘱";
-                }
-            }
-
-            if (drug.IsNarcotic)
-            {
-                if (string.IsNullOrWhiteSpace(agentIdCard) || !IdCardValidator.IsValid(agentIdCard))
-                {
-                    return $"开具麻精类药品 [{drug.DrugName}] 必须录入合法的代办人 18 位身份证号码";
-                }
-                if (matchingItem != null && matchingItem.Days > 7)
-                {
-                    return $"麻精类药品 [{drug.DrugName}] 单张处方最大用药天数不得超过 7 天（当前：{matchingItem.Days} 天）";
-                }
-            }
+            var firstBlock = result.Issues.FirstOrDefault(x => x.Severity == "BLOCK");
+            return firstBlock != null ? firstBlock.Message : result.SummaryMessage;
         }
+
         return null;
+    }
+
+    [HttpPost("prescriptions/pre-check")]
+    public async Task<ApiResponse<PrescriptionReviewResultDto>> PreCheckPrescription(
+        [FromBody] PrescriptionPreCheckRequestDto req,
+        CancellationToken ct = default)
+    {
+        if (req == null || string.IsNullOrWhiteSpace(req.PatientId))
+            return ApiResponse<PrescriptionReviewResultDto>.Fail(400, "前置审方请求参数无效，患者ID不能为空");
+
+        int prescribeLevel = req.PrescribeLevel ?? (_userSession?.PrescribeLevel ?? 0);
+        bool isAdmin = IsAdmin();
+
+        var items = new List<OpdPrescriptionItem>();
+        var drugs = new List<DrugCatalogSnapshotDto>();
+
+        foreach (var itemDto in req.Items ?? new List<PrescriptionPreCheckItemDto>())
+        {
+            if (string.IsNullOrWhiteSpace(itemDto.DrugId)) continue;
+            var (drug, drugError) = await ResolveDrugAsync(itemDto.DrugId, ct);
+            if (drug == null || drugError != null)
+            {
+                return ApiResponse<PrescriptionReviewResultDto>.Fail(400, drugError ?? $"药品 [{itemDto.DrugId}] 不存在");
+            }
+            drugs.Add(drug);
+            items.Add(new OpdPrescriptionItem
+            {
+                DrugId = drug.DrugId,
+                DrugNameSnapshot = drug.DrugName,
+                DoseOnce = itemDto.DoseOnce,
+                DoseUnit = itemDto.DoseUnit,
+                FrequencyCode = itemDto.FrequencyCode,
+                RouteCode = itemDto.RouteCode,
+                Days = itemDto.Days,
+                TotalQuantity = itemDto.TotalQuantity,
+                UnitPrice = drug.UnitPrice,
+                SkinTestFlag = itemDto.SkinTestFlag
+            });
+        }
+
+        var result = await _reviewEngine.ReviewAsync(
+            req.PatientId,
+            prescribeLevel,
+            isAdmin,
+            items,
+            drugs,
+            req.AgentIdCard,
+            ct);
+
+        return ApiResponse<PrescriptionReviewResultDto>.Success(result, result.SummaryMessage);
     }
 
     private async Task<(DrugCatalogSnapshotDto? Drug, string? Error)> ResolveDrugAsync(
@@ -1896,6 +1919,7 @@ VALUES
                 return await RejectPrescriptionAsync(rx, pharmacistId,
                     "患者档案不存在或已停用，审方自动驳回");
             }
+            var resolvedDrugs = new List<DrugCatalogSnapshotDto>();
             foreach (var item in activeItems)
             {
                 var (drug, drugError) = await ResolveDrugAsync(item.DrugId);
@@ -1909,17 +1933,21 @@ VALUES
                     return await RejectPrescriptionAsync(rx, pharmacistId,
                         $"药品 [{drug.DrugName}] 价格已调整，请刷新处方明细后重新提交");
                 }
-                var conflict = FindAllergyConflict(patient.AllergyTags, drug);
-                if (conflict != null)
-                {
-                    return await RejectPrescriptionAsync(rx, pharmacistId,
-                        $"前置审方自动拦截：患者存在 [{conflict}]，禁止使用 [{drug.DrugName}]");
-                }
-                if (item.SkinTestFlag is 1 or 2 or 4)
-                {
-                    return await RejectPrescriptionAsync(rx, pharmacistId,
-                        $"药品 [{drug.DrugName}] 的皮试尚未取得阴性双签结果，禁止通过审方");
-                }
+                resolvedDrugs.Add(drug);
+            }
+
+            var reviewResult = await _reviewEngine.ReviewAsync(
+                rx.PatientId,
+                _userSession?.PrescribeLevel ?? 3,
+                IsAdmin(),
+                activeItems,
+                resolvedDrugs,
+                null);
+
+            if (reviewResult.OverallStatus == "BLOCK")
+            {
+                var blockReason = string.Join("；", reviewResult.Issues.Where(x => x.Severity == "BLOCK").Select(x => x.Message));
+                return await RejectPrescriptionAsync(rx, pharmacistId, "前置审方自动拦截：" + blockReason);
             }
 
             rx.Status = 1; // AuditedPassed
