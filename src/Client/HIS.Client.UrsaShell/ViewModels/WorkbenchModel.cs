@@ -721,6 +721,65 @@ public partial class WorkbenchModel : ClientModelBase
 		set => SetField(ref _auditSummaryInfo, value, nameof(AuditSummaryInfo));
 	}
 
+	public ObservableCollection<SecurityAlertModel> SecurityAlertsList { get; } = new ObservableCollection<SecurityAlertModel>();
+	public ObservableCollection<KmsKeyModel> KmsKeysList { get; } = new ObservableCollection<KmsKeyModel>();
+
+	private int _securityScore = 98;
+	public int SecurityScore
+	{
+		get => _securityScore;
+		set => SetField(ref _securityScore, value, nameof(SecurityScore));
+	}
+
+	private string _threatLevel = "NORMAL";
+	public string ThreatLevel
+	{
+		get => _threatLevel;
+		set
+		{
+			if (SetField(ref _threatLevel, value, nameof(ThreatLevel)))
+			{
+				OnPropertyChanged(nameof(ThreatLevelBadgeClass));
+			}
+		}
+	}
+
+	public string ThreatLevelBadgeClass => ThreatLevel switch
+	{
+		"NORMAL" => "Success",
+		"ATTENTION" => "Warning",
+		"HIGH" => "Warning",
+		_ => "Danger"
+	};
+
+	private int _activeAlertsCount = 0;
+	public int ActiveAlertsCount
+	{
+		get => _activeAlertsCount;
+		set => SetField(ref _activeAlertsCount, value, nameof(ActiveAlertsCount));
+	}
+
+	private string _hsmStatus = "ONLINE (硬件隔离守护)";
+	public string HsmStatus
+	{
+		get => _hsmStatus;
+		set => SetField(ref _hsmStatus, value, nameof(HsmStatus));
+	}
+
+	private string _nationalCipherStatus = "密评三级 (SM2/SM3/SM4)";
+	public string NationalCipherStatus
+	{
+		get => _nationalCipherStatus;
+		set => SetField(ref _nationalCipherStatus, value, nameof(NationalCipherStatus));
+	}
+
+	private string _dengbaoStatus = "等保三级安全审计就绪";
+	public string DengbaoStatus
+	{
+		get => _dengbaoStatus;
+		set => SetField(ref _dengbaoStatus, value, nameof(DengbaoStatus));
+	}
+
 	public ObservableCollection<LoginContextOption> AvailableContexts { get; } = new ObservableCollection<LoginContextOption>();
 
 	public ObservableCollection<NavigationItemModel> NavigationItems { get; } = new ObservableCollection<NavigationItemModel>();
@@ -10496,6 +10555,159 @@ public partial class WorkbenchModel : ClientModelBase
 		catch (Exception ex)
 		{
 			SystemNotice = "固化锚点异常：" + ex.Message;
+		}
+	}
+
+	public async Task LoadSecurityPostureAsync()
+	{
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			var response = await http.GetFromJsonAsync<ClientApiEnvelope<JsonElement>>("/api/v4/operations/security/posture", JsonOptions);
+			if (response is { Code: 200 } && response.Data.ValueKind == JsonValueKind.Object)
+			{
+				if (response.Data.TryGetProperty("securityScore", out var ss)) SecurityScore = ss.GetInt32();
+				if (response.Data.TryGetProperty("threatLevel", out var tl)) ThreatLevel = tl.GetString() ?? "NORMAL";
+				if (response.Data.TryGetProperty("activeAlertsCount", out var aac)) ActiveAlertsCount = aac.GetInt32();
+				if (response.Data.TryGetProperty("hsmStatus", out var hs)) HsmStatus = hs.GetString() ?? "ONLINE";
+				if (response.Data.TryGetProperty("nationalCipherStatus", out var ncs)) NationalCipherStatus = ncs.GetString() ?? "密评三级已合规";
+				if (response.Data.TryGetProperty("dengbaoStatus", out var ds)) DengbaoStatus = ds.GetString() ?? "等保三级已合规";
+			}
+		}
+		catch (Exception ex)
+		{
+			SystemNotice = "拉取安全态势异常: " + ex.Message;
+		}
+	}
+
+	public async Task LoadSecurityAlertsAsync()
+	{
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			var response = await http.GetFromJsonAsync<ClientApiEnvelope<JsonElement>>("/api/v4/operations/security/alerts", JsonOptions);
+			if (response is { Code: 200 } && response.Data.ValueKind == JsonValueKind.Array)
+			{
+				SecurityAlertsList.Clear();
+				foreach (var item in response.Data.EnumerateArray())
+				{
+					SecurityAlertsList.Add(new SecurityAlertModel
+					{
+						Id = item.TryGetProperty("id", out var p) ? p.GetString() ?? "" : "",
+						AlertNo = item.TryGetProperty("alertNo", out p) ? p.GetString() ?? "" : "",
+						AlertType = item.TryGetProperty("alertType", out p) ? p.GetString() ?? "" : "",
+						Severity = item.TryGetProperty("severity", out p) ? p.GetString() ?? "HIGH" : "HIGH",
+						SourceIp = item.TryGetProperty("sourceIp", out p) ? p.GetString() ?? "" : "",
+						UserId = item.TryGetProperty("userId", out p) ? p.GetString() ?? "" : "",
+						OperatorName = item.TryGetProperty("operatorName", out p) ? p.GetString() ?? "" : "",
+						TargetResource = item.TryGetProperty("targetResource", out p) ? p.GetString() ?? "" : "",
+						Description = item.TryGetProperty("description", out p) ? p.GetString() ?? "" : "",
+						ThreatIndicatorsJson = item.TryGetProperty("threatIndicatorsJson", out p) ? p.GetString() ?? "" : "",
+						Status = item.TryGetProperty("status", out p) ? p.GetString() ?? "ACTIVE" : "ACTIVE",
+						ResolvedBy = item.TryGetProperty("resolvedBy", out p) ? p.GetString() ?? "" : "",
+						ResolutionNote = item.TryGetProperty("resolutionNote", out p) ? p.GetString() ?? "" : "",
+						CreatedAtMs = item.TryGetProperty("createdAtMs", out p) && p.TryGetInt64(out var ts) ? ts : 0
+					});
+				}
+				ActiveAlertsCount = SecurityAlertsList.Count(a => a.IsActive);
+			}
+		}
+		catch (Exception ex)
+		{
+			SystemNotice = "拉取入侵告警异常: " + ex.Message;
+		}
+	}
+
+	public async Task ScanSecurityThreatsAsync()
+	{
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			var response = await http.PostAsync("/api/v4/operations/security/alerts/scan", null);
+			if (response.IsSuccessStatusCode)
+			{
+				SystemNotice = "已执行全网威胁与异常行为扫描";
+				await LoadSecurityAlertsAsync();
+				await LoadSecurityPostureAsync();
+			}
+		}
+		catch (Exception ex)
+		{
+			SystemNotice = "威胁扫描异常: " + ex.Message;
+		}
+	}
+
+	public async Task ResolveSecurityAlertAsync(string alertId, string resolutionNote)
+	{
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			var response = await http.PostAsJsonAsync($"/api/v4/operations/security/alerts/{alertId}/resolve", new { ResolutionNote = resolutionNote });
+			if (response.IsSuccessStatusCode)
+			{
+				SystemNotice = "安全威胁告警已处置闭环";
+				await LoadSecurityAlertsAsync();
+				await LoadSecurityPostureAsync();
+			}
+		}
+		catch (Exception ex)
+		{
+			SystemNotice = "处置告警异常: " + ex.Message;
+		}
+	}
+
+	public async Task LoadKmsKeysAsync()
+	{
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			var response = await http.GetFromJsonAsync<ClientApiEnvelope<JsonElement>>("/api/v4/operations/kms/keys", JsonOptions);
+			if (response is { Code: 200 } && response.Data.ValueKind == JsonValueKind.Array)
+			{
+				KmsKeysList.Clear();
+				foreach (var item in response.Data.EnumerateArray())
+				{
+					KmsKeysList.Add(new KmsKeyModel
+					{
+						Id = item.TryGetProperty("id", out var p) ? p.GetString() ?? "" : "",
+						KeyName = item.TryGetProperty("keyName", out p) ? p.GetString() ?? "" : "",
+						Algorithm = item.TryGetProperty("algorithm", out p) ? p.GetString() ?? "" : "",
+						Version = item.TryGetProperty("version", out p) && p.TryGetInt32(out var v) ? v : 1,
+						State = item.TryGetProperty("state", out p) ? p.GetString() ?? "ACTIVE" : "ACTIVE",
+						HsmProtected = item.TryGetProperty("hsmProtected", out p) && p.TryGetInt16(out var hp) ? hp : (short)1,
+						KeyFingerprint = item.TryGetProperty("keyFingerprint", out p) ? p.GetString() ?? "" : "",
+						ExpiresAtMs = item.TryGetProperty("expiresAtMs", out p) && p.TryGetInt64(out var exp) ? exp : 0,
+						RotatedAtMs = item.TryGetProperty("rotatedAtMs", out p) && p.TryGetInt64(out var rot) ? rot : null,
+						Description = item.TryGetProperty("description", out p) ? p.GetString() ?? "" : ""
+					});
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			SystemNotice = "拉取KMS密钥清单异常: " + ex.Message;
+		}
+	}
+
+	public async Task RotateKmsKeyAsync(string keyName, string? reason = null)
+	{
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			var response = await http.PostAsJsonAsync("/api/v4/operations/kms/keys/rotate", new { KeyName = keyName, Reason = reason });
+			if (response.IsSuccessStatusCode)
+			{
+				SystemNotice = $"密码学密钥 [{keyName}] 平滑轮换成功";
+				await LoadKmsKeysAsync();
+			}
+			else
+			{
+				SystemNotice = $"密钥轮换失败: {response.StatusCode}";
+			}
+		}
+		catch (Exception ex)
+		{
+			SystemNotice = "密钥轮换异常: " + ex.Message;
 		}
 	}
 }

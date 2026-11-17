@@ -485,6 +485,52 @@ CREATE TABLE IF NOT EXISTS emr_inpatient_front_sheets (
     updated_by VARCHAR(36),
     version_no INT NOT NULL DEFAULT 1
 );
+
+CREATE TABLE IF NOT EXISTS ops_security_alerts (
+    id VARCHAR(36) PRIMARY KEY,
+    alert_no VARCHAR(40) NOT NULL UNIQUE,
+    alert_type VARCHAR(64) NOT NULL,
+    severity VARCHAR(16) NOT NULL,
+    source_ip VARCHAR(64),
+    user_id VARCHAR(36),
+    operator_name VARCHAR(128),
+    target_resource VARCHAR(128),
+    description VARCHAR(1000) NOT NULL,
+    threat_indicators_json TEXT,
+    status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+    resolved_by VARCHAR(36),
+    resolved_at_ms BIGINT,
+    resolution_note VARCHAR(1000),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ops_security_alerts_status ON ops_security_alerts (status, severity);
+
+CREATE TABLE IF NOT EXISTS ops_kms_keys (
+    id VARCHAR(36) PRIMARY KEY,
+    key_name VARCHAR(64) NOT NULL,
+    algorithm VARCHAR(32) NOT NULL,
+    version INT NOT NULL,
+    state VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+    hsm_protected SMALLINT NOT NULL DEFAULT 1,
+    key_fingerprint VARCHAR(64) NOT NULL,
+    expires_at_ms BIGINT NOT NULL,
+    rotated_at_ms BIGINT,
+    description VARCHAR(255),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ops_kms_keys_name ON ops_kms_keys (key_name, version);
 ");
 	}
 

@@ -129,6 +129,8 @@ public class Program
 		RegisterRepo<OpsAuditAnchor>(builder.Services, "ops_audit_anchors");
 		RegisterRepo<OpsIdempotencyKey>(builder.Services, "ops_idempotency_keys");
 		RegisterRepo<OpsOutboxMessage>(builder.Services, "ops_outbox_messages");
+		RegisterRepo<OpsSecurityAlert>(builder.Services, "ops_security_alerts");
+		RegisterRepo<OpsKmsKey>(builder.Services, "ops_kms_keys");
 
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);
@@ -177,6 +179,8 @@ public class Program
 		builder.Services.AddScoped((Func<IServiceProvider, IIdempotencyContract>)((IServiceProvider sp) => sp.GetRequiredService<IdempotencyService>()));
 		builder.Services.AddScoped<OutboxService>();
 		builder.Services.AddScoped((Func<IServiceProvider, IOutboxContract>)((IServiceProvider sp) => sp.GetRequiredService<OutboxService>()));
+		builder.Services.AddScoped<SecurityIntrusionDetectionService>();
+		builder.Services.AddScoped<KmsKeyLifecycleService>();
 		builder.Services.AddCors((CorsOptions opt) =>
 		{
 			opt.AddDefaultPolicy((CorsPolicyBuilder p) =>

@@ -24,19 +24,25 @@ public class OperationsController : ControllerBase
 	private readonly AuditLogService _auditService;
 	private readonly OutboxService _outboxService;
 	private readonly IUserSession? _userSession;
+	private readonly SecurityIntrusionDetectionService? _idpsService;
+	private readonly KmsKeyLifecycleService? _kmsService;
 
 	public OperationsController(
 		IRepository<OpsAuditEvent> auditRepo,
 		IRepository<OpsOutboxMessage> outboxRepo,
 		AuditLogService auditService,
 		OutboxService outboxService,
-		IUserSession? userSession = null)
+		IUserSession? userSession = null,
+		SecurityIntrusionDetectionService? idpsService = null,
+		KmsKeyLifecycleService? kmsService = null)
 	{
 		_auditRepo = auditRepo;
 		_outboxRepo = outboxRepo;
 		_auditService = auditService;
 		_outboxService = outboxService;
 		_userSession = userSession;
+		_idpsService = idpsService;
+		_kmsService = kmsService;
 	}
 
 	[RequireAdmin]
@@ -165,5 +171,112 @@ LIMIT 1000", new
 	{
 		int dispatched = await _outboxService.DispatchPendingMessagesAsync(batchSize);
 		return ApiResponse<int>.Success(dispatched, $"已成功投递 {dispatched} 条可靠消息队列事件");
+	}
+
+	// ==========================================
+	// M-019 集中安全审计与入侵防范 (IDPS & Security Alerting)
+	// ==========================================
+
+	[RequireAdmin]
+	[HttpGet("security/posture")]
+	public async Task<ApiResponse<SecurityPostureDto>> GetSecurityPosture()
+	{
+		if (_idpsService == null)
+		{
+			return ApiResponse<SecurityPostureDto>.Fail(500, "入侵防范与安全态势服务未就绪");
+		}
+		var posture = await _idpsService.GetSecurityPostureAsync();
+		return ApiResponse<SecurityPostureDto>.Success(posture);
+	}
+
+	[RequireAdmin]
+	[HttpGet("security/alerts")]
+	public async Task<ApiResponse<IReadOnlyList<OpsSecurityAlert>>> GetSecurityAlerts(
+		[FromQuery] string? severity = null,
+		[FromQuery] string? status = null,
+		[FromQuery] int limit = 50)
+	{
+		if (_idpsService == null)
+		{
+			return ApiResponse<IReadOnlyList<OpsSecurityAlert>>.Fail(500, "入侵防范与安全态势服务未就绪");
+		}
+		var alerts = await _idpsService.GetAlertsAsync(severity, status, limit);
+		return ApiResponse<IReadOnlyList<OpsSecurityAlert>>.Success(alerts);
+	}
+
+	[RequireAdmin]
+	[HttpPost("security/alerts/scan")]
+	public async Task<ApiResponse<int>> ScanSecurityThreats()
+	{
+		if (_idpsService == null)
+		{
+			return ApiResponse<int>.Fail(500, "入侵防范与安全态势服务未就绪");
+		}
+		int newAlerts = await _idpsService.ScanAndGenerateThreatAlertsAsync();
+		return ApiResponse<int>.Success(newAlerts, $"威胁与异常检测引擎扫描完成，新识别 {newAlerts} 条可疑安全威胁");
+	}
+
+	[RequireAdmin]
+	[HttpPost("security/alerts/{id}/resolve")]
+	public async Task<ApiResponse<OpsSecurityAlert>> ResolveSecurityAlert(
+		[FromRoute] string id,
+		[FromBody] ResolveAlertRequestDto req)
+	{
+		if (_idpsService == null)
+		{
+			return ApiResponse<OpsSecurityAlert>.Fail(500, "入侵防范与安全态势服务未就绪");
+		}
+		if (string.IsNullOrWhiteSpace(req.ResolutionNote))
+		{
+			return ApiResponse<OpsSecurityAlert>.Fail(400, "处置安全威胁告警必须填写核实与防范处置说明");
+		}
+		var alert = await _idpsService.ResolveAlertAsync(id, _userSession?.UserId ?? "USER-ADMIN", req.ResolutionNote);
+		return alert != null
+			? ApiResponse<OpsSecurityAlert>.Success(alert, "安全威胁告警已完成闭环处置")
+			: ApiResponse<OpsSecurityAlert>.Fail(404, "未找到指定的告警记录");
+	}
+
+	// ==========================================
+	// M-021 KMS/HSM 密钥全生命周期管理 (Key Management Service)
+	// ==========================================
+
+	[RequireAdmin]
+	[HttpGet("kms/keys")]
+	public async Task<ApiResponse<IReadOnlyList<OpsKmsKey>>> GetKmsKeys()
+	{
+		if (_kmsService == null)
+		{
+			return ApiResponse<IReadOnlyList<OpsKmsKey>>.Fail(500, "KMS 密钥全生命周期管理服务未就绪");
+		}
+		var keys = await _kmsService.GetKeysAsync();
+		return ApiResponse<IReadOnlyList<OpsKmsKey>>.Success(keys);
+	}
+
+	[RequireAdmin]
+	[HttpPost("kms/keys/rotate")]
+	public async Task<ApiResponse<OpsKmsKey>> RotateKmsKey([FromBody] KeyRotationRequestDto req)
+	{
+		if (_kmsService == null)
+		{
+			return ApiResponse<OpsKmsKey>.Fail(500, "KMS 密钥全生命周期管理服务未就绪");
+		}
+		if (string.IsNullOrWhiteSpace(req.KeyName))
+		{
+			return ApiResponse<OpsKmsKey>.Fail(400, "轮换密钥必须指定目标密钥标识名称 (KeyName)");
+		}
+		var newKey = await _kmsService.RotateKeyAsync(req.KeyName, _userSession?.UserId ?? "USER-ADMIN", req.Reason);
+		return ApiResponse<OpsKmsKey>.Success(newKey, $"密码学主密钥 [{req.KeyName}] 平滑轮换成功，已生成 v{newKey.Version} 新密钥");
+	}
+
+	[RequireAdmin]
+	[HttpGet("kms/hsm-status")]
+	public async Task<ApiResponse<HsmStatusDto>> GetHsmStatus()
+	{
+		if (_kmsService == null)
+		{
+			return ApiResponse<HsmStatusDto>.Fail(500, "KMS 密钥全生命周期管理服务未就绪");
+		}
+		var status = await _kmsService.GetHsmStatusAsync();
+		return ApiResponse<HsmStatusDto>.Success(status);
 	}
 }

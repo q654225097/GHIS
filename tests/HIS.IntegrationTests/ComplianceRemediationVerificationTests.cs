@@ -18,6 +18,7 @@ using HIS.Modules.Inventory.Models;
 using HIS.Modules.MedTech.Controllers;
 using HIS.Modules.MedTech.Models;
 using HIS.Modules.Operations.Models;
+using HIS.Modules.Operations.Services;
 using HIS.Modules.Outpatient.Controllers;
 using HIS.Modules.Outpatient.Models;
 using HIS.Modules.Patient.Controllers;
@@ -424,5 +425,72 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
         var submitData = await submitRes.Content.ReadFromJsonAsync<ApiResponse<EmrInpatientFrontSheet>>();
         Assert.Equal("SUBMITTED", submitData?.Data?.Status);
         Assert.Equal("GRADE_A", submitData?.Data?.QualityLevel);
+    }
+
+    [Fact]
+    public async Task M019_IntrusionDetection_ScanThreats_AlertsList_And_Resolve()
+    {
+        // 1. Posture check
+        var postureRes = await _client.GetAsync("/api/v4/operations/security/posture");
+        Assert.Equal(HttpStatusCode.OK, postureRes.StatusCode);
+        var postureData = await postureRes.Content.ReadFromJsonAsync<ApiResponse<SecurityPostureDto>>();
+        Assert.NotNull(postureData?.Data);
+        Assert.True(postureData!.Data!.SecurityScore >= 10);
+        Assert.Equal("COMPLIANT_L3", postureData.Data.DengbaoStatus);
+
+        // 2. Scan threats
+        var scanRes = await _client.PostAsync("/api/v4/operations/security/alerts/scan", null);
+        Assert.Equal(HttpStatusCode.OK, scanRes.StatusCode);
+
+        // 3. Query alerts
+        var alertsRes = await _client.GetAsync("/api/v4/operations/security/alerts");
+        Assert.Equal(HttpStatusCode.OK, alertsRes.StatusCode);
+        var alertsData = await alertsRes.Content.ReadFromJsonAsync<ApiResponse<List<OpsSecurityAlert>>>();
+        Assert.NotNull(alertsData?.Data);
+        Assert.NotEmpty(alertsData!.Data!);
+
+        // 4. Resolve an alert
+        var targetAlert = alertsData.Data.First();
+        var resolveRes = await _client.PostAsJsonAsync($"/api/v4/operations/security/alerts/{targetAlert.Id}/resolve", new ResolveAlertRequestDto("安全管理员已确认并处置威胁"));
+        Assert.Equal(HttpStatusCode.OK, resolveRes.StatusCode);
+        var resolveData = await resolveRes.Content.ReadFromJsonAsync<ApiResponse<OpsSecurityAlert>>();
+        Assert.Equal("RESOLVED", resolveData?.Data?.Status);
+    }
+
+    [Fact]
+    public async Task M021_KmsKeyManagement_QueryKeys_RotateKey_And_HsmStatus()
+    {
+        // 1. Query Keys
+        var keysRes = await _client.GetAsync("/api/v4/operations/kms/keys");
+        Assert.Equal(HttpStatusCode.OK, keysRes.StatusCode);
+        var keysData = await keysRes.Content.ReadFromJsonAsync<ApiResponse<List<OpsKmsKey>>>();
+        Assert.NotNull(keysData?.Data);
+        Assert.True(keysData!.Data!.Count >= 4);
+
+        var jwtKey = keysData.Data.First(k => k.KeyName == "JWT_SIGNING_KEY" && k.State == "ACTIVE");
+        Assert.Equal((short)1, jwtKey.HsmProtected);
+        int oldVersion = jwtKey.Version;
+
+        // 2. Rotate Key
+        var rotateRes = await _client.PostAsJsonAsync("/api/v4/operations/kms/keys/rotate", new KeyRotationRequestDto("JWT_SIGNING_KEY", "自动化轮换演练测试"));
+        Assert.Equal(HttpStatusCode.OK, rotateRes.StatusCode);
+        var rotateData = await rotateRes.Content.ReadFromJsonAsync<ApiResponse<OpsKmsKey>>();
+        Assert.NotNull(rotateData?.Data);
+        Assert.Equal(oldVersion + 1, rotateData!.Data!.Version);
+        Assert.Equal("ACTIVE", rotateData.Data.State);
+
+        // 3. Re-query to confirm previous key was retired
+        var postRotateRes = await _client.GetAsync("/api/v4/operations/kms/keys");
+        var postRotateData = await postRotateRes.Content.ReadFromJsonAsync<ApiResponse<List<OpsKmsKey>>>();
+        var retiredKey = postRotateData?.Data?.FirstOrDefault(k => k.KeyName == "JWT_SIGNING_KEY" && k.Version == oldVersion);
+        Assert.NotNull(retiredKey);
+        Assert.Equal("RETIRED", retiredKey!.State);
+
+        // 4. HSM Status check
+        var hsmRes = await _client.GetAsync("/api/v4/operations/kms/hsm-status");
+        Assert.Equal(HttpStatusCode.OK, hsmRes.StatusCode);
+        var hsmData = await hsmRes.Content.ReadFromJsonAsync<ApiResponse<HsmStatusDto>>();
+        Assert.NotNull(hsmData?.Data);
+        Assert.Equal("ONLINE", hsmData!.Data!.State);
     }
 }

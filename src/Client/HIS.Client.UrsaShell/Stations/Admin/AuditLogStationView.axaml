@@ -6,92 +6,265 @@
              x:Class="HIS.Client.UrsaShell.Stations.Admin.AuditLogStationView"
              x:DataType="local:AuditLogStationViewModel">
     <Grid RowDefinitions="Auto,Auto,*" Margin="16" RowSpacing="12">
-        <!-- 顶部状态与校验动作 -->
-        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
-                Background="{DynamicResource SemiColorBackground1}"
-                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                <StackPanel Spacing="4">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="安全审计日志与密码学防篡改哈希链" FontSize="17" FontWeight="Bold"/>
-                        <controls:StatusTag Text="{Binding Workbench.AuditVerificationStatus}"
-                                            Kind="{Binding Workbench.AuditVerificationBadgeClass}"/>
+        <!-- 顶部安全态势与密评等保合规指标看板 (design-taste-frontend 四维等距卡片) -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+            <!-- 卡片 1: 等保三级安全态势分 -->
+            <Border Grid.Column="0" Padding="14,12" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="等保三级安全态势" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <controls:StatusTag Grid.Column="1" Text="{Binding Workbench.ThreatLevel}" Kind="{Binding Workbench.ThreatLevelBadgeClass}"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Workbench.SecurityScore}" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        <TextBlock Text="/ 100 分" FontSize="13" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
                     </StackPanel>
-                    <TextBlock Text="{Binding Workbench.AuditSummaryInfo}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock Text="{Binding Workbench.DengbaoStatus}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
+            </Border>
 
-                <Button Grid.Column="1" Content="刷新查询 (F5)" Classes="Tertiary" Height="32" Margin="0,0,8,0"
-                        Command="{Binding QueryLogsCommand}"/>
-                <Button Grid.Column="2" Content="固化防截断锚点 (F3)" Classes="Warning" Height="32" Margin="0,0,8,0"
-                        Command="{Binding CreateAnchorCommand}"/>
-                <Button Grid.Column="3" Content="校验哈希链完整性 (F2)" Classes="Primary" Height="32"
-                        Command="{Binding VerifyChainCommand}"/>
-            </Grid>
-        </Border>
+            <!-- 卡片 2: 密评三级密码合规 -->
+            <Border Grid.Column="1" Padding="14,12" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="密评三级合规基线" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <controls:StatusTag Grid.Column="1" Text="国密合规" Kind="Success"/>
+                    </Grid>
+                    <TextBlock Text="SM2 / SM3 / SM4" FontSize="18" FontWeight="Bold" Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding Workbench.NationalCipherStatus}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Border>
 
-        <!-- 三维检索过滤条 -->
-        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto,Auto" ColumnSpacing="8">
-            <TextBox x:Name="EventFilterBox" Grid.Column="0"
-                     Text="{Binding Workbench.AuditEventTypeFilter, Mode=TwoWay}"
-                     PlaceholderText="事件类型过滤（如 PRICE_ADJUST / LOGIN）(Ctrl+F)"/>
-            <TextBox Grid.Column="1"
-                     Text="{Binding Workbench.AuditTargetEntityFilter, Mode=TwoWay}"
-                     PlaceholderText="目标实体过滤（如 Prescription / User）"/>
-            <TextBox Grid.Column="2"
-                     Text="{Binding Workbench.AuditOperatorFilter, Mode=TwoWay}"
-                     PlaceholderText="操作人姓名或工号过滤"/>
-            <Button Grid.Column="3" Content="执行查询" Classes="Primary" Height="32"
-                    Command="{Binding QueryLogsCommand}"/>
-            <Button Grid.Column="4" Content="清空" Height="32"
-                    Command="{Binding ClearFilterCommand}"/>
+            <!-- 卡片 3: HSM 硬件密码机状态 -->
+            <Border Grid.Column="2" Padding="14,12" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="HSM 硬件密码机" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <controls:StatusTag Grid.Column="1" Text="硬件隔离" Kind="Success"/>
+                    </Grid>
+                    <TextBlock Text="{Binding Workbench.HsmStatus}" FontSize="16" FontWeight="Bold" Margin="0,4,0,0"/>
+                    <TextBlock Text="PCI-E Level 3 物理防探测 / 硬件零化保护" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 卡片 4: 哈希防篡改存证与活跃威胁 -->
+            <Border Grid.Column="3" Padding="14,12" CornerRadius="8"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="活跃威胁与审计链" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <controls:StatusTag Grid.Column="1" Text="{Binding Workbench.AuditVerificationBadgeClass}" Kind="{Binding Workbench.AuditVerificationBadgeClass}"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding Workbench.ActiveAlertsCount, StringFormat='未处置告警: {0}'}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Workbench.AuditVerificationStatus}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Border>
         </Grid>
 
-        <!-- 审计流水表 -->
-        <Border Grid.Row="2" CornerRadius="8" Padding="12"
+        <!-- 次级导航条与多维操作区 -->
+        <Border Grid.Row="1" Padding="10,8" CornerRadius="8"
                 Background="{DynamicResource SemiColorBackground1}"
                 BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-            <Grid RowDefinitions="Auto,*">
-                <Grid Grid.Row="0" ColumnDefinitions="150,150,130,170,*,160,90" Margin="8,4,8,8">
-                    <TextBlock Grid.Column="0" Text="时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                    <TextBlock Grid.Column="1" Text="事件类型" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                    <TextBlock Grid.Column="2" Text="操作人" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                    <TextBlock Grid.Column="3" Text="目标实体" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                    <TextBlock Grid.Column="4" Text="操作详情" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                    <TextBlock Grid.Column="5" Text="链哈希摘要" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                    <TextBlock Grid.Column="6" Text="存证" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                </Grid>
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                <!-- 切换面板按钮组 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                    <Button Content="等保审计存证链" Classes="Tertiary" Height="30"
+                            Command="{Binding SwitchSubTabCommand}" CommandParameter="0"/>
+                    <Button Content="集中入侵防范与告警 (M-019)" Classes="Tertiary" Height="30"
+                            Command="{Binding SwitchSubTabCommand}" CommandParameter="1"/>
+                    <Button Content="KMS 密钥全生命周期 (M-021)" Classes="Tertiary" Height="30"
+                            Command="{Binding SwitchSubTabCommand}" CommandParameter="2"/>
+                </StackPanel>
 
-                <ScrollViewer Grid.Row="1">
-                    <ItemsControl ItemsSource="{Binding Workbench.AuditLogsList}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:AuditLogEntryModel">
-                                <Border Margin="0,3" Padding="10" CornerRadius="6"
-                                        Background="{DynamicResource SemiColorBackground0}"
-                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                    <Grid ColumnDefinitions="150,150,130,170,*,160,90">
-                                        <TextBlock Grid.Column="0" Text="{Binding FormattedTime}" FontSize="12" VerticalAlignment="Center"/>
-                                        <controls:StatusTag Grid.Column="1" Text="{Binding EventType}" Kind="{Binding EventBadgeClass}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
-                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding OperatorName}" FontWeight="SemiBold" FontSize="12"/>
-                                            <TextBlock Text="{Binding UserId}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="3" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding TargetEntity}" FontSize="12"/>
-                                            <TextBlock Text="{Binding TargetId}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="4" Text="{Binding ActionDetail}" FontSize="12" TextWrapping="Wrap" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="5" Text="{Binding ShortHash}" FontFamily="Consolas" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="6" Content="详情" Classes="Primary" Height="28" FontSize="12" VerticalAlignment="Center"
-                                                Command="{Binding $parent[UserControl].((local:AuditLogStationViewModel)DataContext).InspectEntryCommand}"
-                                                CommandParameter="{Binding}"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <!-- 当前标签快捷操作 -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Content="刷新全部 (F5)" Classes="Tertiary" Height="30" Command="{Binding QueryLogsCommand}"/>
+                    <Button Content="全网威胁扫描" Classes="Warning" Height="30" Command="{Binding ScanThreatsCommand}"/>
+                    <Button Content="固化防截断锚点 (F3)" Classes="Tertiary" Height="30" Command="{Binding CreateAnchorCommand}"/>
+                    <Button Content="校验哈希链完整性 (F2)" Classes="Primary" Height="30" Command="{Binding VerifyChainCommand}"/>
+                </StackPanel>
             </Grid>
         </Border>
+
+        <!-- 内容区域：根据 SelectedSubTabIndex 切换三个面板 -->
+        <Grid Grid.Row="2">
+            <!-- ============================================== -->
+            <!-- 面板 0: 安全审计流水与防篡改存证链 -->
+            <!-- ============================================== -->
+            <Grid RowDefinitions="Auto,*" RowSpacing="8" IsVisible="{Binding SelectedSubTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}">
+                <!-- 三维检索过滤条 -->
+                <Grid Grid.Row="0" ColumnDefinitions="*,*,*,Auto,Auto" ColumnSpacing="8">
+                    <TextBox x:Name="EventFilterBox" Grid.Column="0"
+                             Text="{Binding Workbench.AuditEventTypeFilter, Mode=TwoWay}"
+                             PlaceholderText="事件类型过滤（如 PRICE_ADJUST / LOGIN / EMR_SIGN）(Ctrl+F)"/>
+                    <TextBox Grid.Column="1"
+                             Text="{Binding Workbench.AuditTargetEntityFilter, Mode=TwoWay}"
+                             PlaceholderText="目标实体过滤（如 pat_patients / opd_prescriptions）"/>
+                    <TextBox Grid.Column="2"
+                             Text="{Binding Workbench.AuditOperatorFilter, Mode=TwoWay}"
+                             PlaceholderText="操作人姓名或工号过滤"/>
+                    <Button Grid.Column="3" Content="执行检索" Classes="Primary" Height="32" Command="{Binding QueryLogsCommand}"/>
+                    <Button Grid.Column="4" Content="清空" Height="32" Command="{Binding ClearFilterCommand}"/>
+                </Grid>
+
+                <!-- 审计流水表 -->
+                <Border Grid.Row="1" CornerRadius="8" Padding="12"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid RowDefinitions="Auto,*">
+                        <Grid Grid.Row="0" ColumnDefinitions="150,150,130,170,*,160,90" Margin="8,4,8,8">
+                            <TextBlock Grid.Column="0" Text="时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="事件类型" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="操作人" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="3" Text="目标实体" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="4" Text="操作详情" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="5" Text="链哈希摘要" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="6" Text="存证" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1">
+                            <ItemsControl ItemsSource="{Binding Workbench.AuditLogsList}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:AuditLogEntryModel">
+                                        <Border Margin="0,3" Padding="10" CornerRadius="6"
+                                                Background="{DynamicResource SemiColorBackground0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <Grid ColumnDefinitions="150,150,130,170,*,160,90">
+                                                <TextBlock Grid.Column="0" Text="{Binding FormattedTime}" FontSize="12" VerticalAlignment="Center"/>
+                                                <controls:StatusTag Grid.Column="1" Text="{Binding EventType}" Kind="{Binding EventBadgeClass}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding OperatorName}" FontWeight="SemiBold" FontSize="12"/>
+                                                    <TextBlock Text="{Binding UserId}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding TargetEntity}" FontSize="12"/>
+                                                    <TextBlock Text="{Binding TargetId}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="4" Text="{Binding ActionDetail}" FontSize="12" TextWrapping="Wrap" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding ShortHash}" FontFamily="Consolas" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="6" Content="详情" Classes="Primary" Height="28" FontSize="12" VerticalAlignment="Center"
+                                                        Command="{Binding $parent[UserControl].((local:AuditLogStationViewModel)DataContext).InspectEntryCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- ============================================== -->
+            <!-- 面板 1: 集中入侵防范与安全告警 (M-019) -->
+            <!-- ============================================== -->
+            <Border Grid.Row="0" CornerRadius="8" Padding="14"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    IsVisible="{Binding SelectedSubTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=1}">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="140,160,110,140,*,110,100" Margin="8,0,8,10">
+                        <TextBlock Grid.Column="0" Text="告警编号" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="1" Text="威胁类型" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="2" Text="风险等级" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="3" Text="受害账号 / 来源IP" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="4" Text="威胁与异常行为描述" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="5" Text="状态" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="6" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding Workbench.SecurityAlertsList}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SecurityAlertModel">
+                                    <Border Margin="0,3" Padding="12,10" CornerRadius="6"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="140,160,110,140,*,110,100">
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding AlertNo}" FontWeight="SemiBold" FontSize="12"/>
+                                                <TextBlock Text="{Binding FormattedTime}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="{Binding AlertType}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                                            <controls:StatusTag Grid.Column="2" Text="{Binding Severity}" Kind="{Binding SeverityBadgeClass}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                            <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding UserId}" FontSize="12" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding SourceIp}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,0,12,0">
+                                                <TextBlock Text="{Binding Description}" FontSize="12" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding ResolutionNote, StringFormat='处置说明: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"
+                                                           IsVisible="{Binding !IsActive}"/>
+                                            </StackPanel>
+                                            <controls:StatusTag Grid.Column="5" Text="{Binding Status}" Kind="{Binding StatusBadgeClass}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                            <Button Grid.Column="6" Content="处置闭环" Classes="Primary" Height="28" FontSize="12" VerticalAlignment="Center"
+                                                    IsEnabled="{Binding IsActive}"
+                                                    Command="{Binding $parent[UserControl].((local:AuditLogStationViewModel)DataContext).ResolveAlertCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- ============================================== -->
+            <!-- 面板 2: KMS / HSM 密钥全生命周期管理 (M-021) -->
+            <!-- ============================================== -->
+            <Border Grid.Row="0" CornerRadius="8" Padding="14"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    IsVisible="{Binding SelectedSubTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=2}">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="160,100,70,100,200,*,120,110" Margin="8,0,8,10">
+                        <TextBlock Grid.Column="0" Text="主密钥名称 (KeyName)" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="1" Text="加密算法" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="2" Text="版本" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="3" Text="生命周期" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="4" Text="硬件指纹 (SM3 Entropy)" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="5" Text="密钥用途说明" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="6" Text="有效期截止" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="7" Text="平滑轮换" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding Workbench.KmsKeysList}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:KmsKeyModel">
+                                    <Border Margin="0,4" Padding="12,12" CornerRadius="6"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="160,100,70,100,200,*,120,110">
+                                            <TextBlock Grid.Column="0" Text="{Binding KeyName}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Algorithm}" FontSize="12" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Version, StringFormat='v{0}'}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <controls:StatusTag Grid.Column="3" Text="{Binding State}" Kind="{Binding StateBadgeClass}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding KeyFingerprint}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="5" Text="{Binding Description}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" TextWrapping="Wrap"/>
+                                            <TextBlock Grid.Column="6" Text="{Binding FormattedExpiry}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="7" Content="立即轮换" Classes="Warning" Height="28" FontSize="12" VerticalAlignment="Center"
+                                                    IsEnabled="{Binding IsActive}"
+                                                    Command="{Binding $parent[UserControl].((local:AuditLogStationViewModel)DataContext).RotateKeyCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>
-

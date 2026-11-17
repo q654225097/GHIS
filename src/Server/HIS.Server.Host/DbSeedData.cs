@@ -353,6 +353,24 @@ VALUES
 			      WHERE l.medical_order_id = ord_medical_orders.id
 			  )
 			""", new { Now = nowMs });
+		// 15. Seed P1 Security & Cryptographic KMS Keys
+		long oneYearMs = 365L * 24 * 3600 * 1000;
+		long halfYearMs = 180L * 24 * 3600 * 1000;
+		await conn.ExecuteAsync("""
+			INSERT OR IGNORE INTO ops_kms_keys (id, key_name, algorithm, version, state, hsm_protected, key_fingerprint, expires_at_ms, rotated_at_ms, description, ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    ('KMS-KEY-01', 'JWT_SIGNING_KEY', 'SM2', 1, 'ACTIVE', 1, 'SM2-PUB-7A39B206F18E94B3C1', @Now + @OneYear, NULL, '全院登录认证与令牌签发私钥 (HSM 硬件密码机隔离)', '{"hsm_slot":1}', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('KMS-KEY-02', 'SM4_DATABASE_KEY', 'SM4-GCM', 1, 'ACTIVE', 1, 'SM4-FPR-91BC832E54AA62B8', @Now + @HalfYear, NULL, '患者敏感信息 (PII) 数据库存储加密主密钥', '{"hsm_slot":2}', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('KMS-KEY-03', 'SM2_SIGNATURE_KEY', 'SM2', 1, 'ACTIVE', 1, 'SM2-CA-55F4D3C210E87391', @Now + @OneYear, NULL, '电子病历三级审签与 OFD 归档国密签名私钥', '{"hsm_slot":3}', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('KMS-KEY-04', 'HMAC_AUDIT_KEY', 'HMAC-SM3', 1, 'ACTIVE', 1, 'HMAC-SM3-A01B2C3D4E5F6789', @Now + @HalfYear, NULL, '等保三级安全审计日志哈希链防篡改计算密钥', '{"hsm_slot":4}', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1)
+			""", new { Now = nowMs, OneYear = oneYearMs, HalfYear = halfYearMs });
+
+		// 16. Seed P1 Intrusion Detection Baseline Alerts
+		await conn.ExecuteAsync("""
+			INSERT OR IGNORE INTO ops_security_alerts (id, alert_no, alert_type, severity, source_ip, user_id, operator_name, target_resource, description, threat_indicators_json, status, resolved_by, resolved_at_ms, resolution_note, ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    ('ALERT-SEED-01', 'ALT-202611-0001', 'BRUTE_FORCE_LOGIN', 'HIGH', '192.168.10.105', 'USER-CASHIER-01', '刘洋 (收费结算处收费员)', 'api/v4/platform/auth/login', '检测到连续 5 次口令尝试失败，触发持久化 15 分钟账户安全锁定', '{"failed_count":5,"rule":"IDPS-01-BRUTE-FORCE"}', 'RESOLVED', 'USER-ADMIN', @Now, '安全管理员核实为窗口误操作，已完成口令重置与安全培训', '{"mitre_technique":"T1110"}', 1, @Now - 3600000, 'IDPS_MONITOR', @Now, 'USER-ADMIN', 1)
+			""", new { Now = nowMs });
 	}
 
 	private static async Task ResetDemoPasswordsAsync(DbConnection conn, long nowMs)
