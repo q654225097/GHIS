@@ -471,6 +471,41 @@ INSERT OR IGNORE INTO ipc_hand_hygiene_audits
 VALUES
     ('HAND-SEED-01', 'DEPT-WARD-01', 'USER-NURSE-W2', '2026-11-18', 'TOUCH_PATIENT', 'NURSE', 20, 19, 18, 95.00, 94.74, 1, @Now, 'USER-NURSE-W2', @Now, 'USER-NURSE-W2', 1);
 """, new { Now = nowMs });
+
+		// Step 20: P2-A Patient Services & P2-B Management Support seed
+		await conn.ExecuteAsync("""
+INSERT OR IGNORE INTO srv_satisfaction_surveys
+    (id, encounter_id, visit_id, patient_id, patient_name, dept_id, score, medical_skill_score, service_attitude_score, environment_score, comment, submitted_at_ms, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('SAT-SEED-01', 'ADM20261105001', 'VISIT-001', 'PAT85061801', '李建国', 'DEPT-RESP-01', 5, 5, 5, 5, '医护人员非常耐心细致，病区环境整洁舒适！', @Now, 1, @Now, 'PAT85061801', @Now, 'PAT85061801', 1);
+
+INSERT OR IGNORE INTO srv_complaints
+    (id, complaint_no, patient_id, patient_name, patient_phone, dept_id, complaint_type, description, status, handler_id, handler_name, handling_result, patient_satisfaction, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('CMPL-SEED-01', 'CMPL20261118001', 'PAT85061801', '李建国', '13800138000', 'DEPT-OPD-01', 'WAITING_TIME', '门诊高峰期取药排队时间较长', 3, 'USER-ADMIN', '系统管理员', '已开启快速发药应急窗口，电话回访患者表示理解', 'SATISFIED', 1, @Now, 'USER-ADMIN', @Now, 'USER-ADMIN', 1);
+
+INSERT OR IGNORE INTO srv_informed_consents
+    (id, consent_no, patient_id, encounter_id, consent_type, title, document_content_summary, signer_type, signer_name, signed_at_ms, witness_doctor_id, signature_hash, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('CONSENT-SEED-01', 'IC20261118001', 'PAT85061801', 'ADM20261105001', 'SURGERY_CONSENT', '支气管镜下诊疗知情同意书', '术前风险告知、麻醉方式及术中可能并发症充分知情并签署', 'PATIENT', '李建国', @Now, 'USER-DOC-ATTENDING', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 1, 1, @Now, 'USER-DOC-ATTENDING', @Now, 'USER-DOC-ATTENDING', 1);
+
+INSERT OR IGNORE INTO fin_cost_centers
+    (id, dept_id, period, direct_cost, allocated_cost, total_cost, revenue, profit_margin, allocation_method, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('CC-SEED-01', 'DEPT-RESP-01', '2026-10', 450000.00, 120000.00, 570000.00, 720000.00, 20.83, 'STEP_DOWN', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+    ('CC-SEED-02', 'DEPT-CARD-01', '2026-10', 680000.00, 180000.00, 860000.00, 1150000.00, 25.22, 'STEP_DOWN', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
+INSERT OR IGNORE INTO eqp_equipments
+    (id, code, name, model_spec, dept_id, purchase_date, price, warranty_end, is_mandatory_inspection, next_inspection_date, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('EQP-SEED-01', 'EQP-RESP-VENT-01', '高频呼吸机', 'Servo-u 3.0', 'DEPT-WARD-01', '2024-01-15', 380000.00, '2027-01-15', 1, '2027-01-10', 'NORMAL', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+    ('EQP-SEED-02', 'EQP-OR-MON-01', '多参数麻醉监护仪', 'Mindray BeneVision N17', 'DEPT-MTC-OR', '2023-06-20', 120000.00, '2026-06-20', 1, '2026-12-01', 'NORMAL', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
+INSERT OR IGNORE INTO eqp_maintenance_records
+    (id, equipment_id, type, maintenance_date, cost, vendor, engineer_name, result, remark, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('MAINT-SEED-01', 'EQP-SEED-01', 'CALIBRATION', '2026-01-10', 1500.00, '市计量科学研究院', '张工', 'QUALIFIED', '气道压力传感器精度合格，出具法定检定证书', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+""", new { Now = nowMs });
 	}
 
 	private static async Task ResetDemoPasswordsAsync(DbConnection conn, long nowMs)

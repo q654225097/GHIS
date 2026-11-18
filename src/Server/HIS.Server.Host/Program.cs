@@ -165,6 +165,15 @@ public class Program
 		RegisterRepo<IpcAdverseEvent>(builder.Services, "ipc_adverse_events");
 		RegisterRepo<IpcHandHygieneAudit>(builder.Services, "ipc_hand_hygiene_audits");
 
+		RegisterRepo<SrvSatisfactionSurvey>(builder.Services, "srv_satisfaction_surveys");
+		RegisterRepo<SrvComplaint>(builder.Services, "srv_complaints");
+		RegisterRepo<SrvInformedConsent>(builder.Services, "srv_informed_consents");
+
+		RegisterRepo<FinCostCenter>(builder.Services, "fin_cost_centers");
+
+		RegisterRepo<EqpEquipment>(builder.Services, "eqp_equipments");
+		RegisterRepo<EqpMaintenanceRecord>(builder.Services, "eqp_maintenance_records");
+
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);
 		builder.Services.AddSingleton(new JwtTokenService(securityKeys.JwtSigningKey));

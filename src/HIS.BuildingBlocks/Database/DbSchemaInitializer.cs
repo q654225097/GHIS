@@ -1089,6 +1089,141 @@ CREATE TABLE IF NOT EXISTS ipc_hand_hygiene_audits (
     version_no INT NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS ix_ipc_hand_ward ON ipc_hand_hygiene_audits (ward_id, audit_date);
+
+-- P2-A: Patient Services
+CREATE TABLE IF NOT EXISTS srv_satisfaction_surveys (
+    id VARCHAR(36) PRIMARY KEY,
+    encounter_id VARCHAR(36),
+    visit_id VARCHAR(36),
+    patient_id VARCHAR(36) NOT NULL,
+    patient_name VARCHAR(128) NOT NULL,
+    dept_id VARCHAR(36) NOT NULL,
+    score INT NOT NULL DEFAULT 5,
+    medical_skill_score INT NOT NULL DEFAULT 5,
+    service_attitude_score INT NOT NULL DEFAULT 5,
+    environment_score INT NOT NULL DEFAULT 5,
+    comment VARCHAR(1000),
+    submitted_at_ms BIGINT NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_srv_sat_dept ON srv_satisfaction_surveys (dept_id, submitted_at_ms);
+
+CREATE TABLE IF NOT EXISTS srv_complaints (
+    id VARCHAR(36) PRIMARY KEY,
+    complaint_no VARCHAR(40) NOT NULL UNIQUE,
+    patient_id VARCHAR(36) NOT NULL,
+    patient_name VARCHAR(128) NOT NULL,
+    patient_phone VARCHAR(32),
+    dept_id VARCHAR(36) NOT NULL,
+    complaint_type VARCHAR(64) NOT NULL,
+    description VARCHAR(2000) NOT NULL,
+    status INT NOT NULL DEFAULT 0,
+    handler_id VARCHAR(36),
+    handler_name VARCHAR(128),
+    handling_result VARCHAR(2000),
+    patient_satisfaction VARCHAR(32),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_srv_comp_status ON srv_complaints (status, dept_id);
+
+CREATE TABLE IF NOT EXISTS srv_informed_consents (
+    id VARCHAR(36) PRIMARY KEY,
+    consent_no VARCHAR(40) NOT NULL UNIQUE,
+    patient_id VARCHAR(36) NOT NULL,
+    encounter_id VARCHAR(36),
+    consent_type VARCHAR(64) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    document_content_summary VARCHAR(1000),
+    signer_type VARCHAR(32) NOT NULL DEFAULT 'PATIENT',
+    signer_name VARCHAR(128) NOT NULL,
+    signed_at_ms BIGINT NOT NULL,
+    witness_doctor_id VARCHAR(36) NOT NULL,
+    signature_hash VARCHAR(128) NOT NULL,
+    status INT NOT NULL DEFAULT 1,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_srv_consent_pat ON srv_informed_consents (patient_id, consent_type);
+
+-- P2-B: Management Support (Cost Accounting & Equipment)
+CREATE TABLE IF NOT EXISTS fin_cost_centers (
+    id VARCHAR(36) PRIMARY KEY,
+    dept_id VARCHAR(36) NOT NULL,
+    period VARCHAR(16) NOT NULL,
+    direct_cost DECIMAL(18,4) NOT NULL DEFAULT 0,
+    allocated_cost DECIMAL(18,4) NOT NULL DEFAULT 0,
+    total_cost DECIMAL(18,4) NOT NULL DEFAULT 0,
+    revenue DECIMAL(18,4) NOT NULL DEFAULT 0,
+    profit_margin DECIMAL(8,4) NOT NULL DEFAULT 0,
+    allocation_method VARCHAR(64) NOT NULL DEFAULT 'STEP_DOWN',
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_fin_cost_dept_per ON fin_cost_centers (dept_id, period);
+
+CREATE TABLE IF NOT EXISTS eqp_equipments (
+    id VARCHAR(36) PRIMARY KEY,
+    code VARCHAR(64) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    model_spec VARCHAR(100),
+    dept_id VARCHAR(36) NOT NULL,
+    purchase_date VARCHAR(16),
+    price DECIMAL(18,4) NOT NULL DEFAULT 0,
+    warranty_end VARCHAR(16),
+    is_mandatory_inspection SMALLINT NOT NULL DEFAULT 0,
+    next_inspection_date VARCHAR(16),
+    status VARCHAR(32) NOT NULL DEFAULT 'NORMAL',
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_eqp_code_status ON eqp_equipments (code, status);
+
+CREATE TABLE IF NOT EXISTS eqp_maintenance_records (
+    id VARCHAR(36) PRIMARY KEY,
+    equipment_id VARCHAR(36) NOT NULL,
+    type VARCHAR(32) NOT NULL,
+    maintenance_date VARCHAR(16) NOT NULL,
+    cost DECIMAL(18,4) NOT NULL DEFAULT 0,
+    vendor VARCHAR(200),
+    engineer_name VARCHAR(128),
+    result VARCHAR(32) NOT NULL DEFAULT 'QUALIFIED',
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_eqp_maint_eqp ON eqp_maintenance_records (equipment_id);
 ");
 	}
 

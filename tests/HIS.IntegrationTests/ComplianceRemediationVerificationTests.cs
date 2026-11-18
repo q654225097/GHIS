@@ -1288,4 +1288,191 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
         Assert.True(sumData.Data.OccupationalExposuresCount >= 1);
         Assert.True(sumData.Data.AverageHandHygieneComplianceRate >= 0);
     }
+
+    [Fact]
+    public async Task P2A_PatientServices_Satisfaction_Complaints_Consents()
+    {
+        var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+        var patientId = "PAT-SRV-" + uniqueSuffix;
+
+        // 1. Submit Satisfaction Survey
+        var satReq = new SubmitSatisfactionRequest(
+            PatientId: patientId,
+            PatientName: "评测患者" + uniqueSuffix,
+            DeptId: "DEPT-RESP-01",
+            EncounterId: "ENC-" + uniqueSuffix,
+            Score: 5,
+            MedicalSkillScore: 5,
+            ServiceAttitudeScore: 5,
+            EnvironmentScore: 4,
+            Comment: "医护耐心负责，就医体验良好"
+        );
+        var satRes = await _client.PostAsJsonAsync("/api/v4/service/satisfaction", satReq);
+        Assert.Equal(HttpStatusCode.OK, satRes.StatusCode);
+        var satData = await satRes.Content.ReadFromJsonAsync<ApiResponse<SrvSatisfactionSurvey>>();
+        Assert.NotNull(satData?.Data);
+        Assert.Equal(5, satData.Data.Score);
+
+        // Query surveys
+        var qSatRes = await _client.GetAsync($"/api/v4/service/satisfaction?patientId={patientId}");
+        Assert.Equal(HttpStatusCode.OK, qSatRes.StatusCode);
+        var qSatData = await qSatRes.Content.ReadFromJsonAsync<ApiResponse<IReadOnlyList<SrvSatisfactionSurvey>>>();
+        Assert.NotNull(qSatData?.Data);
+        Assert.NotEmpty(qSatData.Data);
+
+        // 2. Submit Complaint
+        var cmplReq = new SubmitComplaintRequest(
+            PatientId: patientId,
+            PatientName: "评测患者" + uniqueSuffix,
+            PatientPhone: "13912345678",
+            DeptId: "DEPT-OPD-01",
+            ComplaintType: "WAITING_TIME",
+            Description: "门诊候诊等候时间偏长，建议优化叫号提示"
+        );
+        var cmplRes = await _client.PostAsJsonAsync("/api/v4/service/complaints", cmplReq);
+        Assert.Equal(HttpStatusCode.OK, cmplRes.StatusCode);
+        var cmplData = await cmplRes.Content.ReadFromJsonAsync<ApiResponse<SrvComplaint>>();
+        Assert.NotNull(cmplData?.Data);
+        var complaintId = cmplData.Data.Id;
+        Assert.Equal(0, cmplData.Data.Status);
+
+        // Process Complaint
+        var procRes = await _client.PutAsJsonAsync($"/api/v4/service/complaints/{complaintId}", new ProcessComplaintRequest(
+            Status: 2,
+            HandlerId: "USER-ADMIN",
+            HandlerName: "医患办主任",
+            HandlingResult: "已调取叫号时序，高峰期增开诊室分流"
+        ));
+        Assert.Equal(HttpStatusCode.OK, procRes.StatusCode);
+
+        // Close Complaint
+        var closeRes = await _client.PostAsJsonAsync($"/api/v4/service/complaints/{complaintId}/close", new CloseComplaintRequest(
+            HandlingResult: "患者对增开诊室方案表示满意并认可",
+            PatientSatisfaction: "VERY_SATISFIED"
+        ));
+        Assert.Equal(HttpStatusCode.OK, closeRes.StatusCode);
+        var closedData = await closeRes.Content.ReadFromJsonAsync<ApiResponse<SrvComplaint>>();
+        Assert.NotNull(closedData?.Data);
+        Assert.Equal(4, closedData.Data.Status);
+        Assert.Equal("VERY_SATISFIED", closedData.Data.PatientSatisfaction);
+
+        // 3. Record Informed Consent
+        var icReq = new RecordInformedConsentRequest(
+            PatientId: patientId,
+            EncounterId: "ENC-" + uniqueSuffix,
+            ConsentType: "SURGERY_CONSENT",
+            Title: "支气管镜介入诊疗知情同意书",
+            DocumentContentSummary: "术前告知相关手术风险及麻醉事项",
+            SignerType: "PATIENT",
+            SignerName: "评测患者" + uniqueSuffix,
+            WitnessDoctorId: "USER-DOC-IPD",
+            SignatureHash: "sha256-demo-signature-hash-" + uniqueSuffix
+        );
+        var icRes = await _client.PostAsJsonAsync("/api/v4/service/informed-consents", icReq);
+        Assert.Equal(HttpStatusCode.OK, icRes.StatusCode);
+        var icData = await icRes.Content.ReadFromJsonAsync<ApiResponse<SrvInformedConsent>>();
+        Assert.NotNull(icData?.Data);
+        Assert.Equal(1, icData.Data.Status);
+        Assert.Equal(icReq.SignatureHash, icData.Data.SignatureHash);
+
+        // Query Consents
+        var qIcRes = await _client.GetAsync($"/api/v4/service/informed-consents?patientId={patientId}");
+        Assert.Equal(HttpStatusCode.OK, qIcRes.StatusCode);
+        var qIcData = await qIcRes.Content.ReadFromJsonAsync<ApiResponse<IReadOnlyList<SrvInformedConsent>>>();
+        Assert.NotNull(qIcData?.Data);
+        Assert.NotEmpty(qIcData.Data);
+
+        // 4. Patient Service Summary
+        var sumRes = await _client.GetAsync("/api/v4/service/summary");
+        Assert.Equal(HttpStatusCode.OK, sumRes.StatusCode);
+        var sumData = await sumRes.Content.ReadFromJsonAsync<ApiResponse<PatientServiceSummaryDto>>();
+        Assert.NotNull(sumData?.Data);
+        Assert.True(sumData.Data.TotalSurveys >= 1);
+        Assert.True(sumData.Data.ResolvedComplaintsCount >= 1);
+        Assert.True(sumData.Data.TotalSignedConsents >= 1);
+    }
+
+    [Fact]
+    public async Task P2B_ManagementSupport_CostCenter_EquipmentMaintenance()
+    {
+        var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+        var period = "2026-11";
+        var deptId = "DEPT-TEST-" + uniqueSuffix;
+
+        // 1. Cost Center Allocation
+        var allocReq = new AllocateCostRequest(
+            DeptId: deptId,
+            Period: period,
+            DirectCost: 300000.00m,
+            AllocatedCost: 80000.00m,
+            Revenue: 500000.00m,
+            AllocationMethod: "STEP_DOWN"
+        );
+        var allocRes = await _client.PostAsJsonAsync("/api/v4/finance/cost-centers/allocate", allocReq);
+        Assert.Equal(HttpStatusCode.OK, allocRes.StatusCode);
+        var allocData = await allocRes.Content.ReadFromJsonAsync<ApiResponse<FinCostCenter>>();
+        Assert.NotNull(allocData?.Data);
+        Assert.Equal(380000.00m, allocData.Data.TotalCost);
+        Assert.Equal(24.00m, allocData.Data.ProfitMargin); // (500000 - 380000) / 500000 = 24.00%
+
+        // Query Cost Center Report
+        var rptRes = await _client.GetAsync($"/api/v4/finance/cost-centers/report?period={period}&deptId={deptId}");
+        Assert.Equal(HttpStatusCode.OK, rptRes.StatusCode);
+        var rptData = await rptRes.Content.ReadFromJsonAsync<ApiResponse<IReadOnlyList<CostCenterReportDto>>>();
+        Assert.NotNull(rptData?.Data);
+        Assert.Single(rptData.Data);
+        Assert.Equal(380000.00m, rptData.Data[0].TotalCost);
+
+        // 2. Equipment Asset Registration
+        var eqpCode = "EQP-TEST-" + uniqueSuffix;
+        var eqpReq = new CreateEquipmentRequest(
+            Code: eqpCode,
+            Name: "超声多普勒血流仪" + uniqueSuffix,
+            ModelSpec: "Doppler-X500",
+            DeptId: deptId,
+            PurchaseDate: "2025-06-01",
+            Price: 250000.00m,
+            WarrantyEnd: "2028-06-01",
+            IsMandatoryInspection: true,
+            NextInspectionDate: "2026-12-31"
+        );
+        var eqpRes = await _client.PostAsJsonAsync("/api/v4/equipment/equipments", eqpReq);
+        Assert.Equal(HttpStatusCode.OK, eqpRes.StatusCode);
+        var eqpData = await eqpRes.Content.ReadFromJsonAsync<ApiResponse<EqpEquipment>>();
+        Assert.NotNull(eqpData?.Data);
+        var eqpId = eqpData.Data.Id;
+        Assert.Equal("NORMAL", eqpData.Data.Status);
+        Assert.Equal(1, eqpData.Data.IsMandatoryInspection);
+
+        // Record Maintenance / Calibration
+        var maintReq = new RecordMaintenanceRequest(
+            Type: "CALIBRATION",
+            MaintenanceDate: "2026-11-18",
+            Cost: 2000.00m,
+            Vendor: "国家医疗器械检验检测中心",
+            EngineerName: "李工程师",
+            Result: "QUALIFIED",
+            Remark: "超声换能器灵敏度与声功率检定达标，准予继续临床使用"
+        );
+        var maintRes = await _client.PostAsJsonAsync($"/api/v4/equipment/equipments/{eqpId}/maintenance", maintReq);
+        Assert.Equal(HttpStatusCode.OK, maintRes.StatusCode);
+        var maintData = await maintRes.Content.ReadFromJsonAsync<ApiResponse<EqpMaintenanceRecord>>();
+        Assert.NotNull(maintData?.Data);
+        Assert.Equal("QUALIFIED", maintData.Data.Result);
+
+        // Query Maintenance Records
+        var qMaintRes = await _client.GetAsync($"/api/v4/equipment/equipments/{eqpId}/maintenance");
+        Assert.Equal(HttpStatusCode.OK, qMaintRes.StatusCode);
+        var qMaintData = await qMaintRes.Content.ReadFromJsonAsync<ApiResponse<IReadOnlyList<EqpMaintenanceRecord>>>();
+        Assert.NotNull(qMaintData?.Data);
+        Assert.NotEmpty(qMaintData.Data);
+
+        // 3. Equipment Summary Report
+        var eqpRptRes = await _client.GetAsync("/api/v4/equipment/report");
+        Assert.Equal(HttpStatusCode.OK, eqpRptRes.StatusCode);
+        var eqpRptData = await eqpRptRes.Content.ReadFromJsonAsync<ApiResponse<EquipmentReportDto>>();
+        Assert.NotNull(eqpRptData?.Data);
+        Assert.True(eqpRptData.Data.TotalEquipmentCount >= 1);
+        Assert.True(eqpRptData.Data.TotalAssetValue > 0);
+    }
 }
