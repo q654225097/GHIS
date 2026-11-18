@@ -350,6 +350,12 @@ public sealed class SessionContext : INotifyPropertyChanged
 
 	public bool CanSeeAdminPanel => IsAdmin;
 
+	public bool CanSeeConsumablesWarehouse => IsAdmin || IsWarehouseKeeper;
+
+	public bool CanSeeConsumablesWard => IsAdmin || IsWardNurse || IsIpdResident || IsIpdAttending || IsOpdDoctor;
+
+	public bool CanSeeAnalytics => IsAdmin || IsRole("DIRECTOR") || IsRole("LEADER") || IsRole("DEPT-HEAD");
+
 	public ObservableCollection<LoginContextSnapshot> AvailableContexts { get; } = new ObservableCollection<LoginContextSnapshot>();
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -435,7 +441,8 @@ public sealed class SessionContext : INotifyPropertyChanged
 			"IsAdmin", "IsOpdDoctor", "IsIpdResident", "IsIpdAttending", "IsWardNurse", "IsPharmacist", "IsCashier",
 			"IsMedTech", "IsWarehouseKeeper", "CanPrescribe", "CanSignEmr", "CanSurgery",
 			"CanManageUsers", "CanSeeOpdStation", "CanSeeIpdStation", "CanSeeWardStation", "CanSeeMedTech",
-			"CanSeePharmacy", "CanSeeWarehouse", "CanSeePharmacyWindow", "CanSeeFinance", "CanSeeEmrOfd", "CanSeeDynFormConfig", "CanSeeAdminPanel"
+			"CanSeePharmacy", "CanSeeWarehouse", "CanSeePharmacyWindow", "CanSeeFinance", "CanSeeEmrOfd", "CanSeeDynFormConfig", "CanSeeAdminPanel",
+			"CanSeeConsumablesWarehouse", "CanSeeConsumablesWard", "CanSeeAnalytics"
 		};
 		string[] array2 = array;
 		foreach (string propertyName in array2)

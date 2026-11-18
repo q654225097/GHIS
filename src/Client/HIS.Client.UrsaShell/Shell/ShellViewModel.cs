@@ -405,6 +405,48 @@ public sealed class ShellViewModel : ClientModelBase
             if (med.Items.Count > 0) NavGroups.Add(med);
         }
 
+        var logistics = new ShellNavGroup("logistics", "物资与耗材", isExpanded: true);
+        if (ctx.CanSeeConsumablesWarehouse)
+        {
+            logistics.Items.Add(new ShellNavItem
+            {
+                Key = "consumables_warehouse",
+                LegacyNavIndex = 4,
+                Title = "耗材库与供应室",
+                Icon = "📦",
+                IsClinical = false,
+                Description = "耗材主目录维护、批次效期、出库与消毒供应室(CSSD)器械包追溯"
+            });
+        }
+        if (ctx.CanSeeConsumablesWard)
+        {
+            logistics.Items.Add(new ShellNavItem
+            {
+                Key = "consumables_ward",
+                LegacyNavIndex = 2,
+                Title = "病区耗材请领",
+                Icon = "📑",
+                IsClinical = true,
+                Description = "科室耗材物资请领与高值植入耗材UDI扫码核销绑定"
+            });
+        }
+        if (logistics.Items.Count > 0) NavGroups.Add(logistics);
+
+        if (ctx.CanSeeAnalytics)
+        {
+            var bi = new ShellNavGroup("bi", "运营与决策", isExpanded: true);
+            bi.Items.Add(new ShellNavItem
+            {
+                Key = "analytics",
+                LegacyNavIndex = -1,
+                Title = "统计分析工作站",
+                Icon = "📊",
+                IsClinical = false,
+                Description = "全院门诊住院运营、药占比、医疗质控与等保安全决策看板"
+            });
+            NavGroups.Add(bi);
+        }
+
         var finance = new ShellNavGroup("finance", "挂号与结算", isExpanded: true);
         if (ctx.CanSeeFinance)
         {
@@ -566,6 +608,9 @@ public sealed class ShellViewModel : ClientModelBase
             "role_admin" => new Stations.Admin.RoleAdminStationView { DataContext = new Stations.Admin.RoleAdminStationViewModel(Workbench, this) },
             "audit_log" => new Stations.Admin.AuditLogStationView { DataContext = new Stations.Admin.AuditLogStationViewModel(Workbench, this) },
             "schedule" => new Stations.Schedule.ScheduleStationView { DataContext = new Stations.Schedule.ScheduleStationViewModel(Workbench, this) },
+            "consumables_warehouse" => new Stations.Consumables.ConsumablesWarehouseView { DataContext = new Stations.Consumables.ConsumablesWarehouseViewModel(Workbench, this) },
+            "consumables_ward" => new Stations.Consumables.ConsumablesWardView { DataContext = new Stations.Consumables.ConsumablesWardViewModel(Workbench, this) },
+            "analytics" => new Stations.Analytics.AnalyticsStationView { DataContext = new Stations.Analytics.AnalyticsStationViewModel(Workbench, this) },
             _ => new LegacyStationBridgeView(
                 item.Title,
                 item.Description,

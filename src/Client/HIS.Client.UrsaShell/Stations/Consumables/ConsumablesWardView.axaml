@@ -1,0 +1,120 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Consumables"
+             x:Class="HIS.Client.UrsaShell.Stations.Consumables.ConsumablesWardView"
+             x:DataType="local:ConsumablesWardViewModel">
+    <DockPanel Margin="16">
+        <!-- Top Title Bar -->
+        <Border DockPanel.Dock="Top" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16,12">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="病区耗材请领 &amp; 高值耗材临床使用追溯" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                    <TextBlock Text="向医用耗材中心库提报物资请领、追踪领用审批进度，以及手术/介入高值耗材一物一码临床扫码核销绑定" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="0,4,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="刷新列表" Command="{Binding RefreshHistoryCommand}" Height="32"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Tab Control -->
+        <TabControl SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+            <!-- Tab 1: 提报请领单 -->
+            <TabItem Header="提报耗材请领">
+                <Grid ColumnDefinitions="*,*" Margin="0,12,0,0" ColumnSpacing="16">
+                    <!-- Left: Form -->
+                    <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="新建科室物资请领单" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="申请科室 / 病区" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding TargetDeptId, Mode=TwoWay}"/>
+                            <TextBlock Text="选择耗材品规" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding ReqConsumableId, Mode=TwoWay}" PlaceholderText="耗材ID (如 CSM-001 或 CSM-002)"/>
+                            <TextBlock Text="申请数量" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding ReqQuantity, Mode=TwoWay}"/>
+                            <TextBlock Text="请领用途说明" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding ReqRemark, Mode=TwoWay}" PlaceholderText="如 病区周转常规补库"/>
+                            <Button Content="提交请领单至中心库" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding SubmitRequisitionCommand}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Right: Info Panel -->
+                    <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="请领流程规范与注意事项" FontSize="14" FontWeight="Bold"/>
+                            <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="12,10">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="1. 常规耗材请领" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <TextBlock Text="各临床科室及病区护士站根据科室常备基数提报，库房每日上午集中审批发货。" FontSize="12" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="6" Padding="12,10">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="2. 无菌物品与消毒包" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                    <TextBlock Text="无菌包发放后由病区双人核对指示卡变色合格并记录，效期内妥善存放无菌柜。" FontSize="12" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 高值耗材临床扫码核销 -->
+            <TabItem Header="高值耗材扫码绑定">
+                <Border Margin="0,12,0,0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="20">
+                    <StackPanel Spacing="16" MaxWidth="600" HorizontalAlignment="Left">
+                        <TextBlock Text="植入性与高值耗材 (UDI) 临床核销绑定" FontSize="15" FontWeight="Bold"/>
+                        <TextBlock Text="国家卫健委要求高值耗材实现'一物一码'全流程闭环追溯，请使用扫码枪读取耗材条码并在术后或床旁与患者绑定。" FontSize="12" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="耗材追溯码 (UDI / 扫码录入)" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBox Text="{Binding ScanTraceCode, Mode=TwoWay}" PlaceholderText="扫描包装唯一编码，如 UDI-HC-2026110001"/>
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                            <StackPanel Grid.Column="0" Spacing="6">
+                                <TextBlock Text="患者唯一病历号" FontSize="12" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding PatientId, Mode=TwoWay}" PlaceholderText="患者 ID (如 PAT85061801)"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="6">
+                                <TextBlock Text="住院就诊流水号" FontSize="12" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding EncounterId, Mode=TwoWay}" PlaceholderText="住院号 (如 ADM20261105001)"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Content="确认扫码核销并记录追溯档案" Classes="Primary" Height="36" Command="{Binding BindTraceCodeCommand}"/>
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
+            <!-- Tab 3: 请领进度追踪 -->
+            <TabItem Header="请领进度追踪">
+                <Border Margin="0,12,0,0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="本科室历史请领进度" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding MyRequisitions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:ConsumableRequisitionItemModel">
+                                        <Border Margin="0,4" Padding="14,10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="16" VerticalAlignment="Center">
+                                                <TextBlock Grid.Column="0" Text="{Binding RequisitionNo}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Remark, StringFormat='申请说明: {0}'}" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding CreatedAtText, StringFormat='提报时间: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </StackPanel>
+                                                <Border Grid.Column="2" Background="{DynamicResource SemiColorFill0}" CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusLabel}" FontSize="12" FontWeight="SemiBold"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>

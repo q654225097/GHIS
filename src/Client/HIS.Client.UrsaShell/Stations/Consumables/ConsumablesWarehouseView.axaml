@@ -1,0 +1,228 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Consumables"
+             x:Class="HIS.Client.UrsaShell.Stations.Consumables.ConsumablesWarehouseView"
+             x:DataType="local:ConsumablesWarehouseViewModel">
+    <DockPanel Margin="16">
+        <!-- Top Title Bar -->
+        <Border DockPanel.Dock="Top" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16,12">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="医用耗材中心库 &amp; 消毒供应室 (CSSD)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                    <TextBlock Text="耗材主目录维护、批次与效期管控、科室请领出库闭环及无菌器械包全流程质量追溯" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="0,4,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="刷新数据" Command="{Binding RefreshCommand}" Height="32"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Tab Control -->
+        <TabControl SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+            <!-- Tab 1: 耗材主目录 -->
+            <TabItem Header="耗材目录维护">
+                <Grid ColumnDefinitions="3*,2*" Margin="0,12,0,0" ColumnSpacing="12">
+                    <!-- Left: Table -->
+                    <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="全院医用耗材目录" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Consumables}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:ConsumableItemModel">
+                                            <Border Margin="0,4" Padding="12,10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="12" VerticalAlignment="Center">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Code}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                                        <TextBlock Text="{Binding Spec, StringFormat='规格: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                    <Border Grid.Column="2" Background="{DynamicResource SemiColorFill0}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding HighValueTag}" FontSize="11" Foreground="{DynamicResource SemiColorDanger}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="3" Background="{DynamicResource SemiColorFill0}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding SterileTag}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="4" Text="{Binding Price, StringFormat='¥{0:F2}'}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Right: Add Form -->
+                    <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="新增耗材入册" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="编码" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding NewCode, Mode=TwoWay}" PlaceholderText="如 HC-9001"/>
+                            <TextBlock Text="耗材品名" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding NewName, Mode=TwoWay}" PlaceholderText="医用耗材全称"/>
+                            <TextBlock Text="规格型号" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding NewSpec, Mode=TwoWay}" PlaceholderText="如 50ml, 8孔直型"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="单位" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding NewUnit, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="单价 (元)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding NewPrice, Mode=TwoWay}"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4">
+                                <CheckBox IsChecked="{Binding NewIsSterile, Mode=TwoWay}" Content="无菌物品"/>
+                                <CheckBox IsChecked="{Binding NewIsHighValue, Mode=TwoWay}" Content="高值耗材 (一物一码)"/>
+                            </StackPanel>
+                            <Button Content="保存并发布至目录" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateConsumableCommand}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 库存与入库 -->
+            <TabItem Header="采购入库与批次">
+                <Grid ColumnDefinitions="3*,2*" Margin="0,12,0,0" ColumnSpacing="12">
+                    <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="中心库实时库存与批次" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Stocks}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:ConsumableStockItemModel">
+                                            <Border Margin="0,4" Padding="12,10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="12">
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13"/>
+                                                        <TextBlock Text="{Binding ConsumableId, StringFormat='ID: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                                        <TextBlock Text="{Binding Quantity, StringFormat='在库: {0}'}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding AvailableQty, StringFormat='可用: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                                                        <TextBlock Text="{Binding Price, StringFormat='单价 ¥{0:F2}'}" FontSize="12"/>
+                                                        <TextBlock Text="{Binding StockValue, StringFormat='货值 ¥{0:F2}'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="采购验收入库" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="耗材 ID / 编号" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding StockInConsumableId, Mode=TwoWay}" PlaceholderText="如 CSM-001"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="入库数量" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding StockInQty, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="进价单价" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding StockInCost, Mode=TwoWay}"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="生产批号" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding StockInBatchNo, Mode=TwoWay}" PlaceholderText="生产批次号"/>
+                            <TextBlock Text="有效期至" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding StockInExpiry, Mode=TwoWay}" PlaceholderText="yyyy-MM-dd"/>
+                            <Button Content="确认入库并更新库存" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding StockInCommand}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 请领审核与出库 -->
+            <TabItem Header="科室请领审核">
+                <Border Margin="0,12,0,0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="病区与门诊科室耗材请领单列表" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Requisitions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:ConsumableRequisitionItemModel">
+                                        <Border Margin="0,4" Padding="14,10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="16" VerticalAlignment="Center">
+                                                <TextBlock Grid.Column="0" Text="{Binding RequisitionNo}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding WardId, StringFormat='申请科室/病区: {0}'}" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding CreatedAtText, StringFormat='提交时间: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </StackPanel>
+                                                <Border Grid.Column="2" Background="{DynamicResource SemiColorFill0}" CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusLabel}" FontSize="12" FontWeight="SemiBold"/>
+                                                </Border>
+                                                <Button Grid.Column="3" Content="审批通过" Classes="Primary"
+                                                        Command="{Binding $parent[UserControl].((local:ConsumablesWarehouseViewModel)DataContext).ApproveRequisitionCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button Grid.Column="4" Content="发货出库" Classes="Success"
+                                                        Command="{Binding $parent[UserControl].((local:ConsumablesWarehouseViewModel)DataContext).IssueRequisitionCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </TabItem>
+
+            <!-- Tab 4: 消毒供应室 CSSD -->
+            <TabItem Header="消毒供应中心 (CSSD)">
+                <Grid ColumnDefinitions="3*,2*" Margin="0,12,0,0" ColumnSpacing="12">
+                    <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="无菌器械包生命周期追溯" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding SterilePackages}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:SterilePackageItemModel">
+                                            <Border Margin="0,4" Padding="12,10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="12" VerticalAlignment="Center">
+                                                    <TextBlock Grid.Column="0" Text="{Binding PackageCode}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding PackageName}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding ValidUntilText, StringFormat='灭菌效期至: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                    <Border Grid.Column="2" Background="{DynamicResource SemiColorFill0}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding StatusLabel}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    </Border>
+                                                    <Button Grid.Column="3" Content="高温蒸汽灭菌"
+                                                            Command="{Binding $parent[UserControl].((local:ConsumablesWarehouseViewModel)DataContext).SterilizePackageCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Grid.Column="4" Content="发放病区" Classes="Primary"
+                                                            Command="{Binding $parent[UserControl].((local:ConsumablesWarehouseViewModel)DataContext).DispatchPackageCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="新建手术/无菌器械包" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="器械包编码" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding NewPackageCode, Mode=TwoWay}" PlaceholderText="如 PKG-ORTHO-01"/>
+                            <TextBlock Text="器械包名称" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding NewPackageName, Mode=TwoWay}" PlaceholderText="如 骨科开髓器械包"/>
+                            <Button Content="确认组包入库" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreatePackageCommand}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>

@@ -9,6 +9,7 @@ using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
+using HIS.Modules.Consumables.Models;
 using HIS.Modules.Emr.Controllers;
 using HIS.Modules.Emr.Models;
 using HIS.Modules.Finance.Controllers;
@@ -19,6 +20,7 @@ using HIS.Modules.Inventory.Controllers;
 using HIS.Modules.Inventory.Models;
 using HIS.Modules.MedTech.Controllers;
 using HIS.Modules.MedTech.Models;
+using HIS.Modules.Operations.Controllers;
 using HIS.Modules.Operations.Models;
 using HIS.Modules.Operations.Services;
 using HIS.Modules.Outpatient.Controllers;
@@ -671,5 +673,154 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
         Assert.NotNull(balance);
         Assert.Equal("NORMAL", balance.Status);
         Assert.True(balance.Balance > 0);
+    }
+
+    [Fact]
+    public async Task P1A_ConsumablesAndCssd_FullLifecycle()
+    {
+        // 1. Query catalog and verify seeded consumables
+        var catRes = await _client.GetFromJsonAsync<ApiResponse<List<CsmConsumable>>>("/api/v4/csm/consumables");
+        Assert.NotNull(catRes?.Data);
+        Assert.Contains(catRes.Data, c => c.Code == "HC001");
+        Assert.Contains(catRes.Data, c => c.Code == "HC003" && c.IsHighValue == 1);
+
+        // 2. Create new consumable item
+        var uniqueSuffix = Guid.NewGuid().ToString("N")[..6];
+        var createRes = await _client.PostAsJsonAsync("/api/v4/csm/consumables", new CreateConsumableRequestDto(
+            Code: "HC-" + uniqueSuffix,
+            Name: "测试无菌纱布包-" + uniqueSuffix,
+            Spec: "10x10cm 5片装",
+            Unit: "包",
+            Category: "SURGICAL",
+            IsSterile: true,
+            IsHighValue: false,
+            Price: 8.50m
+        ));
+        Assert.Equal(HttpStatusCode.OK, createRes.StatusCode);
+        var createdData = await createRes.Content.ReadFromJsonAsync<ApiResponse<CsmConsumable>>();
+        Assert.NotNull(createdData?.Data);
+        var consumableId = createdData!.Data!.Id;
+
+        // 3. Purchase Stock-In
+        var stockInRes = await _client.PostAsJsonAsync("/api/v4/csm/stock-in", new StockInRequestDto(
+            ConsumableId: consumableId,
+            WarehouseId: "DEPT-WH-CSM",
+            BatchNo: "BAT-AUTO-" + uniqueSuffix,
+            ExpiryDate: "2028-12-31",
+            ManufactureDate: "2026-11-01",
+            Quantity: 200,
+            UnitCost: 5.00m
+        ));
+        Assert.Equal(HttpStatusCode.OK, stockInRes.StatusCode);
+
+        // 4. Ward Requisition
+        var reqRes = await _client.PostAsJsonAsync("/api/v4/csm/requisitions", new CreateRequisitionRequestDto(
+            WardId: "DEPT-WARD-01",
+            DeptId: "DEPT-WARD-01",
+            Remark: "病区临床急需请领",
+            Items: new List<RequisitionLineItemDto>
+            {
+                new(ConsumableId: consumableId, Quantity: 20)
+            }
+        ));
+        Assert.Equal(HttpStatusCode.OK, reqRes.StatusCode);
+        var reqData = await reqRes.Content.ReadFromJsonAsync<ApiResponse<CsmRequisition>>();
+        Assert.NotNull(reqData?.Data);
+        var requisitionId = reqData!.Data!.Id;
+        Assert.Equal("PENDING", reqData.Data.Status);
+
+        // 5. Approve Requisition
+        var approveRes = await _client.PostAsync($"/api/v4/csm/requisitions/{requisitionId}/approve", null);
+        Assert.Equal(HttpStatusCode.OK, approveRes.StatusCode);
+
+        // 6. Issue Requisition
+        var issueRes = await _client.PostAsync($"/api/v4/csm/requisitions/{requisitionId}/issue", null);
+        Assert.Equal(HttpStatusCode.OK, issueRes.StatusCode);
+        var issuedData = await issueRes.Content.ReadFromJsonAsync<ApiResponse<CsmRequisition>>();
+        Assert.NotNull(issuedData?.Data);
+        Assert.Equal("ISSUED", issuedData!.Data!.Status);
+
+        // 7. High-Value Consumable Trace Code Use & Verification
+        var bindRes = await _client.PostAsJsonAsync("/api/v4/csm/trace/use", new ScanUseTraceCodeRequestDto(
+            TraceCode: "UDI-HC-2026110001",
+            PatientId: "PAT85061801",
+            EncounterId: "ADM20261105001"
+        ));
+        Assert.Equal(HttpStatusCode.OK, bindRes.StatusCode);
+
+        var verifyRes = await _client.GetFromJsonAsync<ApiResponse<List<CsmTraceCode>>>("/api/v4/csm/trace-codes?patientId=PAT85061801");
+        Assert.NotNull(verifyRes?.Data);
+        Assert.Contains(verifyRes.Data, tc => tc.TraceCode == "UDI-HC-2026110001" && tc.Status == "USED");
+
+        // 8. CSSD Sterile Package lifecycle
+        var pkgRes = await _client.PostAsJsonAsync("/api/v4/csm/cssd/packages", new CreateSterilePackageRequestDto(
+            PackageName: "测试骨科微创包-" + uniqueSuffix,
+            Contents: new List<string> { "持针钳", "缝合线" }
+        ));
+        Assert.Equal(HttpStatusCode.OK, pkgRes.StatusCode);
+        var pkgData = await pkgRes.Content.ReadFromJsonAsync<ApiResponse<CsmSterilePackage>>();
+        Assert.NotNull(pkgData?.Data);
+        var packageId = pkgData!.Data!.Id;
+
+        // Sterilize
+        var sterilizeRes = await _client.PostAsJsonAsync($"/api/v4/csm/sterile-packages/{packageId}/sterilize", new SterilizePackageRequestDto(
+            SterilizationBatchNo: "ST-BAT-" + uniqueSuffix,
+            Method: "HIGH_PRESSURE_STEAM",
+            ValidDays: 180
+        ));
+        Assert.Equal(HttpStatusCode.OK, sterilizeRes.StatusCode);
+
+        // Dispatch / Issue to ward
+        var dispatchRes = await _client.PostAsJsonAsync($"/api/v4/csm/sterile-packages/{packageId}/issue", new IssueSterilePackageRequestDto(
+            TargetLocation: "DEPT-WARD-01",
+            Remark: "手术借包"
+        ));
+        Assert.Equal(HttpStatusCode.OK, dispatchRes.StatusCode);
+
+        // 9. Finance inventory report
+        var rptRes = await _client.GetFromJsonAsync<ApiResponse<ConsumableFinanceReportDto>>("/api/v4/csm/finance/report");
+        Assert.NotNull(rptRes?.Data);
+        Assert.True(rptRes.Data.TotalConsumablesCount > 0);
+        Assert.True(rptRes.Data.TotalStockValuation >= 0);
+    }
+
+    [Fact]
+    public async Task P1F_Analytics_HospitalOverviewAndExport()
+    {
+        // 1. Overview KPIs
+        var ovRes = await _client.GetAsync("/api/v4/ops/analytics/overview");
+        Assert.Equal(HttpStatusCode.OK, ovRes.StatusCode);
+        var ovData = await ovRes.Content.ReadFromJsonAsync<ApiResponse<AnalyticsController.HospitalOverviewDto>>();
+        Assert.NotNull(ovData?.Data);
+        Assert.True(ovData.Data.TotalRegisteredPatients >= 0);
+        Assert.True(ovData.Data.AvailableBedsCount >= 0);
+
+        // 2. Outpatient analytics
+        var opdRes = await _client.GetAsync("/api/v4/ops/analytics/outpatient");
+        var opdBody = await opdRes.Content.ReadAsStringAsync();
+        Assert.True(opdRes.IsSuccessStatusCode, $"Outpatient failed with {opdRes.StatusCode}: {opdBody}");
+
+        // 3. Inpatient analytics
+        var ipdRes = await _client.GetAsync("/api/v4/ops/analytics/inpatient");
+        Assert.Equal(HttpStatusCode.OK, ipdRes.StatusCode);
+
+        // 4. Pharmacy analytics
+        var phmRes = await _client.GetAsync("/api/v4/ops/analytics/pharmacy");
+        Assert.Equal(HttpStatusCode.OK, phmRes.StatusCode);
+
+        // 5. Finance analytics
+        var finRes = await _client.GetAsync("/api/v4/ops/analytics/finance");
+        Assert.Equal(HttpStatusCode.OK, finRes.StatusCode);
+
+        // 6. Quality indicators
+        var qltRes = await _client.GetAsync("/api/v4/ops/analytics/quality");
+        Assert.Equal(HttpStatusCode.OK, qltRes.StatusCode);
+
+        // 7. CSV Export
+        var csvRes = await _client.GetAsync("/api/v4/ops/analytics/export?reportType=OVERVIEW");
+        Assert.Equal(HttpStatusCode.OK, csvRes.StatusCode);
+        var csvText = await csvRes.Content.ReadAsStringAsync();
+        Assert.Contains("指标名称,数值,单位", csvText);
+        Assert.Contains("今日门诊就诊", csvText);
     }
 }

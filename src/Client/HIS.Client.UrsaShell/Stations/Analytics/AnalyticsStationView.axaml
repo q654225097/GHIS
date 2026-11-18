@@ -1,0 +1,128 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Analytics"
+             x:Class="HIS.Client.UrsaShell.Stations.Analytics.AnalyticsStationView"
+             x:DataType="local:AnalyticsStationViewModel">
+    <DockPanel Margin="16">
+        <!-- Top Title Bar -->
+        <Border DockPanel.Dock="Top" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16,12">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="全院医疗运营统计分析工作站 (BI / 院长决策看板)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                    <TextBlock Text="全院门急诊流量、住院床位周转、药占比监管、财务日结总览与医疗质控等保安全运营态势" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="0,4,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="导出综合报表 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="overview" Classes="Primary" Height="32"/>
+                    <Button Content="刷新数据" Command="{Binding RefreshCommand}" Height="32"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- KPI Summary Cards Row -->
+        <Border DockPanel.Dock="Top" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+            <Grid ColumnDefinitions="*,*,*,*,*,*" ColumnSpacing="12">
+                <!-- Card 1: 门诊 -->
+                <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="今日在诊/就诊" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding ActiveOutpatientVisits, StringFormat='{}{0} 人'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        <TextBlock Text="{Binding TotalRegisteredPatients, StringFormat='累计建档 {0} 人'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 2: 住院 -->
+                <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="在院患者 / 额定床位" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding OccupiedBeds, StringFormat='{}{0} 床'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                        <TextBlock Text="{Binding TotalBeds, StringFormat='总床位 {0} 张'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 3: 床位使用率 -->
+                <Border Grid.Column="2" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="床位使用率" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding BedOccupancyRate, StringFormat='{}{0:F1}%'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
+                        <TextBlock Text="考核基线 &gt; 85%" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 4: 今日营收 -->
+                <Border Grid.Column="3" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="全院结算收入" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding TotalRevenue, StringFormat='¥{0:F2}'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <TextBlock Text="门急诊+住院预交" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 5: 药占比 -->
+                <Border Grid.Column="4" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="药费占比 (公立医院考核)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding PharmacyRatio, StringFormat='{}{0:F1}%'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                        <TextBlock Text="{Binding PharmacyRevenue, StringFormat='药费 ¥{0:F2}'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 6: 质控与安全 -->
+                <Border Grid.Column="5" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="危急值待闭环" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding PendingCriticalValues, StringFormat='{}{0} 例'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                        <TextBlock Text="{Binding UnresolvedSecurityAlerts, StringFormat='等保待处置告警: {0}'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Detailed Domain Panels -->
+        <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="16">
+                    <!-- Domain 1: 门诊运营 -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="门急诊诊疗与挂号指标" FontSize="14" FontWeight="Bold"/>
+                                <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="outpatient" Height="26" Padding="8,0"/>
+                            </Grid>
+                            <TextBlock Text="{Binding OutpatientSummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Domain 2: 住院运营 -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="住院病区周转与医嘱负荷" FontSize="14" FontWeight="Bold"/>
+                                <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="inpatient" Height="26" Padding="8,0"/>
+                            </Grid>
+                            <TextBlock Text="{Binding InpatientSummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Domain 3: 药事与进销存 -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="药事进销存、效期与库存货值" FontSize="14" FontWeight="Bold"/>
+                                <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="pharmacy" Height="26" Padding="8,0"/>
+                            </Grid>
+                            <TextBlock Text="{Binding PharmacySummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Domain 4: 医疗质控与等保安全 -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="医疗安全、病案归档与等保合规态势" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding QualitySummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</UserControl>

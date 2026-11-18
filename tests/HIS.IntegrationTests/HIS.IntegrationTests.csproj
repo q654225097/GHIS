@@ -14,6 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Server\HIS.Server.Host\HIS.Server.Host.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.Consumables\HIS.Modules.Consumables.csproj" />
   </ItemGroup>
 </Project>
 

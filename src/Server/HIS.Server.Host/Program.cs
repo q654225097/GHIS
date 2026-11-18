@@ -9,6 +9,9 @@ using HIS.Contracts;
 using HIS.Modules.Config.Controllers;
 using HIS.Modules.Config.Models;
 using HIS.Modules.Config.Services;
+using HIS.Modules.Consumables.Controllers;
+using HIS.Modules.Consumables.Models;
+using HIS.Modules.Consumables.Services;
 using HIS.Modules.Emr.Controllers;
 using HIS.Modules.Emr.Models;
 using HIS.Modules.Emr.Services;
@@ -63,7 +66,8 @@ public class Program
 			.AddApplicationPart(typeof(PharmacyController).Assembly)
 			.AddApplicationPart(typeof(InventoryController).Assembly)
 			.AddApplicationPart(typeof(FinanceController).Assembly)
-			.AddApplicationPart(typeof(OperationsController).Assembly);
+			.AddApplicationPart(typeof(OperationsController).Assembly)
+			.AddApplicationPart(typeof(ConsumablesController).Assembly);
 		builder.Services.AddSingleton((Func<IServiceProvider, IDbConnectionFactory>)((IServiceProvider sp) => new SqliteConnectionFactory()));
 		RegisterRepo<SysDepartment>(builder.Services, "sys_departments");
 		RegisterRepo<SysDeptWardRelation>(builder.Services, "sys_dept_ward_relations");
@@ -131,6 +135,16 @@ public class Program
 		RegisterRepo<OpsOutboxMessage>(builder.Services, "ops_outbox_messages");
 		RegisterRepo<OpsSecurityAlert>(builder.Services, "ops_security_alerts");
 		RegisterRepo<OpsKmsKey>(builder.Services, "ops_kms_keys");
+		RegisterRepo<CsmConsumable>(builder.Services, "csm_consumables");
+		RegisterRepo<CsmStock>(builder.Services, "csm_stocks");
+		RegisterRepo<CsmBatch>(builder.Services, "csm_batches");
+		RegisterRepo<CsmStockMovement>(builder.Services, "csm_stock_movements");
+		RegisterRepo<CsmRequisition>(builder.Services, "csm_requisitions");
+		RegisterRepo<CsmRequisitionLine>(builder.Services, "csm_requisition_lines");
+		RegisterRepo<CsmSterilePackage>(builder.Services, "csm_sterile_packages");
+		RegisterRepo<CsmSterilizationBatch>(builder.Services, "csm_sterilization_batches");
+		RegisterRepo<CsmPackageMovement>(builder.Services, "csm_package_movements");
+		RegisterRepo<CsmTraceCode>(builder.Services, "csm_trace_codes");
 
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);
@@ -176,6 +190,7 @@ public class Program
 		builder.Services.AddScoped<EmrQualityControlService>();
 		builder.Services.AddScoped<EmrOfdRenderService>();
 		builder.Services.AddScoped<DischargeChecklistService>();
+		builder.Services.AddScoped<ConsumableSupplyService>();
 		builder.Services.AddScoped<HIS.Modules.Finance.Services.FinanceSettlementContract>();
 		builder.Services.AddScoped<IFinanceSettlementContract>((Func<IServiceProvider, IFinanceSettlementContract>)((IServiceProvider sp) => sp.GetRequiredService<HIS.Modules.Finance.Services.FinanceSettlementContract>()));
 		builder.Services.AddScoped<AuditLogService>();

@@ -7,6 +7,7 @@
     <ProjectReference Include="..\..\HIS.BuildingBlocks\HIS.BuildingBlocks.csproj" />
     <ProjectReference Include="..\HIS.Modules.Platform\HIS.Modules.Platform.csproj" />
     <ProjectReference Include="..\HIS.Modules.Config\HIS.Modules.Config.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Consumables\HIS.Modules.Consumables.csproj" />
     <ProjectReference Include="..\HIS.Modules.Emr\HIS.Modules.Emr.csproj" />
     <ProjectReference Include="..\HIS.Modules.Patient\HIS.Modules.Patient.csproj" />
     <ProjectReference Include="..\HIS.Modules.Outpatient\HIS.Modules.Outpatient.csproj" />

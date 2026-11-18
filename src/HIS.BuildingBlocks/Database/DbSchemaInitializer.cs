@@ -531,6 +531,197 @@ CREATE TABLE IF NOT EXISTS ops_kms_keys (
     version_no INT NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS ix_ops_kms_keys_name ON ops_kms_keys (key_name, version);
+
+-- Consumables & CSSD tables (P1-A)
+CREATE TABLE IF NOT EXISTS csm_consumables (
+    id VARCHAR(36) PRIMARY KEY,
+    code VARCHAR(64) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    spec VARCHAR(100) NOT NULL,
+    unit VARCHAR(32) NOT NULL,
+    category VARCHAR(64) NOT NULL,
+    is_sterile SMALLINT NOT NULL DEFAULT 0,
+    is_high_value SMALLINT NOT NULL DEFAULT 0,
+    price DECIMAL(18,4) NOT NULL DEFAULT 0,
+    is_active SMALLINT NOT NULL DEFAULT 1,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_csm_consumables_code ON csm_consumables (code);
+
+CREATE TABLE IF NOT EXISTS csm_stocks (
+    id VARCHAR(36) PRIMARY KEY,
+    consumable_id VARCHAR(36) NOT NULL,
+    warehouse_id VARCHAR(36) NOT NULL,
+    quantity INT NOT NULL DEFAULT 0,
+    reserved_qty INT NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_csm_stocks_wh_item ON csm_stocks (consumable_id, warehouse_id);
+
+CREATE TABLE IF NOT EXISTS csm_batches (
+    id VARCHAR(36) PRIMARY KEY,
+    consumable_id VARCHAR(36) NOT NULL,
+    batch_no VARCHAR(80) NOT NULL,
+    expiry_date VARCHAR(32) NOT NULL,
+    manufacture_date VARCHAR(32),
+    quantity INT NOT NULL DEFAULT 0,
+    unit_cost DECIMAL(18,4) NOT NULL DEFAULT 0,
+    is_frozen SMALLINT NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_csm_batches_item ON csm_batches (consumable_id, batch_no);
+
+CREATE TABLE IF NOT EXISTS csm_stock_movements (
+    id VARCHAR(36) PRIMARY KEY,
+    consumable_id VARCHAR(36) NOT NULL,
+    batch_id VARCHAR(36),
+    from_warehouse_id VARCHAR(36),
+    to_warehouse_id VARCHAR(36),
+    movement_type VARCHAR(32) NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(18,4) NOT NULL DEFAULT 0,
+    reference_id VARCHAR(64),
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_csm_movements_item ON csm_stock_movements (consumable_id, created_at_ms);
+
+CREATE TABLE IF NOT EXISTS csm_requisitions (
+    id VARCHAR(36) PRIMARY KEY,
+    requisition_no VARCHAR(64) NOT NULL UNIQUE,
+    ward_id VARCHAR(36) NOT NULL,
+    dept_id VARCHAR(36) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    requested_by VARCHAR(36) NOT NULL,
+    approved_by VARCHAR(36),
+    issued_by VARCHAR(36),
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_csm_requisitions_status ON csm_requisitions (status, ward_id);
+
+CREATE TABLE IF NOT EXISTS csm_requisition_lines (
+    id VARCHAR(36) PRIMARY KEY,
+    requisition_id VARCHAR(36) NOT NULL,
+    consumable_id VARCHAR(36) NOT NULL,
+    quantity INT NOT NULL,
+    issued_quantity INT NOT NULL DEFAULT 0,
+    unit_price DECIMAL(18,4) NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_csm_req_lines_req ON csm_requisition_lines (requisition_id);
+
+CREATE TABLE IF NOT EXISTS csm_sterile_packages (
+    id VARCHAR(36) PRIMARY KEY,
+    package_code VARCHAR(64) NOT NULL UNIQUE,
+    package_name VARCHAR(200) NOT NULL,
+    contents_json TEXT,
+    sterilization_batch_no VARCHAR(80),
+    status VARCHAR(32) NOT NULL DEFAULT 'CREATED',
+    valid_until_ms BIGINT,
+    current_location VARCHAR(64) NOT NULL DEFAULT 'CSSD',
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_csm_sterile_pkg_code ON csm_sterile_packages (package_code, status);
+
+CREATE TABLE IF NOT EXISTS csm_sterilization_batches (
+    id VARCHAR(36) PRIMARY KEY,
+    batch_no VARCHAR(80) NOT NULL UNIQUE,
+    method VARCHAR(64) NOT NULL,
+    operator_id VARCHAR(36) NOT NULL,
+    started_at_ms BIGINT NOT NULL,
+    completed_at_ms BIGINT,
+    result VARCHAR(32) NOT NULL DEFAULT 'QUALIFIED',
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS csm_package_movements (
+    id VARCHAR(36) PRIMARY KEY,
+    package_id VARCHAR(36) NOT NULL,
+    from_location VARCHAR(64) NOT NULL,
+    to_location VARCHAR(64) NOT NULL,
+    movement_type VARCHAR(32) NOT NULL,
+    operator_id VARCHAR(36) NOT NULL,
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS csm_trace_codes (
+    id VARCHAR(36) PRIMARY KEY,
+    consumable_id VARCHAR(36) NOT NULL,
+    trace_code VARCHAR(80) NOT NULL UNIQUE,
+    batch_no VARCHAR(80) NOT NULL,
+    patient_id VARCHAR(36),
+    encounter_id VARCHAR(36),
+    status VARCHAR(32) NOT NULL DEFAULT 'IN_STOCK',
+    used_at_ms BIGINT,
+    used_by VARCHAR(36),
+    recalled_at_ms BIGINT,
+    recall_reason VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_csm_trace_codes_patient ON csm_trace_codes (patient_id, status);
 ");
 	}
 

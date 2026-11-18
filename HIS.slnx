@@ -10,6 +10,7 @@
   </Folder>
   <Folder Name="/src/Server/">
     <Project Path="src/Server/HIS.Modules.Config/HIS.Modules.Config.csproj" />
+    <Project Path="src/Server/HIS.Modules.Consumables/HIS.Modules.Consumables.csproj" />
     <Project Path="src/Server/HIS.Modules.Emr/HIS.Modules.Emr.csproj" />
     <Project Path="src/Server/HIS.Modules.Finance/HIS.Modules.Finance.csproj" />
     <Project Path="src/Server/HIS.Modules.Inpatient/HIS.Modules.Inpatient.csproj" />

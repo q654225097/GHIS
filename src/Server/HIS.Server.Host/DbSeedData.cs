@@ -371,6 +371,43 @@ VALUES
 			VALUES
 			    ('ALERT-SEED-01', 'ALT-202611-0001', 'BRUTE_FORCE_LOGIN', 'HIGH', '192.168.10.105', 'USER-CASHIER-01', '刘洋 (收费结算处收费员)', 'api/v4/platform/auth/login', '检测到连续 5 次口令尝试失败，触发持久化 15 分钟账户安全锁定', '{"failed_count":5,"rule":"IDPS-01-BRUTE-FORCE"}', 'RESOLVED', 'USER-ADMIN', @Now, '安全管理员核实为窗口误操作，已完成口令重置与安全培训', '{"mitre_technique":"T1110"}', 1, @Now - 3600000, 'IDPS_MONITOR', @Now, 'USER-ADMIN', 1)
 			""", new { Now = nowMs });
+
+		// 17. Seed P1 Consumables & CSSD Logistics Baseline
+		await conn.ExecuteAsync("""
+			INSERT OR IGNORE INTO sys_departments (id, campus_id, dept_code, dept_name, pinyin_code, dept_category, sub_specialty_type, rated_bed_count, is_allow_appointment, is_active, schema_version, created_at_ms, updated_at_ms, version_no)
+			VALUES
+			    ('DEPT-WH-CSM', 'CAMPUS-01', 'WH_CSM_CENTRAL', '医用耗材中心库', 'YYHCZXK', 'WAREHOUSE', 'CONSUMABLE', 0, 0, 1, 1, @Now, @Now, 1),
+			    ('DEPT-CSSD', 'CAMPUS-01', 'CSSD_CENTRAL', '消毒供应中心(CSSD)', 'XDGYZX', 'MEDTECH', 'STERILIZATION', 0, 0, 1, 1, @Now, @Now, 1);
+
+			INSERT OR IGNORE INTO csm_consumables (id, code, name, spec, unit, category, is_sterile, is_high_value, price, is_active, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    ('CSM-001', 'HC001', '一次性使用无菌注射器 5ml', '5ml 带针', '支', 'GENERAL', 1, 0, 1.50, 1, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('CSM-002', 'HC002', '一次性使用精密过滤输液器', '1.2um', '套', 'GENERAL', 1, 0, 12.00, 1, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('CSM-003', 'HC003', '钛合金锁定接骨板', '8孔直型', '块', 'IMPLANT', 1, 1, 4800.00, 1, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('CSM-004', 'HC004', '外科缝线带针 3-0', '1/2弧 22mm', '包', 'SURGICAL', 1, 0, 28.00, 1, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
+			INSERT OR IGNORE INTO csm_stocks (id, consumable_id, warehouse_id, quantity, reserved_qty, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    ('STK-CSM-01', 'CSM-001', 'DEPT-WH-CSM', 5000, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('STK-CSM-02', 'CSM-002', 'DEPT-WH-CSM', 2000, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('STK-CSM-03', 'CSM-003', 'DEPT-WH-CSM', 20, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('STK-CSM-04', 'CSM-004', 'DEPT-WH-CSM', 300, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
+			INSERT OR IGNORE INTO csm_batches (id, consumable_id, batch_no, expiry_date, manufacture_date, quantity, unit_cost, is_frozen, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    ('BAT-CSM-01', 'CSM-001', 'BATCH-HC202611-01', '2028-11-01', '2026-11-01', 5000, 0.80, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('BAT-CSM-02', 'CSM-002', 'BATCH-HC202611-02', '2028-11-01', '2026-11-01', 2000, 6.50, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('BAT-CSM-03', 'CSM-003', 'BATCH-HC202611-03', '2030-11-01', '2026-11-01', 20, 2600.00, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
+			INSERT OR IGNORE INTO csm_trace_codes (id, consumable_id, trace_code, batch_no, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    ('TC-01', 'CSM-003', 'UDI-HC-2026110001', 'BATCH-HC202611-03', 'IN_STOCK', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+			    ('TC-02', 'CSM-003', 'UDI-HC-2026110002', 'BATCH-HC202611-03', 'IN_STOCK', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
+			INSERT OR IGNORE INTO csm_sterile_packages (id, package_code, package_name, contents_json, sterilization_batch_no, status, valid_until_ms, current_location, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    ('PKG-01', 'PKG-GEN-SURG-01', '基础普外科开腹器械包', '[{"name":"手术刀柄#3","qty":2},{"name":"止血钳","qty":10},{"name":"持针钳","qty":2},{"name":"组织剪","qty":2}]', 'ST-BATCH-20261101', 'STERILIZED', @Now + @HalfYear, 'DEPT-CSSD', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+			""", new { Now = nowMs, HalfYear = halfYearMs });
 	}
 
 	private static async Task ResetDemoPasswordsAsync(DbConnection conn, long nowMs)
