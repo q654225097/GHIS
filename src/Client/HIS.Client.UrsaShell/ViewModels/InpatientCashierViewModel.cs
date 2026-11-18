@@ -43,6 +43,24 @@ public sealed class InpatientCashierViewModel : ClientModelBase
     private string _selectedCardId = string.Empty;
     private string _loadedWardId = string.Empty;
 
+    // 新建档表单字段
+    private string _newPatientName = string.Empty;
+    private string _newPatientGender = "1";
+    private string _newPatientBirthDate = string.Empty;
+    private string _newPatientIdCard = string.Empty;
+    private string _newPatientPhone = string.Empty;
+    private string _newPatientGuardianName = string.Empty;
+    private string _newPatientGuardianIdCard = string.Empty;
+    private string _newPatientAllergy = string.Empty;
+    private string _newCardDiagnosis = string.Empty;
+    private string _newCardRemark = string.Empty;
+    private InpatientDeptChoice? _newCardDept;
+    private InpatientWardChoice? _newCardWard;
+    private bool _showNewPatientForm;
+    private string _patientFormError = string.Empty;
+    private string _patientFormNotice = string.Empty;
+    private bool _allowReusePatient;
+
     public InpatientCashierViewModel()
     {
         PaymentChannels.Add(new("CASH", "现金"));
@@ -57,12 +75,16 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         SearchCommand = new AsyncRelayCommand(LoadAllAsync);
         RegisterCommand = new AsyncRelayCommand(RegisterAsync, () => CanRegister);
         AddPrepaymentCommand = new AsyncRelayCommand(AddPrepaymentAsync, () => CanTakePrepayment);
+        RegisterAndCreateCardCommand = new AsyncRelayCommand(RegisterAndCreateCardAsync);
+        ToggleNewPatientFormCommand = new RelayCommand(ToggleNewPatientForm);
     }
 
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand SearchCommand { get; }
     public AsyncRelayCommand RegisterCommand { get; }
     public AsyncRelayCommand AddPrepaymentCommand { get; }
+    public AsyncRelayCommand RegisterAndCreateCardCommand { get; }
+    public RelayCommand ToggleNewPatientFormCommand { get; }
 
     public ObservableCollection<AdmissionCardItem> Cards { get; } = new();
     public ObservableCollection<InpatientRecordItem> Encounters { get; } = new();
@@ -71,6 +93,13 @@ public sealed class InpatientCashierViewModel : ClientModelBase
     public ObservableCollection<InpatientBedItem> Beds { get; } = new();
     public ObservableCollection<PrepaymentChannel> PaymentChannels { get; } = new();
     public ObservableCollection<PrepaymentRecordItem> Prepayments { get; } = new();
+    public sealed record GenderChoice(string Code, string Name);
+    public ObservableCollection<GenderChoice> GenderChoices { get; } = new()
+    {
+        new("1", "男"),
+        new("2", "女")
+    };
+    public ObservableCollection<InpatientWardChoice> NewCardWards { get; } = new();
 
     public string Keyword
     {
@@ -307,6 +336,189 @@ public sealed class InpatientCashierViewModel : ClientModelBase
     public bool CanTakePrepayment => IsNotBusy && SelectedEncounter != null && AdditionalPaymentChannel != null
         && (AdditionalPrepayment ?? 0) > 0;
     public bool HasPrepaymentRecords => Prepayments.Count > 0;
+
+    // 新建档表单属性
+    public string NewPatientName { get => _newPatientName; set => SetField(ref _newPatientName, value ?? string.Empty); }
+    public string NewPatientGender { get => _newPatientGender; set => SetField(ref _newPatientGender, value ?? "1"); }
+    public string NewPatientBirthDate { get => _newPatientBirthDate; set => SetField(ref _newPatientBirthDate, value ?? string.Empty); }
+    public string NewPatientIdCard { get => _newPatientIdCard; set => SetField(ref _newPatientIdCard, value ?? string.Empty); }
+    public string NewPatientPhone { get => _newPatientPhone; set => SetField(ref _newPatientPhone, value ?? string.Empty); }
+    public string NewPatientGuardianName { get => _newPatientGuardianName; set => SetField(ref _newPatientGuardianName, value ?? string.Empty); }
+    public string NewPatientGuardianIdCard { get => _newPatientGuardianIdCard; set => SetField(ref _newPatientGuardianIdCard, value ?? string.Empty); }
+    public string NewPatientAllergy { get => _newPatientAllergy; set => SetField(ref _newPatientAllergy, value ?? string.Empty); }
+
+    public string NewCardDiagnosis { get => _newCardDiagnosis; set => SetField(ref _newCardDiagnosis, value ?? string.Empty); }
+    public string NewCardRemark { get => _newCardRemark; set => SetField(ref _newCardRemark, value ?? string.Empty); }
+    public InpatientDeptChoice? NewCardDept
+    {
+        get => _newCardDept;
+        set
+        {
+            if (SetField(ref _newCardDept, value))
+            {
+                NewCardWards.Clear();
+                if (value != null)
+                {
+                    foreach (var w in value.Wards)
+                    {
+                        NewCardWards.Add(w);
+                    }
+                }
+                NewCardWard = NewCardWards.FirstOrDefault();
+            }
+        }
+    }
+    public InpatientWardChoice? NewCardWard { get => _newCardWard; set => SetField(ref _newCardWard, value); }
+
+    public bool ShowNewPatientForm { get => _showNewPatientForm; set => SetField(ref _showNewPatientForm, value); }
+    public string PatientFormError { get => _patientFormError; set => SetField(ref _patientFormError, value ?? string.Empty); }
+    public string PatientFormNotice { get => _patientFormNotice; set => SetField(ref _patientFormNotice, value ?? string.Empty); }
+    public bool AllowReusePatient { get => _allowReusePatient; set => SetField(ref _allowReusePatient, value); }
+
+    public void ToggleNewPatientForm()
+    {
+        ShowNewPatientForm = !ShowNewPatientForm;
+        PatientFormError = string.Empty;
+        PatientFormNotice = string.Empty;
+        AllowReusePatient = false;
+        if (ShowNewPatientForm && NewCardDept == null && Departments.Count > 0)
+        {
+            NewCardDept = Departments.FirstOrDefault();
+        }
+    }
+
+    public async Task RegisterAndCreateCardAsync()
+    {
+        if (IsBusy) return;
+
+        if (string.IsNullOrWhiteSpace(NewPatientName))
+        {
+            PatientFormError = "请填写患者姓名。";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(NewPatientIdCard))
+        {
+            PatientFormError = "请填写身份证号码。";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(NewPatientBirthDate))
+        {
+            PatientFormError = "请填写出生日期。";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(NewPatientPhone))
+        {
+            PatientFormError = "请填写联系电话。";
+            return;
+        }
+        if (NewCardDept == null)
+        {
+            PatientFormError = "请选择建议住院科室。";
+            return;
+        }
+
+        if (!int.TryParse(NewPatientBirthDate.Trim().Replace("-", "").Replace("/", ""), out var birthDateInt)
+            || birthDateInt < 19000101 || birthDateInt > 20991231)
+        {
+            PatientFormError = "出生日期格式无效，请输入 yyyyMMdd 或 yyyy-MM-dd。";
+            return;
+        }
+
+        List<string>? allergyTags = null;
+        if (!string.IsNullOrWhiteSpace(NewPatientAllergy))
+        {
+            allergyTags = NewPatientAllergy.Split(new[] { ',', '，', '、', ';', '；' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => x.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        IsBusy = true;
+        PatientFormError = string.Empty;
+        PatientFormNotice = string.Empty;
+        try
+        {
+            using var http = CreateHttpClient();
+            using var response = await http.PostAsJsonAsync(
+                "/api/v4/ipd/admission/register-with-patient",
+                new
+                {
+                    FullName = NewPatientName.Trim(),
+                    GenderCode = NewPatientGender,
+                    BirthDateInt = birthDateInt,
+                    IdCardNo = NewPatientIdCard.Trim(),
+                    Phone = NewPatientPhone.Trim(),
+                    GuardianName = string.IsNullOrWhiteSpace(NewPatientGuardianName) ? null : NewPatientGuardianName.Trim(),
+                    GuardianIdCardNo = string.IsNullOrWhiteSpace(NewPatientGuardianIdCard) ? null : NewPatientGuardianIdCard.Trim(),
+                    AllergyTags = allergyTags,
+                    SuggestedIpdDeptId = NewCardDept.Id,
+                    SuggestedWardId = NewCardWard?.Id,
+                    AdmissionDiagnosis = string.IsNullOrWhiteSpace(NewCardDiagnosis) ? null : NewCardDiagnosis.Trim(),
+                    Remark = string.IsNullOrWhiteSpace(NewCardRemark) ? null : NewCardRemark.Trim(),
+                    RequestKey = "IPD_CASHIER_ADC_" + Guid.NewGuid().ToString("N"),
+                    ReuseExistingPatient = AllowReusePatient
+                },
+                JsonOptions);
+
+            var envelope = await ReadEnvelopeAsync<AdmissionCardDto>(response);
+
+            if (!response.IsSuccessStatusCode || envelope.Code != 200 || envelope.Data == null)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.Conflict && !AllowReusePatient && envelope.Message?.Contains("已建档") == true)
+                {
+                    AllowReusePatient = true;
+                    PatientFormError = envelope.Message + "（已允许使用已有患者档案，再次点击按钮即可直接开立住院卡）";
+                }
+                else
+                {
+                    PatientFormError = string.IsNullOrWhiteSpace(envelope.Message)
+                        ? $"建档与开卡失败 (HTTP {(int)response.StatusCode})"
+                        : envelope.Message;
+                }
+                return;
+            }
+
+            var cardDto = envelope.Data;
+            Notice = "建档并开卡成功，请继续分配床位并收取押金。住院卡号: " + cardDto.CardNo;
+            ShowNewPatientForm = false;
+            AllowReusePatient = false;
+            ClearNewPatientForm();
+
+            await LoadCardsAsync();
+            var matchCard = Cards.FirstOrDefault(c => c.Id == cardDto.Id || c.CardNo == cardDto.CardNo);
+            if (matchCard != null)
+            {
+                SelectedCard = matchCard;
+            }
+        }
+        catch (Exception ex)
+        {
+            SetException("建档并开立住院卡异常", ex);
+            PatientFormError = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void ClearNewPatientForm()
+    {
+        NewPatientName = string.Empty;
+        NewPatientGender = "1";
+        NewPatientBirthDate = string.Empty;
+        NewPatientIdCard = string.Empty;
+        NewPatientPhone = string.Empty;
+        NewPatientGuardianName = string.Empty;
+        NewPatientGuardianIdCard = string.Empty;
+        NewPatientAllergy = string.Empty;
+        NewCardDiagnosis = string.Empty;
+        NewCardRemark = string.Empty;
+        PatientFormError = string.Empty;
+        PatientFormNotice = string.Empty;
+        AllowReusePatient = false;
+    }
 
     public async Task EnsureLoadedAsync()
     {

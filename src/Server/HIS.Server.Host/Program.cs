@@ -167,7 +167,12 @@ public class Program
 		builder.Services.AddScoped<PharmacyInventoryService>();
 		builder.Services.AddScoped((Func<IServiceProvider, IPharmacyInventoryContract>)((IServiceProvider sp) => sp.GetRequiredService<PharmacyInventoryService>()));
 		builder.Services.AddScoped<IEmrMacroExtractorContract, EmrMacroExtractorService>();
-		builder.Services.AddScoped<IMedicalInsuranceAdapter, MockMedicalInsuranceAdapter>();
+		string insuranceProvider = builder.Configuration["HIS_INSURANCE_PROVIDER"] ?? "Mock";
+		builder.Services.AddSingleton<IMedicalInsuranceAdapter>(insuranceProvider switch
+		{
+			"Mock" => new MockMedicalInsuranceAdapter(),
+			_ => throw new InvalidOperationException($"未知医保适配器: {insuranceProvider}")
+		});
 		builder.Services.AddScoped<EmrQualityControlService>();
 		builder.Services.AddScoped<EmrOfdRenderService>();
 		builder.Services.AddScoped<DischargeChecklistService>();

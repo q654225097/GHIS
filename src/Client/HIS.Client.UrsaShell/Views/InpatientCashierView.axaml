@@ -100,7 +100,8 @@
                     <!-- Right: Admission Registration Form -->
                     <Border Grid.Column="1" Classes="InpCard" MinHeight="0">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Spacing="14" IsVisible="{Binding HasSelectedCard}">
+                            <Panel>
+                                <StackPanel Spacing="14" IsVisible="{Binding HasSelectedCard}">
                                 <!-- Patient Info Summary -->
                                 <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12"
                                         BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
@@ -204,6 +205,114 @@
                                         Command="{Binding RegisterCommand}"
                                         IsEnabled="{Binding CanRegister}"/>
                             </StackPanel>
+
+                            <!-- When no card selected: prompt and one-stop patient registration form -->
+                            <StackPanel Spacing="14" IsVisible="{Binding !HasSelectedCard}">
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="16"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="12">
+                                        <TextBlock Text="未选择待登记住院卡" FontSize="16" FontWeight="Bold"/>
+                                        <TextBlock Text="您可以从左侧列表中选择已由门诊开立的待登记住院卡，或者在此直接为新来院患者一站式建档并代开住院卡。"
+                                                   Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                                        <Button Content="＋ 入院建档并代开住院卡"
+                                                Classes="Primary"
+                                                Height="36"
+                                                Padding="16,0"
+                                                HorizontalAlignment="Left"
+                                                Command="{Binding ToggleNewPatientFormCommand}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 建档+开卡表单 -->
+                                <Border IsVisible="{Binding ShowNewPatientForm}" Classes="InpCard" Padding="16">
+                                    <StackPanel Spacing="14">
+                                        <TextBlock Text="患者基本建档信息" FontSize="14" FontWeight="Bold"/>
+                                        <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="12">
+                                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                                <TextBlock Text="患者姓名 *" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewPatientName, Mode=TwoWay}" PlaceholderText="请输入姓名" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="0" Grid.Column="1">
+                                                <TextBlock Text="性别 *" Classes="InpLabel"/>
+                                                <ComboBox ItemsSource="{Binding GenderChoices}"
+                                                          SelectedValue="{Binding NewPatientGender, Mode=TwoWay}"
+                                                          SelectedValueBinding="{Binding Code}"
+                                                          DisplayMemberBinding="{Binding Name}"
+                                                          HorizontalAlignment="Stretch" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                                <TextBlock Text="出生日期 *" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewPatientBirthDate, Mode=TwoWay}" PlaceholderText="如 19900101" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="1" Grid.Column="0">
+                                                <TextBlock Text="身份证号 *" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewPatientIdCard, Mode=TwoWay}" PlaceholderText="18位身份证号" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="1" Grid.Column="1">
+                                                <TextBlock Text="联系电话 *" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewPatientPhone, Mode=TwoWay}" PlaceholderText="11位手机号" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="1" Grid.Column="2">
+                                                <TextBlock Text="监护人姓名 (14周岁以下必填)" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewPatientGuardianName, Mode=TwoWay}" PlaceholderText="选填" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                                <TextBlock Text="监护人身份证" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewPatientGuardianIdCard, Mode=TwoWay}" PlaceholderText="选填" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2">
+                                                <TextBlock Text="药物过敏史" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewPatientAllergy, Mode=TwoWay}" PlaceholderText="如有多种请用逗号隔开，如 青霉素, 头孢" Height="32"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Separator Margin="0,4"/>
+                                        <TextBlock Text="建议住院信息" FontSize="14" FontWeight="Bold"/>
+                                        <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" RowSpacing="10" ColumnSpacing="12">
+                                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                                <TextBlock Text="建议科室 *" Classes="InpLabel"/>
+                                                <ComboBox ItemsSource="{Binding Departments}"
+                                                          SelectedItem="{Binding NewCardDept, Mode=TwoWay}"
+                                                          DisplayMemberBinding="{Binding Name}"
+                                                          HorizontalAlignment="Stretch" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="0" Grid.Column="1">
+                                                <TextBlock Text="建议病区" Classes="InpLabel"/>
+                                                <ComboBox ItemsSource="{Binding NewCardWards}"
+                                                          SelectedItem="{Binding NewCardWard, Mode=TwoWay}"
+                                                          DisplayMemberBinding="{Binding Name}"
+                                                          HorizontalAlignment="Stretch" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                                <TextBlock Text="入院初步诊断" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewCardDiagnosis, Mode=TwoWay}" PlaceholderText="主要初步诊断" Height="32"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">
+                                                <TextBlock Text="开卡备注" Classes="InpLabel"/>
+                                                <TextBox Text="{Binding NewCardRemark, Mode=TwoWay}" PlaceholderText="选填，如患者行动不便等" Height="32"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,6,0,0">
+                                            <Button Content="建档并开立住院卡"
+                                                    Classes="Primary"
+                                                    Height="36"
+                                                    Padding="20,0"
+                                                    Command="{Binding RegisterAndCreateCardCommand}"/>
+                                            <Button Content="取消"
+                                                    Height="36"
+                                                    Padding="16,0"
+                                                    Command="{Binding ToggleNewPatientFormCommand}"/>
+                                        </StackPanel>
+
+                                        <Border Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="10"
+                                                IsVisible="{Binding PatientFormError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                            <TextBlock Text="{Binding PatientFormError}" Foreground="{DynamicResource SemiColorDanger}" FontSize="12"/>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            </Panel>
                         </ScrollViewer>
                     </Border>
                 </Grid>

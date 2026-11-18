@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
@@ -108,11 +109,12 @@ ORDER BY CASE c.status WHEN 'PENDING' THEN 0 ELSE 1 END, c.created_at_ms DESC";
     [HttpPost("cards")]
     public async Task<ApiResponse<IpdAdmissionCardView>> CreateCard([FromBody] CreateAdmissionCardRequest req)
     {
-        if (!HasAnyRole("OPD_DOC", "ADMIN") || (!IsCurrentUserAdmin()
+        if (!HasAnyRole("OPD_DOC", "CASHIER", RoleCode.Cashier, "ADMIN") || (!IsCurrentUserAdmin()
+            && _userSession?.Roles?.Any(r => string.Equals(r, "CASHIER", StringComparison.OrdinalIgnoreCase)) != true
             && (_userSession?.ActiveDeptCategory == DepartmentCategory.IPD
                 || _userSession?.ActiveDeptCategory == DepartmentCategory.WARD)))
         {
-            return ApiResponse<IpdAdmissionCardView>.Fail(403, "仅门诊医生可以为患者开立住院卡");
+            return ApiResponse<IpdAdmissionCardView>.Fail(403, "仅门诊医生或收费员可以为患者开立住院卡");
         }
         if (string.IsNullOrWhiteSpace(req.PatientId) || string.IsNullOrWhiteSpace(req.SuggestedIpdDeptId))
         {
@@ -188,14 +190,207 @@ ORDER BY CASE c.status WHEN 'PENDING' THEN 0 ELSE 1 END, c.created_at_ms DESC";
                 UpdatedBy = userId
             };
             await _cardRepo.InsertAsync(card);
+            var creatorRole = IsCurrentUserAdmin() ? "管理员" :
+                _userSession?.Roles?.Any(r => string.Equals(r, "CASHIER", StringComparison.OrdinalIgnoreCase)) == true ? "收费员" : "门诊医生";
             await Audit("IPD_ADMISSION_CARD_CREATE", card.Id,
-                $"门诊医生为患者 {patient.FullName} 开立住院卡 {card.CardNo}，建议科室 {ipdDept.DeptCode}");
+                $"{creatorRole}为患者 {patient.FullName} 开立住院卡 {card.CardNo}，建议科室 {ipdDept.DeptCode}");
             var createdCard = await LoadCardAsync(conn, card.Id);
             return ApiResponse<IpdAdmissionCardView>.Success(createdCard!, "住院卡已开立");
         }
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 19)
         {
             return ApiResponse<IpdAdmissionCardView>.Fail(409, "住院卡已存在或患者已有待登记住院卡，请刷新列表");
+        }
+    }
+
+    [HttpPost("admission/register-with-patient")]
+    public async Task<ActionResult<ApiResponse<IpdAdmissionCardView>>> RegisterWithPatient([FromBody] CreateAdmissionWithPatientRequest req)
+    {
+        if (!HasAnyRole("CASHIER", RoleCode.Cashier, "ADMIN", "OPD_DOC"))
+        {
+            return StatusCode(403, ApiResponse<IpdAdmissionCardView>.Fail(403, "仅收费员或系统管理员可执行一站式入院建档并开卡"));
+        }
+        if (string.IsNullOrWhiteSpace(req.FullName) || string.IsNullOrWhiteSpace(req.IdCardNo) ||
+            string.IsNullOrWhiteSpace(req.Phone) || string.IsNullOrWhiteSpace(req.SuggestedIpdDeptId))
+        {
+            return BadRequest(ApiResponse<IpdAdmissionCardView>.Fail(400, "姓名、证件号、联系电话和建议住院科室不能为空"));
+        }
+        if (req.BirthDateInt <= 19000101 || req.BirthDateInt > 21000101)
+        {
+            return BadRequest(ApiResponse<IpdAdmissionCardView>.Fail(400, "出生日期格式不合法，请输入有效日期（如 19900101）"));
+        }
+
+        var birthYear = req.BirthDateInt / 10000;
+        var currentYear = SystemTime.ShanghaiNow.Year;
+        var age = currentYear - birthYear;
+        if (age < 14 && string.IsNullOrWhiteSpace(req.GuardianName))
+        {
+            return BadRequest(ApiResponse<IpdAdmissionCardView>.Fail(400, "年龄小于 14 周岁患者强制要求录入法定监护人信息"));
+        }
+
+        string requestKey = string.IsNullOrWhiteSpace(req.RequestKey)
+            ? "IPD_CASHIER_ADC_" + Guid.NewGuid().ToString("N")
+            : req.RequestKey.Trim();
+        if (requestKey.Length > 100)
+        {
+            return BadRequest(ApiResponse<IpdAdmissionCardView>.Fail(400, "请求编号不能超过 100 个字符"));
+        }
+
+        try
+        {
+            using var conn = _connFactory.CreateConnection();
+
+            var oldCard = await conn.QuerySingleOrDefaultAsync<IpdAdmissionCard>(
+                "SELECT * FROM ipd_admission_cards WHERE request_key = @RequestKey", new { RequestKey = requestKey });
+            if (oldCard != null)
+            {
+                var existingCard = await LoadCardAsync(conn, oldCard.Id);
+                return Ok(ApiResponse<IpdAdmissionCardView>.Success(existingCard!));
+            }
+
+            var ipdDept = await conn.QuerySingleOrDefaultAsync<IdCodeRow>(
+                "SELECT id, dept_code FROM sys_departments WHERE id = @Id AND dept_category = 'IPD' AND is_active = 1",
+                new { Id = req.SuggestedIpdDeptId });
+            if (ipdDept == null)
+            {
+                return BadRequest(ApiResponse<IpdAdmissionCardView>.Fail(400, "建议住院科室不存在或已停用"));
+            }
+            if (!string.IsNullOrWhiteSpace(req.SuggestedWardId) && _deptContract != null
+                && !await _deptContract.IsDeptWardRelationValidAsync(req.SuggestedIpdDeptId, req.SuggestedWardId!))
+            {
+                return BadRequest(ApiResponse<IpdAdmissionCardView>.Fail(400, "建议病区不属于该住院科室"));
+            }
+
+            var idCardHash = CryptoHelper.ComputeBlindIndex(req.IdCardNo.Trim());
+            var existingPat = await conn.QuerySingleOrDefaultAsync<PatPatientRow>(
+                "SELECT id, medical_record_no, full_name FROM pat_patients WHERE id_card_hash = @Hash AND is_active = 1",
+                new { Hash = idCardHash });
+
+            string targetPatientId;
+            string targetPatientName;
+            string targetMrn;
+
+            if (existingPat != null)
+            {
+                if (!req.ReuseExistingPatient)
+                {
+                    return StatusCode(409, ApiResponse<IpdAdmissionCardView>.Fail(409,
+                        $"该证件号码已建档，病历号为：{existingPat.medical_record_no}。可直接使用已有档案开立住院卡。"));
+                }
+                targetPatientId = existingPat.id;
+                targetPatientName = existingPat.full_name;
+                targetMrn = existingPat.medical_record_no;
+            }
+            else
+            {
+                targetPatientId = "PAT" + Guid.NewGuid().ToString("N")[..12].ToUpper();
+                targetMrn = "MRN" + SystemTime.ShanghaiNow.ToString("yyMMddHHmmssfff");
+                targetPatientName = req.FullName.Trim();
+                long nowMs = SystemTime.UtcNowMs;
+                string creatorId = CurrentUserId();
+                string gender = req.GenderCode.Trim() switch
+                {
+                    "1" or "M" or "MALE" or "男" => "1",
+                    "2" or "F" or "FEMALE" or "女" => "2",
+                    _ => "0"
+                };
+                string idCardCipher = CryptoHelper.EncryptSm4Gcm(req.IdCardNo.Trim());
+                string phoneCipher = CryptoHelper.EncryptSm4Gcm(req.Phone.Trim());
+                string phoneMasked = CryptoHelper.MaskPhone(req.Phone.Trim());
+                string? guardianCipher = string.IsNullOrWhiteSpace(req.GuardianIdCardNo) ? null : CryptoHelper.EncryptSm4Gcm(req.GuardianIdCardNo.Trim());
+                string? guardianHash = string.IsNullOrWhiteSpace(req.GuardianIdCardNo) ? null : CryptoHelper.ComputeBlindIndex(req.GuardianIdCardNo.Trim());
+                string? allergyJson = req.AllergyTags != null && req.AllergyTags.Count > 0
+                    ? JsonSerializer.Serialize(req.AllergyTags)
+                    : null;
+
+                const string insertPatientSql = @"
+INSERT INTO pat_patients (
+    id, medical_record_no, full_name, gender_code, birth_date_int,
+    id_card_type, id_card_cipher, id_card_hash, phone_cipher, phone_masked,
+    guardian_name, guardian_id_cipher, guardian_id_hash, allergy_tags_json,
+    is_temp_emergency, is_active, schema_version, created_at_ms, created_by,
+    updated_at_ms, updated_by, version_no
+) VALUES (
+    @Id, @Mrn, @FullName, @GenderCode, @BirthDateInt,
+    '01', @IdCardCipher, @IdCardHash, @PhoneCipher, @PhoneMasked,
+    @GuardianName, @GuardianIdCipher, @GuardianIdHash, @AllergyJson,
+    0, 1, 1, @NowMs, @CreatedBy,
+    @NowMs, @CreatedBy, 1
+)";
+                await conn.ExecuteAsync(insertPatientSql, new
+                {
+                    Id = targetPatientId,
+                    Mrn = targetMrn,
+                    FullName = targetPatientName,
+                    GenderCode = gender,
+                    BirthDateInt = req.BirthDateInt,
+                    IdCardCipher = idCardCipher,
+                    IdCardHash = idCardHash,
+                    PhoneCipher = phoneCipher,
+                    PhoneMasked = phoneMasked,
+                    GuardianName = string.IsNullOrWhiteSpace(req.GuardianName) ? null : req.GuardianName.Trim(),
+                    GuardianIdCipher = guardianCipher,
+                    GuardianIdHash = guardianHash,
+                    AllergyJson = allergyJson,
+                    NowMs = nowMs,
+                    CreatedBy = creatorId
+                });
+
+                if (_auditTrail != null)
+                {
+                    await _auditTrail.RecordAuditAsync("PATIENT_REGISTER", "PatPatient", targetPatientId,
+                        $"建立实名患者档案 [{targetMrn} {targetPatientName}]", _userSession?.UserId, _userSession?.DisplayName);
+                }
+            }
+
+            var pending = await conn.QuerySingleOrDefaultAsync<IpdAdmissionCard>(
+                "SELECT * FROM ipd_admission_cards WHERE patient_id = @PatientId AND status = 'PENDING'",
+                new { PatientId = targetPatientId });
+            if (pending != null)
+            {
+                return StatusCode(409, ApiResponse<IpdAdmissionCardView>.Fail(409,
+                    $"该患者已有待登记住院卡 {pending.CardNo}，请勿重复开立"));
+            }
+            var activeEncounter = await conn.ExecuteScalarAsync<long>(
+                "SELECT COUNT(1) FROM ipd_encounters WHERE patient_id = @PatientId AND status IN (1, 4)",
+                new { PatientId = targetPatientId });
+            if (activeEncounter > 0)
+            {
+                return BadRequest(ApiResponse<IpdAdmissionCardView>.Fail(400, "该患者已有在院记录，禁止重复办理入院登记"));
+            }
+
+            string userId = CurrentUserId();
+            string deptId = string.IsNullOrWhiteSpace(_userSession?.ActiveDeptId) ? "DEPT-CASHIER" : _userSession!.ActiveDeptId;
+            var card = new IpdAdmissionCard
+            {
+                CardNo = "ADC" + DateTime.UtcNow.ToString("yyMMddHHmmssfff"),
+                RequestKey = requestKey,
+                PatientId = targetPatientId,
+                VisitId = null,
+                SourceDoctorId = userId,
+                SourceDeptId = deptId,
+                SuggestedIpdDeptId = req.SuggestedIpdDeptId.Trim(),
+                SuggestedWardId = NullIfBlank(req.SuggestedWardId),
+                AdmissionDiagnosis = NullIfBlank(req.AdmissionDiagnosis),
+                ContactPhone = NullIfBlank(req.Phone),
+                Remark = NullIfBlank(req.Remark),
+                Status = "PENDING",
+                CreatedBy = userId,
+                UpdatedBy = userId
+            };
+            await _cardRepo.InsertAsync(card);
+
+            var creatorRole = IsCurrentUserAdmin() ? "管理员" :
+                _userSession?.Roles?.Any(r => string.Equals(r, "CASHIER", StringComparison.OrdinalIgnoreCase)) == true ? "收费员" : "门诊医生";
+            await Audit("IPD_ADMISSION_CARD_CREATE", card.Id,
+                $"{creatorRole}为患者 {targetPatientName} 开立住院卡 {card.CardNo}，建议科室 {ipdDept.DeptCode}");
+
+            var createdCard = await LoadCardAsync(conn, card.Id);
+            return Ok(ApiResponse<IpdAdmissionCardView>.Success(createdCard!, "建档并开立住院卡成功"));
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return StatusCode(409, ApiResponse<IpdAdmissionCardView>.Fail(409, "数据冲突或已存在待登记记录，请重试"));
         }
     }
 
@@ -801,6 +996,32 @@ WHERE c.id = @CardId";
     }
 
     public sealed record CancelRequest(string? Reason);
+
+    public sealed record CreateAdmissionWithPatientRequest(
+        // 患者信息
+        string FullName,
+        string GenderCode,
+        int BirthDateInt,
+        string IdCardNo,
+        string Phone,
+        string? GuardianName = null,
+        string? GuardianIdCardNo = null,
+        List<string>? AllergyTags = null,
+        // 住院卡信息
+        string SuggestedIpdDeptId = "",
+        string? SuggestedWardId = null,
+        string? AdmissionDiagnosis = null,
+        string? Remark = null,
+        string? RequestKey = null,
+        bool ReuseExistingPatient = false
+    );
+
+    private sealed class PatPatientRow
+    {
+        public string id { get; set; } = string.Empty;
+        public string medical_record_no { get; set; } = string.Empty;
+        public string full_name { get; set; } = string.Empty;
+    }
 
     private sealed class IdNameRow
     {
