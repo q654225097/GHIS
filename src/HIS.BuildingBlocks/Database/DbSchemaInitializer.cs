@@ -722,6 +722,144 @@ CREATE TABLE IF NOT EXISTS csm_trace_codes (
     version_no INT NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS ix_csm_trace_codes_patient ON csm_trace_codes (patient_id, status);
+
+-- P1-C: Surgery and Anesthesia Management
+CREATE TABLE IF NOT EXISTS mte_surgery_schedules (
+    id VARCHAR(36) PRIMARY KEY,
+    schedule_no VARCHAR(40) NOT NULL UNIQUE,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    patient_name VARCHAR(128) NOT NULL,
+    surgery_code VARCHAR(64) NOT NULL,
+    surgery_name VARCHAR(200) NOT NULL,
+    surgery_level INT NOT NULL DEFAULT 1,
+    or_room_id VARCHAR(36) NOT NULL,
+    table_seq INT NOT NULL DEFAULT 1,
+    surgeon_id VARCHAR(36) NOT NULL,
+    surgeon_name VARCHAR(128) NOT NULL,
+    assistant_ids_json VARCHAR(1000),
+    anesthesiologist_id VARCHAR(36) NOT NULL,
+    anesthesiologist_name VARCHAR(128) NOT NULL,
+    circulating_nurse_id VARCHAR(36),
+    scrub_nurse_id VARCHAR(36),
+    scheduled_start_ms BIGINT NOT NULL,
+    estimated_duration_min INT NOT NULL DEFAULT 60,
+    actual_start_ms BIGINT,
+    actual_end_ms BIGINT,
+    status INT NOT NULL DEFAULT 0,
+    who_sign_in_ok SMALLINT NOT NULL DEFAULT 0,
+    who_timeout_ok SMALLINT NOT NULL DEFAULT 0,
+    who_sign_out_ok SMALLINT NOT NULL DEFAULT 0,
+    instrument_count_balanced SMALLINT NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_mte_surgery_patient ON mte_surgery_schedules (patient_id, status);
+CREATE INDEX IF NOT EXISTS ix_mte_surgery_room ON mte_surgery_schedules (or_room_id, scheduled_start_ms);
+
+CREATE TABLE IF NOT EXISTS mte_anesthesia_records (
+    id VARCHAR(36) PRIMARY KEY,
+    record_no VARCHAR(40) NOT NULL UNIQUE,
+    schedule_id VARCHAR(36) NOT NULL UNIQUE,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    asa_grade VARCHAR(16) NOT NULL,
+    anesthesia_type VARCHAR(64) NOT NULL,
+    preop_diagnosis VARCHAR(500),
+    airway_assessment VARCHAR(500),
+    anesthesiologist_id VARCHAR(36) NOT NULL,
+    anesthesiologist_name VARCHAR(128) NOT NULL,
+    anesthesia_start_ms BIGINT,
+    anesthesia_end_ms BIGINT,
+    blood_loss_ml DECIMAL(18,2) NOT NULL DEFAULT 0,
+    urine_output_ml DECIMAL(18,2) NOT NULL DEFAULT 0,
+    fluid_input_ml DECIMAL(18,2) NOT NULL DEFAULT 0,
+    intraop_events_json TEXT,
+    status INT NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_mte_anesthesia_patient ON mte_anesthesia_records (patient_id);
+
+CREATE TABLE IF NOT EXISTS mte_anesthesia_medications (
+    id VARCHAR(36) PRIMARY KEY,
+    anesthesia_record_id VARCHAR(36) NOT NULL,
+    drug_id VARCHAR(36) NOT NULL,
+    drug_name VARCHAR(200) NOT NULL,
+    dose DECIMAL(18,4) NOT NULL,
+    dose_unit VARCHAR(32) NOT NULL,
+    route VARCHAR(32) NOT NULL,
+    given_at_ms BIGINT NOT NULL,
+    operator_id VARCHAR(36) NOT NULL,
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_mte_anes_med_record ON mte_anesthesia_medications (anesthesia_record_id);
+
+CREATE TABLE IF NOT EXISTS mte_recovery_records (
+    id VARCHAR(36) PRIMARY KEY,
+    anesthesia_record_id VARCHAR(36) NOT NULL UNIQUE,
+    schedule_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    pacu_bed_no VARCHAR(32),
+    entry_time_ms BIGINT NOT NULL,
+    exit_time_ms BIGINT,
+    steward_score INT NOT NULL DEFAULT 0,
+    aldrete_score INT NOT NULL DEFAULT 0,
+    consciousness VARCHAR(64),
+    respiration VARCHAR(64),
+    circulation VARCHAR(64),
+    spo2 DECIMAL(5,2),
+    discharge_criteria_met SMALLINT NOT NULL DEFAULT 0,
+    evaluator_id VARCHAR(36) NOT NULL,
+    remark VARCHAR(500),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS mte_postop_followups (
+    id VARCHAR(36) PRIMARY KEY,
+    anesthesia_record_id VARCHAR(36) NOT NULL,
+    schedule_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    followup_day INT NOT NULL DEFAULT 1,
+    pain_score INT NOT NULL DEFAULT 0,
+    nausea_vomiting SMALLINT NOT NULL DEFAULT 0,
+    consciousness_recovery SMALLINT NOT NULL DEFAULT 1,
+    throat_pain SMALLINT NOT NULL DEFAULT 0,
+    complications VARCHAR(500),
+    followup_time_ms BIGINT NOT NULL,
+    followup_by VARCHAR(36) NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_mte_postop_anes ON mte_postop_followups (anesthesia_record_id);
 ");
 	}
 

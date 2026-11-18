@@ -408,6 +408,31 @@ VALUES
 			VALUES
 			    ('PKG-01', 'PKG-GEN-SURG-01', '基础普外科开腹器械包', '[{"name":"手术刀柄#3","qty":2},{"name":"止血钳","qty":10},{"name":"持针钳","qty":2},{"name":"组织剪","qty":2}]', 'ST-BATCH-20261101', 'STERILIZED', @Now + @HalfYear, 'DEPT-CSSD', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
 			""", new { Now = nowMs, HalfYear = halfYearMs });
+
+		// Step 18: P1-C Surgery and Anesthesia seed
+		await conn.ExecuteAsync(@"
+INSERT OR IGNORE INTO mte_surgery_schedules
+    (id, schedule_no, encounter_id, patient_id, patient_name, surgery_code, surgery_name,
+     surgery_level, or_room_id, table_seq, surgeon_id, surgeon_name,
+     anesthesiologist_id, anesthesiologist_name, circulating_nurse_id,
+     scheduled_start_ms, estimated_duration_min, status, who_sign_in_ok, who_timeout_ok, who_sign_out_ok,
+     instrument_count_balanced, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('SCHED-SEED-01', 'SURG20261118001', 'ENC-IPD-01', 'PAT-01', '张建国', 'SURG-THOR-01', '胸腔镜下肺叶切除术',
+     3, 'ROOM-OR-01', 1, 'USER-DOC-IPD', '王建国',
+     'USER-ANES-01', '李麻醉', 'USER-NURSE-IPD',
+     @Now + 3600000, 120, 0, 0, 0, 0, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
+INSERT OR IGNORE INTO mtc_surgery_schedules
+    (id, encounter_id, or_dept_id, or_room_code, table_seq, surgery_code, surgery_name,
+     surgery_level, main_surgeon_id, anesthesiologist_id, circulating_nurse_id,
+     sign_in_ok, time_out_ok, sign_out_ok, instrument_count_balanced, status,
+     schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('SCHED-SEED-01', 'ENC-IPD-01', 'DEPT-MTC-OR', 'ROOM-OR-01', 1, 'SURG-THOR-01', '胸腔镜下肺叶切除术',
+     3, 'USER-DOC-IPD', 'USER-ANES-01', 'USER-NURSE-IPD',
+     0, 0, 0, 0, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+", new { Now = nowMs });
 	}
 
 	private static async Task ResetDemoPasswordsAsync(DbConnection conn, long nowMs)

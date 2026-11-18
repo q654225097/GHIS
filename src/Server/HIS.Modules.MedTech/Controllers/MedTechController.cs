@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 using HIS.BuildingBlocks.Common;
@@ -47,6 +50,20 @@ public class MedTechController : ControllerBase
 
 	private readonly IDbConnectionFactory _connFactory;
 
+	private readonly ILisAdapter? _lisAdapter;
+
+	private readonly IPacsAdapter? _pacsAdapter;
+
+	private readonly IRepository<MteSurgerySchedule> _surgeryScheduleRepo;
+
+	private readonly IRepository<MteAnesthesiaRecord> _anesthesiaRecordRepo;
+
+	private readonly IRepository<MteAnesthesiaMedication> _anesthesiaMedRepo;
+
+	private readonly IRepository<MteRecoveryRecord> _recoveryRepo;
+
+	private readonly IRepository<MtePostopFollowup> _followupRepo;
+
 	public MedTechController(
 		IRepository<MtcServiceRequest> requestRepo,
 		IRepository<MtcSurgerySchedule> surgeryRepo,
@@ -58,7 +75,14 @@ public class MedTechController : ControllerBase
 		IPatientReadOnlyContract? patientContract = null,
 		IDepartmentReadOnlyContract? departmentContract = null,
 		IDbConnectionFactory? connFactory = null,
-		IRepository<MedtechCriticalValue>? criticalValueRepo = null)
+		IRepository<MedtechCriticalValue>? criticalValueRepo = null,
+		ILisAdapter? lisAdapter = null,
+		IPacsAdapter? pacsAdapter = null,
+		IRepository<MteSurgerySchedule>? surgeryScheduleRepo = null,
+		IRepository<MteAnesthesiaRecord>? anesthesiaRecordRepo = null,
+		IRepository<MteAnesthesiaMedication>? anesthesiaMedRepo = null,
+		IRepository<MteRecoveryRecord>? recoveryRepo = null,
+		IRepository<MtePostopFollowup>? followupRepo = null)
 	{
 		_requestRepo = requestRepo;
 		_surgeryRepo = surgeryRepo;
@@ -71,6 +95,13 @@ public class MedTechController : ControllerBase
 		_departmentContract = departmentContract;
 		_connFactory = connFactory ?? new SqliteConnectionFactory();
 		_criticalValueRepo = criticalValueRepo ?? new DapperRepository<MedtechCriticalValue>(_connFactory, "medtech_critical_values");
+		_lisAdapter = lisAdapter;
+		_pacsAdapter = pacsAdapter;
+		_surgeryScheduleRepo = surgeryScheduleRepo ?? new DapperRepository<MteSurgerySchedule>(_connFactory, "mte_surgery_schedules");
+		_anesthesiaRecordRepo = anesthesiaRecordRepo ?? new DapperRepository<MteAnesthesiaRecord>(_connFactory, "mte_anesthesia_records");
+		_anesthesiaMedRepo = anesthesiaMedRepo ?? new DapperRepository<MteAnesthesiaMedication>(_connFactory, "mte_anesthesia_medications");
+		_recoveryRepo = recoveryRepo ?? new DapperRepository<MteRecoveryRecord>(_connFactory, "mte_recovery_records");
+		_followupRepo = followupRepo ?? new DapperRepository<MtePostopFollowup>(_connFactory, "mte_postop_followups");
 	}
 
 	[HttpGet("requests")]
@@ -82,6 +113,15 @@ public class MedTechController : ControllerBase
 			ExecDeptId = execMedTechDeptId,
 			CritOnly = (criticalOnly.HasValue ? new short?((short)(criticalOnly.Value ? 1 : 0)) : ((short?)null))
 		}));
+	}
+
+	[HttpGet("requests/{reqId}")]
+	public async Task<ApiResponse<MtcServiceRequest>> GetRequestById(string reqId)
+	{
+		var req = await _requestRepo.GetByIdAsync(reqId);
+		if (req == null)
+			return ApiResponse<MtcServiceRequest>.Fail(404, "医技申请单不存在");
+		return ApiResponse<MtcServiceRequest>.Success(req);
 	}
 
 	[HttpPost("requests")]
@@ -333,6 +373,53 @@ public class MedTechController : ControllerBase
 			req.ReceivedAtMs = now;
 			return ApiResponse<MtcServiceRequest>.Success(req, "标本已核收并完成确费，该项目已锁定禁止直接退费");
 		});
+
+		if (result.Code == 200 && result.Data != null)
+		{
+			var confirmedReq = result.Data;
+			try
+			{
+				if (_lisAdapter != null && (confirmedReq.MedTechSubType?.Contains("LAB", StringComparison.OrdinalIgnoreCase) == true || confirmedReq.ServiceItemCode.StartsWith("LAB") || confirmedReq.ServiceItemCode.StartsWith("LIS")))
+				{
+					var patientSummary = _patientContract != null ? await _patientContract.GetPatientSummaryAsync(confirmedReq.PatientId) : null;
+					await _lisAdapter.SendTestOrderAsync(new LisOrderRequest(
+						OrderId: confirmedReq.Id,
+						VisitOrEncounterId: confirmedReq.SourceVisitId ?? confirmedReq.Id,
+						PatientId: confirmedReq.PatientId,
+						PatientName: patientSummary?.FullName ?? "患者",
+						Gender: patientSummary?.GenderCode == "2" ? "女" : "男",
+						Age: 35,
+						TestItemCode: confirmedReq.ServiceItemCode,
+						TestItemName: confirmedReq.ServiceItemCode,
+						SampleType: "静脉全血/血清",
+						OrderDeptId: confirmedReq.OrderDeptId,
+						DoctorId: confirmedReq.CreatedBy ?? CurrentUserId,
+						OrderTimeMs: SystemTime.UtcNowMs
+					));
+				}
+				else if (_pacsAdapter != null && (confirmedReq.MedTechSubType?.Contains("PACS", StringComparison.OrdinalIgnoreCase) == true || confirmedReq.MedTechSubType?.Contains("RAD", StringComparison.OrdinalIgnoreCase) == true || confirmedReq.ServiceItemCode.StartsWith("RAD") || confirmedReq.ServiceItemCode.StartsWith("PACS") || confirmedReq.ServiceItemCode.StartsWith("CT") || confirmedReq.ServiceItemCode.StartsWith("MR")))
+				{
+					var patientSummary = _patientContract != null ? await _patientContract.GetPatientSummaryAsync(confirmedReq.PatientId) : null;
+					string modality = confirmedReq.ServiceItemCode.Contains("CT") ? "CT" : confirmedReq.ServiceItemCode.Contains("MR") ? "MR" : "DR";
+					await _pacsAdapter.SendStudyOrderAsync(new PacsOrderRequest(
+						AccessionNo: confirmedReq.RequestNo,
+						VisitOrEncounterId: confirmedReq.SourceVisitId ?? confirmedReq.Id,
+						PatientId: confirmedReq.PatientId,
+						PatientName: patientSummary?.FullName ?? "患者",
+						Modality: modality,
+						StudyBodyPart: "胸部/多部位",
+						OrderDeptId: confirmedReq.OrderDeptId,
+						DoctorId: confirmedReq.CreatedBy ?? CurrentUserId,
+						OrderTimeMs: SystemTime.UtcNowMs
+					));
+				}
+			}
+			catch
+			{
+				// Adapter dispatch exception does not roll back confirmed local fee
+			}
+		}
+
 		return result;
 	}
 
@@ -641,6 +728,17 @@ ORDER BY published_at_ms DESC LIMIT 100";
 		{
 			return ApiResponse<MtcSurgerySchedule>.Fail(400, "WHO 三方安全核查（Sign-in/Time-out/Sign-out）未全部通过或器械清点不平衡，严禁结束手术转出！");
 		}
+
+		using (var conn = _connFactory.CreateConnection())
+		{
+			var anes = await conn.QuerySingleOrDefaultAsync<MteAnesthesiaRecord>(
+				"SELECT * FROM mte_anesthesia_records WHERE schedule_id = @ScheduleId",
+				new { ScheduleId = surg.Id });
+			if (anes != null && anes.Status != 1)
+			{
+				return ApiResponse<MtcSurgerySchedule>.Fail(409, "手术麻醉记录尚未完成并归档（必须填写麻醉记录、用药及苏醒状态并标记完成），严禁结束手术转出！");
+			}
+		}
 		if (surg.Status == 2)
 			return ApiResponse<MtcSurgerySchedule>.Success(surg, "手术已结束（幂等返回）");
 		if (surg.Status != 1)
@@ -798,6 +896,644 @@ ORDER BY published_at_ms DESC LIMIT 100";
 	{
 		if (_auditTrail != null)
 			await _auditTrail.RecordAuditAsync(eventType, nameof(MtcServiceRequest), item.Id, detail,
+				CurrentUserId, _session?.DisplayName, _session?.ActiveDeptId, ct);
+	}
+
+	// ==========================================
+	// P1-B: LIS & PACS Integration Endpoints
+	// ==========================================
+
+	[HttpPost("lis/sync-results")]
+	public async Task<ApiResponse<int>> SyncLisResults(CancellationToken ct = default)
+	{
+		var authError = RequireRoles("ROLE-MEDTECH", "ROLE-MEDTECH-STAFF", "MEDTECH", "ADMIN", "ROLE-ADMIN");
+		if (authError != null)
+			return ApiResponse<int>.Fail(403, authError);
+
+		if (_lisAdapter == null)
+			return ApiResponse<int>.Fail(503, "LIS 适配器未配置");
+
+		var results = await _lisAdapter.BatchSyncResultsAsync(ct);
+		int syncedCount = 0;
+		using var conn = _connFactory.CreateConnection();
+
+		foreach (var res in results)
+		{
+			var req = await conn.QuerySingleOrDefaultAsync<MtcServiceRequest>(
+				"SELECT * FROM mtc_service_requests WHERE (id = @HisId OR request_no = @HisId) AND status = 2",
+				new { HisId = res.HisOrderId });
+
+			if (req == null) continue;
+
+			var summary = new StringBuilder();
+			summary.AppendLine($"【LIS检验报告 - 标本类型：{res.SampleType}】");
+			foreach (var item in res.Items)
+			{
+				string flagStr = item.Flag == "CRITICAL" ? " [危急值!]" : item.Flag == "HIGH" ? " ↑" : item.Flag == "LOW" ? " ↓" : "";
+				summary.AppendLine($"{item.ItemName} ({item.ItemCode}): {item.Value} {item.Unit} (参考值: {item.ReferenceRange}){flagStr}");
+			}
+			summary.AppendLine($"报告技师：{res.ReporterName}，审核技师：{res.VerifierName}");
+
+			req.Status = 3;
+			req.ReportSummary = summary.ToString().Trim();
+			req.ExecutedAtMs = res.ReportTimeMs;
+			req.IsCriticalValue = (short)(res.IsCritical ? 1 : 0);
+			req.ReportOfdArchiveId = "OFD-LIS-" + req.RequestNo;
+			req.UpdatedBy = CurrentUserId;
+
+			await conn.ExecuteAsync(@"
+UPDATE mtc_service_requests
+SET status = 3, report_summary = @ReportSummary, executed_at_ms = @ExecutedAtMs,
+    is_critical_value = @IsCriticalValue, report_ofd_archive_id = @ReportOfdArchiveId,
+    updated_at_ms = @Now, updated_by = @UpdatedBy, version_no = version_no + 1
+WHERE id = @Id AND status = 2",
+				new { req.ReportSummary, req.ExecutedAtMs, req.IsCriticalValue, req.ReportOfdArchiveId, Now = SystemTime.UtcNowMs, UpdatedBy = CurrentUserId, req.Id });
+
+			if (res.IsCritical)
+			{
+				var crit = new MedtechCriticalValue
+				{
+					ReportId = req.Id,
+					SourceType = req.SourceType ?? "LAB",
+					VisitOrEncounterId = req.SourceVisitId ?? req.Id,
+					PatientId = req.PatientId,
+					ItemCode = req.ServiceItemCode,
+					ItemName = req.ServiceItemCode,
+					CriticalValueText = "LIS自动回传危急值: " + string.Join("; ", res.Items.Where(i => i.Flag == "CRITICAL").Select(i => $"{i.ItemName}={i.Value}{i.Unit}")),
+					PublishedBy = CurrentUserId,
+					PublishedAtMs = res.ReportTimeMs,
+					Status = "PENDING_ACK"
+				};
+				await _criticalValueRepo.InsertAsync(crit);
+			}
+
+			await RecordAuditAsync("LIS_RESULT_SYNC", req, $"同步 LIS 结果，申请单 [{req.RequestNo}]，项目数 {res.Items.Count}，危急值={res.IsCritical}", ct);
+			syncedCount++;
+		}
+
+		return ApiResponse<int>.Success(syncedCount, $"成功同步 {syncedCount} 份 LIS 报告");
+	}
+
+	[HttpPost("pacs/sync-reports")]
+	public async Task<ApiResponse<int>> SyncPacsReports(CancellationToken ct = default)
+	{
+		var authError = RequireRoles("ROLE-MEDTECH", "ROLE-MEDTECH-STAFF", "MEDTECH", "ADMIN", "ROLE-ADMIN");
+		if (authError != null)
+			return ApiResponse<int>.Fail(403, authError);
+
+		if (_pacsAdapter == null)
+			return ApiResponse<int>.Fail(503, "PACS 适配器未配置");
+
+		using var conn = _connFactory.CreateConnection();
+		var pending = (await conn.QueryAsync<MtcServiceRequest>(
+			"SELECT * FROM mtc_service_requests WHERE status = 2 AND (med_tech_sub_type IN ('PACS', 'EXAM', 'IMAGE', 'RAD', 'US', 'CT', 'MR') OR service_item_code LIKE 'RAD%' OR service_item_code LIKE 'PACS%' OR service_item_code LIKE 'EXAM%')")).ToList();
+
+		int syncedCount = 0;
+		foreach (var req in pending)
+		{
+			var report = await _pacsAdapter.QueryReportAsync(req.RequestNo, ct);
+			if (report == null) continue;
+
+			var summary = $"【PACS影像检查报告 - {report.Modality} {report.StudyBodyPart}】\n影像表现：{report.Findings}\n诊断意见：{report.Impression}\nDICOM影像调阅：{report.DicomViewerUrl}\n报告医师：{report.RadiologistName}，审核医师：{report.VerifierName}";
+
+			await conn.ExecuteAsync(@"
+UPDATE mtc_service_requests
+SET status = 3, report_summary = @Summary, executed_at_ms = @Now,
+    report_ofd_archive_id = @OfdId, updated_at_ms = @Now, updated_by = @UpdatedBy, version_no = version_no + 1
+WHERE id = @Id AND status = 2",
+				new { Summary = summary, Now = SystemTime.UtcNowMs, OfdId = "OFD-PACS-" + req.RequestNo, UpdatedBy = CurrentUserId, req.Id });
+
+			req.Status = 3;
+			req.ReportSummary = summary;
+			await RecordAuditAsync("PACS_REPORT_SYNC", req, $"同步 PACS 报告 [{req.RequestNo}]，检查部位: {report.StudyBodyPart}", ct);
+			syncedCount++;
+		}
+
+		return ApiResponse<int>.Success(syncedCount, $"成功同步 {syncedCount} 份 PACS 报告");
+	}
+
+	[HttpGet("lis/pending")]
+	public async Task<ApiResponse<IReadOnlyList<MtcServiceRequest>>> GetPendingLisRequests()
+	{
+		var list = await _requestRepo.QueryAsync(
+			"SELECT * FROM mtc_service_requests WHERE is_fee_confirmed = 1 AND status = 2 ORDER BY created_at_ms DESC");
+		return ApiResponse<IReadOnlyList<MtcServiceRequest>>.Success(list);
+	}
+
+	[HttpGet("pacs/viewer/{accessionNo}")]
+	public IActionResult GetPacsViewer(string accessionNo)
+	{
+		string html = $@"<!DOCTYPE html>
+<html>
+<head><meta charset='utf-8'><title>PACS DICOM Viewer - {accessionNo}</title>
+<style>body{{font-family:sans-serif;background:#1e1e1e;color:#e0e0e0;padding:20px;text-align:center;}}
+.viewer-card{{background:#2d2d2d;border-radius:8px;padding:24px;max-width:600px;margin:40px auto;border:1px solid #444;}}
+.btn{{background:#0078d4;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;}}
+</style>
+</head>
+<body>
+<div class='viewer-card'>
+<h2>🏥 GHIS Web DICOM 影像阅片工作站</h2>
+<p>检查流水号 (AccessionNo): <strong>{accessionNo}</strong></p>
+<p>协议: DICOM WADO-RS / DIMSE Web Gateway</p>
+<div style='background:#000;border:1px dashed #666;height:240px;line-height:240px;margin:20px 0;color:#888;'>[ DICOM 3D/MPR 影像切片渲染视口 ]</div>
+<button class='btn' onclick='alert(""正在载入 DICOM 系列序列帧..."")'>播放序列帧</button>
+</div>
+</body></html>";
+		return Content(html, "text/html", Encoding.UTF8);
+	}
+
+	// ==========================================
+	// P1-C: Surgery and Anesthesia Management
+	// ==========================================
+
+	[HttpPost("surgeries/schedule")]
+	public async Task<ApiResponse<MteSurgerySchedule>> ScheduleSurgery([FromBody] ScheduleSurgeryRequest req, CancellationToken ct = default)
+	{
+		var authError = RequireRoles("ROLE-IPD-ATTENDING", "ROLE-IPD-CHIEF", "ROLE-OR-NURSE", "ADMIN", "ROLE-ADMIN", "DOCTOR_IPD");
+		if (authError != null)
+			return ApiResponse<MteSurgerySchedule>.Fail(403, authError);
+
+		if (req == null || string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.SurgeryName))
+			return ApiResponse<MteSurgerySchedule>.Fail(400, "手术排班基本信息（住院号、手术名称）不能为空");
+
+		string schedNo = "SURG" + DateTime.Now.ToString("yyMMddHHmmssfff") + Random.Shared.Next(10, 99);
+		long now = SystemTime.UtcNowMs;
+
+		var schedule = new MteSurgerySchedule
+		{
+			ScheduleNo = schedNo,
+			EncounterId = req.EncounterId,
+			PatientId = req.PatientId,
+			PatientName = req.PatientName,
+			SurgeryCode = req.SurgeryCode,
+			SurgeryName = req.SurgeryName,
+			SurgeryLevel = req.SurgeryLevel,
+			OrRoomId = req.OrRoomId,
+			TableSeq = req.TableSeq,
+			SurgeonId = req.SurgeonId,
+			SurgeonName = req.SurgeonName,
+			AssistantIdsJson = req.AssistantIds != null ? JsonSerializer.Serialize(req.AssistantIds) : null,
+			AnesthesiologistId = req.AnesthesiologistId,
+			AnesthesiologistName = req.AnesthesiologistName,
+			CirculatingNurseId = req.CirculatingNurseId,
+			ScrubNurseId = req.ScrubNurseId,
+			ScheduledStartMs = req.ScheduledStartMs > 0 ? req.ScheduledStartMs : now,
+			EstimatedDurationMin = req.EstimatedDurationMin,
+			Status = 0,
+			CreatedBy = CurrentUserId,
+			UpdatedBy = CurrentUserId
+		};
+
+		await _surgeryScheduleRepo.InsertAsync(schedule, ct);
+
+		// Also mirror into legacy mtc_surgery_schedules for compatibility with DischargeChecklistService
+		try
+		{
+			using var conn = _connFactory.CreateConnection();
+			await conn.ExecuteAsync(@"
+INSERT OR IGNORE INTO mtc_surgery_schedules
+    (id, encounter_id, or_dept_id, or_room_code, table_seq, surgery_code, surgery_name,
+     surgery_level, main_surgeon_id, anesthesiologist_id, circulating_nurse_id,
+     sign_in_ok, time_out_ok, sign_out_ok, instrument_count_balanced, status,
+     schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    (@Id, @EncounterId, @OrDeptId, @OrRoomCode, @TableSeq, @SurgeryCode, @SurgeryName,
+     @SurgeryLevel, @MainSurgeonId, @AnesthesiologistId, @CirculatingNurseId,
+     0, 0, 0, 0, 0, 1, @Now, @OperatorId, @Now, @OperatorId, 1)",
+				new
+				{
+					schedule.Id,
+					schedule.EncounterId,
+					OrDeptId = "DEPT-OR-01",
+					OrRoomCode = schedule.OrRoomId,
+					schedule.TableSeq,
+					schedule.SurgeryCode,
+					schedule.SurgeryName,
+					schedule.SurgeryLevel,
+					MainSurgeonId = schedule.SurgeonId,
+					schedule.AnesthesiologistId,
+					schedule.CirculatingNurseId,
+					Now = now,
+					OperatorId = CurrentUserId
+				});
+		}
+		catch { }
+
+		await RecordAuditAsync("MTE_SURGERY_SCHEDULE", nameof(MteSurgerySchedule), schedule.Id, $"为患者 {req.PatientName} 安排手术 [{schedNo}] {req.SurgeryName}，主刀：{req.SurgeonName}", ct);
+		return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术排班成功");
+	}
+
+	[HttpGet("surgeries/schedules")]
+	public async Task<ApiResponse<IReadOnlyList<MteSurgerySchedule>>> GetSchedules(
+		[FromQuery] string? encounterId = null,
+		[FromQuery] string? patientId = null,
+		[FromQuery] int? status = null)
+	{
+		var list = await _surgeryScheduleRepo.QueryAsync(@"
+SELECT * FROM mte_surgery_schedules
+WHERE (@EncounterId IS NULL OR encounter_id = @EncounterId)
+  AND (@PatientId IS NULL OR patient_id = @PatientId)
+  AND (@Status IS NULL OR status = @Status)
+ORDER BY scheduled_start_ms DESC", new { EncounterId = encounterId, PatientId = patientId, Status = status });
+
+		return ApiResponse<IReadOnlyList<MteSurgerySchedule>>.Success(list);
+	}
+
+	[HttpGet("surgeries/schedules/{id}")]
+	public async Task<ApiResponse<MteSurgerySchedule>> GetScheduleById(string id)
+	{
+		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id);
+		if (schedule == null)
+			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
+		return ApiResponse<MteSurgerySchedule>.Success(schedule);
+	}
+
+	[HttpPut("surgeries/schedules/{id}")]
+	public async Task<ApiResponse<MteSurgerySchedule>> UpdateSchedule(string id, [FromBody] UpdateScheduleRequest req, CancellationToken ct = default)
+	{
+		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
+		if (schedule == null)
+			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
+
+		if (schedule.Status >= 2)
+			return ApiResponse<MteSurgerySchedule>.Fail(409, "已完成或已取消的手术排班禁止修改");
+
+		if (!string.IsNullOrWhiteSpace(req.OrRoomId)) schedule.OrRoomId = req.OrRoomId;
+		if (req.TableSeq.HasValue) schedule.TableSeq = req.TableSeq.Value;
+		if (!string.IsNullOrWhiteSpace(req.SurgeonId)) schedule.SurgeonId = req.SurgeonId;
+		if (!string.IsNullOrWhiteSpace(req.SurgeonName)) schedule.SurgeonName = req.SurgeonName;
+		if (!string.IsNullOrWhiteSpace(req.AnesthesiologistId)) schedule.AnesthesiologistId = req.AnesthesiologistId;
+		if (!string.IsNullOrWhiteSpace(req.AnesthesiologistName)) schedule.AnesthesiologistName = req.AnesthesiologistName;
+		if (req.ScheduledStartMs.HasValue) schedule.ScheduledStartMs = req.ScheduledStartMs.Value;
+		if (req.EstimatedDurationMin.HasValue) schedule.EstimatedDurationMin = req.EstimatedDurationMin.Value;
+
+		schedule.UpdatedBy = CurrentUserId;
+		await _surgeryScheduleRepo.UpdateAsync(schedule, ct);
+		await RecordAuditAsync("MTE_SURGERY_UPDATE", nameof(MteSurgerySchedule), schedule.Id, $"更新手术排班 [{schedule.ScheduleNo}]", ct);
+
+		return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术排班更新成功");
+	}
+
+	[HttpPost("surgeries/{id}/start")]
+	public async Task<ApiResponse<MteSurgerySchedule>> StartSurgery(string id, CancellationToken ct = default)
+	{
+		var authError = RequireRoles("ROLE-WARD-NURSE", "ROLE-OR-NURSE", "ROLE-IPD-ATTENDING", "ADMIN", "ROLE-ADMIN");
+		if (authError != null)
+			return ApiResponse<MteSurgerySchedule>.Fail(403, authError);
+
+		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
+		if (schedule == null)
+			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
+
+		if (schedule.Status == 1)
+			return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术已处于进行中状态（幂等返回）");
+		if (schedule.Status != 0)
+			return ApiResponse<MteSurgerySchedule>.Fail(409, "当前手术状态不允许开始手术");
+
+		long now = SystemTime.UtcNowMs;
+		schedule.Status = 1;
+		schedule.ActualStartMs = now;
+		schedule.UpdatedBy = CurrentUserId;
+		await _surgeryScheduleRepo.UpdateAsync(schedule, ct);
+
+		using (var conn = _connFactory.CreateConnection())
+		{
+			await conn.ExecuteAsync(
+				"UPDATE mtc_surgery_schedules SET status = 1, updated_at_ms = @Now, updated_by = @Op WHERE id = @Id",
+				new { Now = now, Op = CurrentUserId, Id = id });
+		}
+
+		await RecordAuditAsync("MTE_SURGERY_START", nameof(MteSurgerySchedule), schedule.Id, $"手术 [{schedule.ScheduleNo}] 正式开台", ct);
+		return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术已开始，请按流程执行 WHO 三方核查与麻醉记录");
+	}
+
+	[HttpPost("surgeries/{id}/who-checklist")]
+	public async Task<ApiResponse<MteSurgerySchedule>> RecordWhoChecklist(string id, [FromBody] WhoThreeCheckRequest req, CancellationToken ct = default)
+	{
+		var authError = RequireRoles("ROLE-OR-NURSE", "ROLE-IPD-ATTENDING", "ADMIN", "ROLE-ADMIN");
+		if (authError != null)
+			return ApiResponse<MteSurgerySchedule>.Fail(403, authError);
+
+		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
+		if (schedule == null)
+			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
+
+		schedule.WhoSignInOk = (short)(req.SignInOk ? 1 : 0);
+		schedule.WhoTimeoutOk = (short)(req.TimeOutOk ? 1 : 0);
+		schedule.WhoSignOutOk = (short)(req.SignOutOk ? 1 : 0);
+		schedule.InstrumentCountBalanced = (short)(req.InstrumentCountBalanced ? 1 : 0);
+		schedule.UpdatedBy = CurrentUserId;
+
+		await _surgeryScheduleRepo.UpdateAsync(schedule, ct);
+
+		using (var conn = _connFactory.CreateConnection())
+		{
+			await conn.ExecuteAsync(@"
+UPDATE mtc_surgery_schedules
+SET sign_in_ok = @SignIn, time_out_ok = @TimeOut, sign_out_ok = @SignOut,
+    instrument_count_balanced = @Bal, updated_at_ms = @Now, updated_by = @Op
+WHERE id = @Id",
+				new { SignIn = schedule.WhoSignInOk, TimeOut = schedule.WhoTimeoutOk, SignOut = schedule.WhoSignOutOk, Bal = schedule.InstrumentCountBalanced, Now = SystemTime.UtcNowMs, Op = CurrentUserId, Id = id });
+		}
+
+		await RecordAuditAsync("MTE_SURGERY_WHO_CHECK", nameof(MteSurgerySchedule), schedule.Id,
+			$"记录 WHO 三方核查：SignIn={req.SignInOk}, TimeOut={req.TimeOutOk}, SignOut={req.SignOutOk}, InstrumentBalanced={req.InstrumentCountBalanced}", ct);
+
+		return ApiResponse<MteSurgerySchedule>.Success(schedule, "WHO 三方核查状态已更新");
+	}
+
+	[HttpPost("surgeries/{id}/finish-surgery")]
+	public async Task<ApiResponse<MteSurgerySchedule>> FinishSurgeryFull(string id, CancellationToken ct = default)
+	{
+		var authError = RequireRoles("ROLE-OR-NURSE", "ROLE-IPD-ATTENDING", "ADMIN", "ROLE-ADMIN");
+		if (authError != null)
+			return ApiResponse<MteSurgerySchedule>.Fail(403, authError);
+
+		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
+		if (schedule == null)
+			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
+
+		if (schedule.Status == 2)
+			return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术已顺利完成（幂等返回）");
+		if (schedule.Status != 1)
+			return ApiResponse<MteSurgerySchedule>.Fail(409, "手术尚未开始，无法完成手术");
+
+		if (schedule.WhoSignInOk != 1 || schedule.WhoTimeoutOk != 1 || schedule.WhoSignOutOk != 1 || schedule.InstrumentCountBalanced != 1)
+		{
+			return ApiResponse<MteSurgerySchedule>.Fail(400, "WHO 三方安全核查（Sign-in / Time-out / Sign-out）未全部通过或器械清点不平衡，严禁结束手术转出！");
+		}
+
+		// Verify anesthesia record is completed
+		using (var conn = _connFactory.CreateConnection())
+		{
+			var anes = await conn.QuerySingleOrDefaultAsync<MteAnesthesiaRecord>(
+				"SELECT * FROM mte_anesthesia_records WHERE schedule_id = @ScheduleId",
+				new { ScheduleId = id });
+
+			if (anes == null || anes.Status != 1)
+			{
+				return ApiResponse<MteSurgerySchedule>.Fail(409, "手术麻醉记录尚未完成并归档（必须填写麻醉记录、用药及苏醒状态并标记完成），严禁结束手术转出！");
+			}
+		}
+
+		long now = SystemTime.UtcNowMs;
+		schedule.Status = 2;
+		schedule.ActualEndMs = now;
+		schedule.UpdatedBy = CurrentUserId;
+		await _surgeryScheduleRepo.UpdateAsync(schedule, ct);
+
+		using (var conn = _connFactory.CreateConnection())
+		{
+			await conn.ExecuteAsync(
+				"UPDATE mtc_surgery_schedules SET status = 2, updated_at_ms = @Now, updated_by = @Op WHERE id = @Id",
+				new { Now = now, Op = CurrentUserId, Id = id });
+		}
+
+		await RecordAuditAsync("MTE_SURGERY_FINISH", nameof(MteSurgerySchedule), schedule.Id, $"手术 [{schedule.ScheduleNo}] 闭环完成并准予转入 PACU", ct);
+		return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术已顺利完成并准予转入 PACU 复苏");
+	}
+
+	[HttpPost("anesthesia/records")]
+	public async Task<ApiResponse<MteAnesthesiaRecord>> CreateAnesthesiaRecord([FromBody] CreateAnesthesiaRecordRequest req, CancellationToken ct = default)
+	{
+		var authError = RequireRoles("ROLE-IPD-ATTENDING", "ROLE-OR-NURSE", "ADMIN", "ROLE-ADMIN", "DOCTOR_IPD");
+		if (authError != null)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(403, authError);
+
+		if (req == null || string.IsNullOrWhiteSpace(req.ScheduleId))
+			return ApiResponse<MteAnesthesiaRecord>.Fail(400, "手术排班号不能为空");
+
+		var schedule = await _surgeryScheduleRepo.GetByIdAsync(req.ScheduleId, ct);
+		if (schedule == null)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "关联的手术排班不存在");
+
+		string recordNo = "ANES" + DateTime.Now.ToString("yyMMddHHmmssfff") + Random.Shared.Next(10, 99);
+		long now = SystemTime.UtcNowMs;
+
+		var record = new MteAnesthesiaRecord
+		{
+			RecordNo = recordNo,
+			ScheduleId = req.ScheduleId,
+			EncounterId = schedule.EncounterId,
+			PatientId = schedule.PatientId,
+			AsaGrade = req.AsaGrade ?? "I",
+			AnesthesiaType = req.AnesthesiaType ?? "GENERAL",
+			PreopDiagnosis = req.PreopDiagnosis,
+			AirwayAssessment = req.AirwayAssessment,
+			AnesthesiologistId = !string.IsNullOrWhiteSpace(req.AnesthesiologistId) ? req.AnesthesiologistId : schedule.AnesthesiologistId,
+			AnesthesiologistName = !string.IsNullOrWhiteSpace(req.AnesthesiologistName) ? req.AnesthesiologistName : schedule.AnesthesiologistName,
+			AnesthesiaStartMs = now,
+			Status = 0,
+			CreatedBy = CurrentUserId,
+			UpdatedBy = CurrentUserId
+		};
+
+		await _anesthesiaRecordRepo.InsertAsync(record, ct);
+		await RecordAuditAsync("MTE_ANESTHESIA_CREATE", nameof(MteAnesthesiaRecord), record.Id,
+			$"为手术 [{schedule.ScheduleNo}] 创建麻醉记录 [{recordNo}]，ASA分级：{record.AsaGrade}，麻醉方式：{record.AnesthesiaType}", ct);
+
+		return ApiResponse<MteAnesthesiaRecord>.Success(record, "麻醉记录创建成功");
+	}
+
+	[HttpGet("anesthesia/records/by-schedule/{scheduleId}")]
+	public async Task<ApiResponse<MteAnesthesiaRecord>> GetAnesthesiaRecordBySchedule(string scheduleId)
+	{
+		using var conn = _connFactory.CreateConnection();
+		var record = await conn.QuerySingleOrDefaultAsync<MteAnesthesiaRecord>(
+			"SELECT * FROM mte_anesthesia_records WHERE schedule_id = @ScheduleId", new { ScheduleId = scheduleId });
+
+		if (record == null)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "该手术尚未建立麻醉记录");
+		return ApiResponse<MteAnesthesiaRecord>.Success(record);
+	}
+
+	[HttpGet("anesthesia/records/{id}")]
+	public async Task<ApiResponse<MteAnesthesiaRecord>> GetAnesthesiaRecordById(string id)
+	{
+		var record = await _anesthesiaRecordRepo.GetByIdAsync(id);
+		if (record == null)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "麻醉记录不存在");
+		return ApiResponse<MteAnesthesiaRecord>.Success(record);
+	}
+
+	[HttpPut("anesthesia/records/{id}")]
+	public async Task<ApiResponse<MteAnesthesiaRecord>> UpdateAnesthesiaRecord(string id, [FromBody] UpdateAnesthesiaRecordRequest req, CancellationToken ct = default)
+	{
+		var record = await _anesthesiaRecordRepo.GetByIdAsync(id, ct);
+		if (record == null)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "麻醉记录不存在");
+
+		if (!string.IsNullOrWhiteSpace(req.AsaGrade)) record.AsaGrade = req.AsaGrade;
+		if (!string.IsNullOrWhiteSpace(req.AnesthesiaType)) record.AnesthesiaType = req.AnesthesiaType;
+		if (req.BloodLossMl.HasValue) record.BloodLossMl = req.BloodLossMl.Value;
+		if (req.UrineOutputMl.HasValue) record.UrineOutputMl = req.UrineOutputMl.Value;
+		if (req.FluidInputMl.HasValue) record.FluidInputMl = req.FluidInputMl.Value;
+		if (!string.IsNullOrWhiteSpace(req.IntraopEventsJson)) record.IntraopEventsJson = req.IntraopEventsJson;
+
+		if (req.MarkCompleted)
+		{
+			record.Status = 1;
+			record.AnesthesiaEndMs = SystemTime.UtcNowMs;
+		}
+
+		record.UpdatedBy = CurrentUserId;
+		await _anesthesiaRecordRepo.UpdateAsync(record, ct);
+		await RecordAuditAsync("MTE_ANESTHESIA_UPDATE", nameof(MteAnesthesiaRecord), record.Id,
+			$"更新麻醉记录 [{record.RecordNo}]，出血={record.BloodLossMl}ml, 尿量={record.UrineOutputMl}ml, 归档={req.MarkCompleted}", ct);
+
+		return ApiResponse<MteAnesthesiaRecord>.Success(record, "麻醉记录更新成功");
+	}
+
+	[HttpPost("anesthesia/records/{id}/medications")]
+	public async Task<ApiResponse<MteAnesthesiaMedication>> AddAnesthesiaMedication(string id, [FromBody] AddAnesthesiaMedicationRequest req, CancellationToken ct = default)
+	{
+		var record = await _anesthesiaRecordRepo.GetByIdAsync(id, ct);
+		if (record == null)
+			return ApiResponse<MteAnesthesiaMedication>.Fail(404, "麻醉记录不存在");
+
+		var med = new MteAnesthesiaMedication
+		{
+			AnesthesiaRecordId = id,
+			DrugId = req.DrugId,
+			DrugName = req.DrugName,
+			Dose = req.Dose,
+			DoseUnit = req.DoseUnit,
+			Route = req.Route,
+			GivenAtMs = SystemTime.UtcNowMs,
+			OperatorId = CurrentUserId,
+			Remark = req.Remark,
+			CreatedBy = CurrentUserId,
+			UpdatedBy = CurrentUserId
+		};
+
+		await _anesthesiaMedRepo.InsertAsync(med, ct);
+		await RecordAuditAsync("MTE_ANESTHESIA_MEDICATION", nameof(MteAnesthesiaMedication), med.Id,
+			$"记录术中麻醉用药：{req.DrugName} {req.Dose}{req.DoseUnit} ({req.Route})", ct);
+
+		return ApiResponse<MteAnesthesiaMedication>.Success(med, "用药记录已保存");
+	}
+
+	[HttpGet("anesthesia/records/{id}/medications")]
+	public async Task<ApiResponse<IReadOnlyList<MteAnesthesiaMedication>>> GetAnesthesiaMedications(string id)
+	{
+		var list = await _anesthesiaMedRepo.QueryAsync(
+			"SELECT * FROM mte_anesthesia_medications WHERE anesthesia_record_id = @RecordId ORDER BY given_at_ms ASC",
+			new { RecordId = id });
+		return ApiResponse<IReadOnlyList<MteAnesthesiaMedication>>.Success(list);
+	}
+
+	[HttpPost("anesthesia/records/{id}/recovery")]
+	public async Task<ApiResponse<MteRecoveryRecord>> RecordPacuRecovery(string id, [FromBody] PacuRecoveryRequest req, CancellationToken ct = default)
+	{
+		var record = await _anesthesiaRecordRepo.GetByIdAsync(id, ct);
+		if (record == null)
+			return ApiResponse<MteRecoveryRecord>.Fail(404, "麻醉记录不存在");
+
+		using var conn = _connFactory.CreateConnection();
+		var existing = await conn.QuerySingleOrDefaultAsync<MteRecoveryRecord>(
+			"SELECT * FROM mte_recovery_records WHERE anesthesia_record_id = @RecordId", new { RecordId = id });
+
+		long now = SystemTime.UtcNowMs;
+		if (existing == null)
+		{
+			existing = new MteRecoveryRecord
+			{
+				AnesthesiaRecordId = id,
+				ScheduleId = record.ScheduleId,
+				PatientId = record.PatientId,
+				PacuBedNo = req.PacuBedNo ?? "PACU-01",
+				EntryTimeMs = now,
+				StewardScore = req.StewardScore,
+				AldreteScore = req.AldreteScore,
+				Consciousness = req.Consciousness,
+				Respiration = req.Respiration,
+				Circulation = req.Circulation,
+				Spo2 = req.Spo2,
+				DischargeCriteriaMet = (short)(req.DischargeCriteriaMet ? 1 : 0),
+				EvaluatorId = CurrentUserId,
+				Remark = req.Remark,
+				CreatedBy = CurrentUserId,
+				UpdatedBy = CurrentUserId
+			};
+			if (req.DischargeCriteriaMet) existing.ExitTimeMs = now;
+			await _recoveryRepo.InsertAsync(existing, ct);
+		}
+		else
+		{
+			existing.StewardScore = req.StewardScore;
+			existing.AldreteScore = req.AldreteScore;
+			if (!string.IsNullOrWhiteSpace(req.Consciousness)) existing.Consciousness = req.Consciousness;
+			if (!string.IsNullOrWhiteSpace(req.Respiration)) existing.Respiration = req.Respiration;
+			if (!string.IsNullOrWhiteSpace(req.Circulation)) existing.Circulation = req.Circulation;
+			if (req.Spo2.HasValue) existing.Spo2 = req.Spo2.Value;
+			existing.DischargeCriteriaMet = (short)(req.DischargeCriteriaMet ? 1 : 0);
+			if (req.DischargeCriteriaMet && !existing.ExitTimeMs.HasValue) existing.ExitTimeMs = now;
+			existing.UpdatedBy = CurrentUserId;
+			await _recoveryRepo.UpdateAsync(existing, ct);
+		}
+
+		await RecordAuditAsync("MTE_PACU_RECOVERY", nameof(MteRecoveryRecord), existing.Id,
+			$"PACU复苏评估：Steward={req.StewardScore}, Aldrete={req.AldreteScore}, 出室达标={req.DischargeCriteriaMet}", ct);
+
+		return ApiResponse<MteRecoveryRecord>.Success(existing, "PACU 复苏记录已更新");
+	}
+
+	[HttpGet("anesthesia/records/{id}/recovery")]
+	public async Task<ApiResponse<MteRecoveryRecord>> GetPacuRecovery(string id)
+	{
+		using var conn = _connFactory.CreateConnection();
+		var existing = await conn.QuerySingleOrDefaultAsync<MteRecoveryRecord>(
+			"SELECT * FROM mte_recovery_records WHERE anesthesia_record_id = @RecordId", new { RecordId = id });
+		if (existing == null)
+			return ApiResponse<MteRecoveryRecord>.Fail(404, "暂无 PACU 复苏记录");
+		return ApiResponse<MteRecoveryRecord>.Success(existing);
+	}
+
+	[HttpPost("anesthesia/records/{id}/followup")]
+	public async Task<ApiResponse<MtePostopFollowup>> RecordPostopFollowup(string id, [FromBody] PostopFollowupRequest req, CancellationToken ct = default)
+	{
+		var record = await _anesthesiaRecordRepo.GetByIdAsync(id, ct);
+		if (record == null)
+			return ApiResponse<MtePostopFollowup>.Fail(404, "麻醉记录不存在");
+
+		var followup = new MtePostopFollowup
+		{
+			AnesthesiaRecordId = id,
+			ScheduleId = record.ScheduleId,
+			PatientId = record.PatientId,
+			FollowupDay = req.FollowupDay,
+			PainScore = req.PainScore,
+			NauseaVomiting = (short)(req.NauseaVomiting ? 1 : 0),
+			ConsciousnessRecovery = (short)(req.ConsciousnessRecovery ? 1 : 0),
+			ThroatPain = (short)(req.ThroatPain ? 1 : 0),
+			Complications = req.Complications,
+			FollowupTimeMs = SystemTime.UtcNowMs,
+			FollowupBy = CurrentUserId,
+			CreatedBy = CurrentUserId,
+			UpdatedBy = CurrentUserId
+		};
+
+		await _followupRepo.InsertAsync(followup, ct);
+		await RecordAuditAsync("MTE_POSTOP_FOLLOWUP", nameof(MtePostopFollowup), followup.Id,
+			$"术后第 {req.FollowupDay} 天随访：疼痛评分 {req.PainScore}，恶心呕吐={req.NauseaVomiting}，并发症={req.Complications}", ct);
+
+		return ApiResponse<MtePostopFollowup>.Success(followup, "术后随访记录已保存");
+	}
+
+	[HttpGet("anesthesia/records/{id}/followup")]
+	public async Task<ApiResponse<IReadOnlyList<MtePostopFollowup>>> GetPostopFollowups(string id)
+	{
+		var list = await _followupRepo.QueryAsync(
+			"SELECT * FROM mte_postop_followups WHERE anesthesia_record_id = @RecordId ORDER BY followup_day ASC, followup_time_ms ASC",
+			new { RecordId = id });
+		return ApiResponse<IReadOnlyList<MtePostopFollowup>>.Success(list);
+	}
+
+	private async Task RecordAuditAsync(string eventType, string entityName, string entityId, string detail, CancellationToken ct = default)
+	{
+		if (_auditTrail != null)
+			await _auditTrail.RecordAuditAsync(eventType, entityName, entityId, detail,
 				CurrentUserId, _session?.DisplayName, _session?.ActiveDeptId, ct);
 	}
 

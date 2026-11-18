@@ -146,6 +146,13 @@ public class Program
 		RegisterRepo<CsmPackageMovement>(builder.Services, "csm_package_movements");
 		RegisterRepo<CsmTraceCode>(builder.Services, "csm_trace_codes");
 
+		// P1-C: Surgery and Anesthesia Management
+		RegisterRepo<MteSurgerySchedule>(builder.Services, "mte_surgery_schedules");
+		RegisterRepo<MteAnesthesiaRecord>(builder.Services, "mte_anesthesia_records");
+		RegisterRepo<MteAnesthesiaMedication>(builder.Services, "mte_anesthesia_medications");
+		RegisterRepo<MteRecoveryRecord>(builder.Services, "mte_recovery_records");
+		RegisterRepo<MtePostopFollowup>(builder.Services, "mte_postop_followups");
+
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);
 		builder.Services.AddSingleton(new JwtTokenService(securityKeys.JwtSigningKey));
@@ -186,6 +193,20 @@ public class Program
 		{
 			"Mock" => new MockMedicalInsuranceAdapter(),
 			_ => throw new InvalidOperationException($"未知医保适配器: {insuranceProvider}")
+		});
+
+		string lisProvider = builder.Configuration["HIS_LIS_PROVIDER"] ?? "Mock";
+		builder.Services.AddSingleton<ILisAdapter>(lisProvider switch
+		{
+			"Mock" => new MockLisAdapter(),
+			_ => throw new InvalidOperationException($"未知 LIS 适配器: {lisProvider}")
+		});
+
+		string pacsProvider = builder.Configuration["HIS_PACS_PROVIDER"] ?? "Mock";
+		builder.Services.AddSingleton<IPacsAdapter>(pacsProvider switch
+		{
+			"Mock" => new MockPacsAdapter(),
+			_ => throw new InvalidOperationException($"未知 PACS 适配器: {pacsProvider}")
 		});
 		builder.Services.AddScoped<EmrQualityControlService>();
 		builder.Services.AddScoped<EmrOfdRenderService>();

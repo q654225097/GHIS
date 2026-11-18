@@ -823,4 +823,234 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
         Assert.Contains("指标名称,数值,单位", csvText);
         Assert.Contains("今日门诊就诊", csvText);
     }
+
+    [Fact]
+    public async Task P1B_LisPacsIntegration_SyncResultsAndReports()
+    {
+        // 1. Create a LAB service request
+        var labReqRes = await _client.PostAsJsonAsync("/api/v4/medtech/requests", new MedTechController.CreateRequestDto(
+            SourceType: "IPD",
+            SourceVisitOrOrderId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            OrderDeptId: "DEPT-IPD-01",
+            OrderWardId: "DEPT-WARD-02",
+            ServiceItemCode: "LAB_BLOOD_ROUTINE",
+            FeeAmount: 25.00m
+        ));
+        Assert.True(labReqRes.IsSuccessStatusCode);
+        var labReqData = await labReqRes.Content.ReadFromJsonAsync<ApiResponse<MtcServiceRequest>>();
+        Assert.NotNull(labReqData);
+        Assert.Equal(200, labReqData.Code);
+        Assert.NotNull(labReqData.Data);
+        var labReqId = labReqData.Data.Id;
+
+        // Confirm fee and receive
+        var feeRes1 = await _client.PostAsync($"/api/v4/medtech/requests/{labReqId}/confirm-fee-and-receive", null);
+        Assert.True(feeRes1.IsSuccessStatusCode);
+
+        // Sync LIS results
+        var lisSyncRes = await _client.PostAsync("/api/v4/medtech/lis/sync-results", null);
+        Assert.Equal(HttpStatusCode.OK, lisSyncRes.StatusCode);
+        var lisSyncData = await lisSyncRes.Content.ReadFromJsonAsync<ApiResponse<int>>();
+        Assert.NotNull(lisSyncData);
+        Assert.True(lisSyncData.Data >= 1);
+
+        // Verify request updated to status 3 with report summary
+        var labVerify = await _client.GetFromJsonAsync<ApiResponse<MtcServiceRequest>>($"/api/v4/medtech/requests/{labReqId}");
+        Assert.NotNull(labVerify?.Data);
+        Assert.Equal(3, labVerify.Data.Status);
+        Assert.NotNull(labVerify.Data.ReportSummary);
+        Assert.Contains("LIS检验报告", labVerify.Data.ReportSummary);
+
+        // 2. Create a PACS service request
+        var pacsReqRes = await _client.PostAsJsonAsync("/api/v4/medtech/requests", new MedTechController.CreateRequestDto(
+            SourceType: "IPD",
+            SourceVisitOrOrderId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            OrderDeptId: "DEPT-IPD-01",
+            OrderWardId: "DEPT-WARD-02",
+            ServiceItemCode: "RAD_CHEST_CT",
+            FeeAmount: 180.00m
+        ));
+        Assert.True(pacsReqRes.IsSuccessStatusCode);
+        var pacsReqData = await pacsReqRes.Content.ReadFromJsonAsync<ApiResponse<MtcServiceRequest>>();
+        Assert.NotNull(pacsReqData);
+        Assert.Equal(200, pacsReqData.Code);
+        Assert.NotNull(pacsReqData.Data);
+        var pacsReqId = pacsReqData.Data.Id;
+        var accessionNo = pacsReqData.Data.RequestNo;
+
+        // Confirm fee and receive
+        var feeRes2 = await _client.PostAsync($"/api/v4/medtech/requests/{pacsReqId}/confirm-fee-and-receive", null);
+        Assert.True(feeRes2.IsSuccessStatusCode);
+
+        // Sync PACS reports
+        var pacsSyncRes = await _client.PostAsync("/api/v4/medtech/pacs/sync-reports", null);
+        Assert.Equal(HttpStatusCode.OK, pacsSyncRes.StatusCode);
+        var pacsSyncData = await pacsSyncRes.Content.ReadFromJsonAsync<ApiResponse<int>>();
+        Assert.NotNull(pacsSyncData);
+        Assert.True(pacsSyncData.Data >= 1);
+
+        // Verify request updated to status 3
+        var pacsVerify = await _client.GetFromJsonAsync<ApiResponse<MtcServiceRequest>>($"/api/v4/medtech/requests/{pacsReqId}");
+        Assert.NotNull(pacsVerify?.Data);
+        Assert.Equal(3, pacsVerify.Data.Status);
+        Assert.Contains("PACS影像检查报告", pacsVerify.Data.ReportSummary);
+
+        // Viewer endpoint
+        var viewerRes = await _client.GetAsync($"/api/v4/medtech/pacs/viewer/{accessionNo}");
+        Assert.Equal(HttpStatusCode.OK, viewerRes.StatusCode);
+        var viewerHtml = await viewerRes.Content.ReadAsStringAsync();
+        Assert.Contains("GHIS Web DICOM 影像阅片工作站", viewerHtml);
+        Assert.Contains(accessionNo, viewerHtml);
+    }
+
+    [Fact]
+    public async Task P1C_SurgeryAndAnesthesia_FullLifecycle()
+    {
+        var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+
+        // 1. Schedule a surgery
+        var schedReq = new ScheduleSurgeryRequest(
+            EncounterId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            PatientName: "测试患者-" + uniqueSuffix,
+            SurgeryCode: "SURG-P1C-01",
+            SurgeryName: "全胸腔镜下肺叶切除与淋巴结清扫术",
+            SurgeryLevel: 4,
+            OrRoomId: "OR-ROOM-01",
+            TableSeq: 1,
+            SurgeonId: "DOC-CHIEF-01",
+            SurgeonName: "张主任",
+            AssistantIds: new List<string> { "DOC-RES-01" },
+            AnesthesiologistId: "DOC-ANES-01",
+            AnesthesiologistName: "王麻醉",
+            CirculatingNurseId: "NUR-OR-01",
+            ScrubNurseId: "NUR-OR-02",
+            ScheduledStartMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            EstimatedDurationMin: 180
+        );
+
+        var schedRes = await _client.PostAsJsonAsync("/api/v4/medtech/surgeries/schedule", schedReq);
+        Assert.Equal(HttpStatusCode.OK, schedRes.StatusCode);
+        var schedData = await schedRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
+        Assert.NotNull(schedData?.Data);
+        var scheduleId = schedData.Data.Id;
+        Assert.Equal(0, schedData.Data.Status);
+
+        // 2. Start surgery
+        var startRes = await _client.PostAsync($"/api/v4/medtech/surgeries/{scheduleId}/start", null);
+        Assert.Equal(HttpStatusCode.OK, startRes.StatusCode);
+        var startedData = await startRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
+        Assert.Equal(1, startedData?.Data?.Status);
+
+        // 3. Attempt to finish surgery before WHO check -> Expect failure (code 400)
+        var earlyFinishRes = await _client.PostAsync($"/api/v4/medtech/surgeries/{scheduleId}/finish-surgery", null);
+        Assert.Equal(HttpStatusCode.OK, earlyFinishRes.StatusCode);
+        var earlyFinishData = await earlyFinishRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
+        Assert.Equal(400, earlyFinishData?.Code);
+
+        // 4. Record WHO Checklist
+        var whoRes = await _client.PostAsJsonAsync($"/api/v4/medtech/surgeries/{scheduleId}/who-checklist", new WhoThreeCheckRequest(
+            SignInOk: true,
+            TimeOutOk: true,
+            SignOutOk: true,
+            InstrumentCountBalanced: true
+        ));
+        Assert.Equal(HttpStatusCode.OK, whoRes.StatusCode);
+
+        // 5. Attempt to finish surgery before Anesthesia Record -> Expect failure (code 409)
+        var preAnesFinishRes = await _client.PostAsync($"/api/v4/medtech/surgeries/{scheduleId}/finish-surgery", null);
+        Assert.Equal(HttpStatusCode.OK, preAnesFinishRes.StatusCode);
+        var preAnesFinishData = await preAnesFinishRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
+        Assert.Equal(409, preAnesFinishData?.Code);
+
+        // 6. Create Anesthesia Record
+        var anesReq = new CreateAnesthesiaRecordRequest(
+            ScheduleId: scheduleId,
+            AsaGrade: "II",
+            AnesthesiaType: "GENERAL",
+            PreopDiagnosis: "右肺上叶恶性肿瘤",
+            AirwayAssessment: "Mallampati II级，张口度正常",
+            AnesthesiologistId: "DOC-ANES-01",
+            AnesthesiologistName: "王麻醉"
+        );
+        var anesRes = await _client.PostAsJsonAsync("/api/v4/medtech/anesthesia/records", anesReq);
+        Assert.Equal(HttpStatusCode.OK, anesRes.StatusCode);
+        var anesData = await anesRes.Content.ReadFromJsonAsync<ApiResponse<MteAnesthesiaRecord>>();
+        Assert.NotNull(anesData?.Data);
+        var anesId = anesData.Data.Id;
+        Assert.Equal(0, anesData.Data.Status);
+
+        // 7. Add Anesthesia Medication
+        var medRes = await _client.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/medications", new AddAnesthesiaMedicationRequest(
+            DrugId: "MED-PROPOFOL-01",
+            DrugName: "丙泊酚乳状注射液",
+            Dose: 150.0m,
+            DoseUnit: "mg",
+            Route: "IV_PUSH",
+            Remark: "麻醉诱导"
+        ));
+        Assert.Equal(HttpStatusCode.OK, medRes.StatusCode);
+
+        // Query medications
+        var medsRes = await _client.GetFromJsonAsync<ApiResponse<List<MteAnesthesiaMedication>>>($"/api/v4/medtech/anesthesia/records/{anesId}/medications");
+        Assert.NotNull(medsRes?.Data);
+        Assert.Single(medsRes.Data);
+        Assert.Equal("丙泊酚乳状注射液", medsRes.Data[0].DrugName);
+
+        // 8. Complete & archive anesthesia record
+        var updateAnesRes = await _client.PutAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}", new UpdateAnesthesiaRecordRequest(
+            AsaGrade: "II",
+            AnesthesiaType: "GENERAL",
+            BloodLossMl: 100,
+            UrineOutputMl: 300,
+            FluidInputMl: 1000,
+            IntraopEventsJson: "生命体征平稳，未见不良事件",
+            MarkCompleted: true
+        ));
+        Assert.Equal(HttpStatusCode.OK, updateAnesRes.StatusCode);
+
+        // 9. Now Finish Surgery -> Must succeed
+        var finishRes = await _client.PostAsync($"/api/v4/medtech/surgeries/{scheduleId}/finish-surgery", null);
+        Assert.Equal(HttpStatusCode.OK, finishRes.StatusCode);
+        var finishedData = await finishRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
+        Assert.Equal(200, finishedData?.Code);
+        Assert.Equal(2, finishedData?.Data?.Status);
+
+        // 10. PACU Recovery evaluation
+        var pacuRes = await _client.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/recovery", new PacuRecoveryRequest(
+            PacuBedNo: "PACU-03",
+            StewardScore: 6,
+            AldreteScore: 9,
+            Consciousness: "完全清醒",
+            Respiration: "呼吸自如平稳",
+            Circulation: "血压心率平稳",
+            Spo2: 99,
+            DischargeCriteriaMet: true,
+            Remark: "达到出室标准，准予转回胸外科病区"
+        ));
+        Assert.Equal(HttpStatusCode.OK, pacuRes.StatusCode);
+
+        var getPacu = await _client.GetFromJsonAsync<ApiResponse<MteRecoveryRecord>>($"/api/v4/medtech/anesthesia/records/{anesId}/recovery");
+        Assert.NotNull(getPacu?.Data);
+        Assert.Equal(1, getPacu.Data.DischargeCriteriaMet);
+        Assert.Equal(9, getPacu.Data.AldreteScore);
+
+        // 11. Postop Followup
+        var followupRes = await _client.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/followup", new PostopFollowupRequest(
+            FollowupDay: 1,
+            PainScore: 2,
+            NauseaVomiting: false,
+            ConsciousnessRecovery: true,
+            ThroatPain: false,
+            Complications: "无"
+        ));
+        Assert.Equal(HttpStatusCode.OK, followupRes.StatusCode);
+
+        var getFollowup = await _client.GetFromJsonAsync<ApiResponse<List<MtePostopFollowup>>>($"/api/v4/medtech/anesthesia/records/{anesId}/followup");
+        Assert.NotNull(getFollowup?.Data);
+        Assert.Single(getFollowup.Data);
+        Assert.Equal(1, getFollowup.Data[0].FollowupDay);
+    }
 }
