@@ -539,6 +539,324 @@
                         </Border>
                     </Grid>
                 </TabItem>
+
+                <!-- Tab 5: 护理计划与目标 -->
+                <TabItem Header="护理计划与目标">
+                    <Grid RowDefinitions="Auto,*" Margin="0,10,0,0">
+                        <!-- Top form to create care plan -->
+                        <Border Grid.Row="0" Classes="InpCard" Padding="14" Margin="0,0,0,10">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="制定新的个性化护理计划" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="12">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="护理诊断 / 护理问题" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding NewPlanProblem}" PlaceholderText="如: 气体交换受损、有皮肤完整性受损的危险" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="预期护理目标" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding NewPlanGoal}" PlaceholderText="如: 患者3天内呼吸平稳，SpO2>95%" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Spacing="4">
+                                        <TextBlock Text="护理措施 (分号或换行分隔)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding NewPlanInterventions}" PlaceholderText="如: 保持半卧位; 定时排痰; 低流量吸氧" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                                    <Button Content="刷新计划列表" Command="{Binding RefreshCarePlansCommand}" Height="30"/>
+                                    <Button Content="＋ 创建护理计划" Classes="Primary" Command="{Binding CreateCarePlanCommand}" Height="30"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Middle: Care plans list & evaluation panel -->
+                        <Grid Grid.Row="1" ColumnDefinitions="3*,2*" ColumnSpacing="12">
+                            <!-- Left: List -->
+                            <Border Grid.Column="0" Classes="InpCard" Padding="12">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="当前住院患者护理计划台账" FontWeight="Bold" FontSize="13" Margin="0,0,0,8"/>
+                                    <ListBox ItemsSource="{Binding CarePlans}" SelectedItem="{Binding SelectedCarePlan}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="local:CarePlanModel">
+                                                <Border Margin="2" Padding="8" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                    <StackPanel Spacing="4">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <TextBlock Grid.Column="0" Text="{Binding DiagnosisOrProblem}" FontWeight="Bold" FontSize="13"/>
+                                                            <Border Grid.Column="1" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                                                                <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding Goal, StringFormat='{}预期目标: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                                                        <TextBlock Text="{Binding InterventionsJson, StringFormat='{}措施: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- Right: Evaluation form -->
+                            <Border Grid.Column="1" Classes="InpCard" Padding="12">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="护理效果评价与目标追踪" FontWeight="Bold" FontSize="13"/>
+                                    <TextBlock Text="{Binding SelectedCarePlan.DiagnosisOrProblem, StringFormat='{}当前选定计划: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="护理评价结论" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding NewEvalResult}" PlaceholderText="记录患者临床症状改善程度与目标进展..." Height="80" AcceptsReturn="True" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <CheckBox Content="标记预期目标已完全达成（并关闭计划）" IsChecked="{Binding NewEvalGoalMet}"/>
+                                    <Button Content="提交阶段性护理评价" Classes="Primary" Command="{Binding EvaluateCarePlanCommand}" Height="32" HorizontalAlignment="Stretch"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </TabItem>
+
+                <!-- Tab 6: 压疮与跌倒评估 -->
+                <TabItem Header="压疮与跌倒评估">
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12" Margin="0,10,0,0">
+                        <!-- Left: Braden Pressure Ulcer Assessment -->
+                        <Border Grid.Column="0" Classes="InpCard" Padding="14">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Braden 压疮发生风险评估量表" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <TextBlock Text="评分范围 6-23 分（得分越低危险度越高）：&lt;=9分极高危，10-12分高危，13-14分中危，15-18分低危" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+
+                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="10">
+                                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                                            <TextBlock Text="感觉知觉 (1完全丧失 - 4未受损)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding BradenSensory}" Minimum="1" Maximum="4"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="潮湿程度 (1持续 - 4罕见)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding BradenMoisture}" Minimum="1" Maximum="4"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
+                                            <TextBlock Text="活动能力 (1卧床 - 4活动自如)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding BradenActivity}" Minimum="1" Maximum="4"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="移动能力 (1完全受限 - 4不受限)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding BradenMobility}" Minimum="1" Maximum="4"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4">
+                                            <TextBlock Text="营养摄入 (1极差 - 4良好)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding BradenNutrition}" Minimum="1" Maximum="4"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="摩擦剪切 (1有问题 - 3无明显问题)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding BradenFriction}" Minimum="1" Maximum="3"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                        <TextBlock Text="{Binding BradenTotalScore, StringFormat='{}实时计算总分: {0} 分'}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1" Content="提交 Braden 评估" Classes="Primary" Command="{Binding SubmitBradenCommand}" Height="30"/>
+                                    </Grid>
+
+                                    <u:Divider Margin="0,4"/>
+                                    <TextBlock Text="历史压疮评估记录" FontWeight="Bold" FontSize="12"/>
+                                    <ItemsControl ItemsSource="{Binding BradenHistory}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="local:BradenAssessmentModel">
+                                                <Border Margin="0,2" Padding="6" Background="{DynamicResource SemiColorBackground0}" CornerRadius="4">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding AssessedTimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding RiskLevelText}" FontWeight="Bold" FontSize="12" Margin="10,0" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding TotalScore, StringFormat='{}得分: {0}分'}" FontSize="11"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- Right: Morse Fall Risk Assessment -->
+                        <Border Grid.Column="1" Classes="InpCard" Padding="14">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Morse 跌倒与坠床风险评估量表" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <TextBlock Text="评分范围 0-125 分（得分越高危险度越高）：&gt;=45分高危（必须悬挂警示与床档防护），25-44分中危，&lt;25分低危" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+
+                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="10">
+                                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                                            <TextBlock Text="近3个月跌倒史 (0无 / 25有)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding MorseHistoryScore}" Minimum="0" Maximum="25"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="多于1个疾病诊断 (0无 / 15有)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding MorseSecondary}" Minimum="0" Maximum="15"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
+                                            <TextBlock Text="使用行走辅助具 (0无 / 15拐杖 / 30扶家具)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding MorseAid}" Minimum="0" Maximum="30"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="静脉输液/留置针 (0否 / 20是)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding MorseIv}" Minimum="0" Maximum="20"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4">
+                                            <TextBlock Text="步态姿态 (0正常 / 10虚弱 / 20受损)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding MorseGait}" Minimum="0" Maximum="20"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="认知状态 (0量力而行 / 15高估能力)" FontSize="11"/>
+                                            <NumericUpDown Value="{Binding MorseMental}" Minimum="0" Maximum="15"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                        <TextBlock Text="{Binding MorseTotalScore, StringFormat='{}实时计算总分: {0} 分'}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1" Content="提交 Morse 评估" Classes="Primary" Command="{Binding SubmitMorseCommand}" Height="30"/>
+                                    </Grid>
+
+                                    <u:Divider Margin="0,4"/>
+                                    <TextBlock Text="历史跌倒评估记录" FontWeight="Bold" FontSize="12"/>
+                                    <ItemsControl ItemsSource="{Binding MorseHistory}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="local:MorseAssessmentModel">
+                                                <Border Margin="0,2" Padding="6" Background="{DynamicResource SemiColorBackground0}" CornerRadius="4">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding AssessedTimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding RiskLevelText}" FontWeight="Bold" FontSize="12" Margin="10,0" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding TotalScore, StringFormat='{}得分: {0}分'}" FontSize="11"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+                <!-- Tab 7: 院感与感控管理 -->
+                <TabItem Header="院感与感控管理">
+                    <Grid RowDefinitions="Auto,*" Margin="0,10,0,0">
+                        <!-- Top: IPC dashboard status banner -->
+                        <Border Grid.Row="0" Classes="InpCard" Padding="12" Margin="0,0,0,10" Background="{DynamicResource SemiColorPrimaryLight}">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="{Binding IpcSummaryText}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="刷新感控指标" Command="{Binding RefreshIpcCommand}" Height="28"/>
+                            </Grid>
+                        </Border>
+
+                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                            <!-- Col 1: HAI Report -->
+                            <Border Grid.Column="0" Classes="InpCard" Padding="12">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="院内感染病例报告 (HAI)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="感染发生部位" FontSize="11"/>
+                                            <TextBox Text="{Binding HaiSite}" Height="28"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="检出病原体" FontSize="11"/>
+                                            <TextBox Text="{Binding HaiPathogen}" Height="28"/>
+                                        </StackPanel>
+                                        <CheckBox Content="属于多重耐药菌 (MDRO)" IsChecked="{Binding HaiIsMdro}"/>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="临床表现与体征" FontSize="11"/>
+                                            <TextBox Text="{Binding HaiManifestation}" Height="50" AcceptsReturn="True" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button Content="上报院感病例" Classes="Primary" Command="{Binding SubmitHaiReportCommand}" Height="30" HorizontalAlignment="Stretch"/>
+
+                                        <u:Divider Margin="0,4"/>
+                                        <TextBlock Text="院感报卡记录" FontWeight="Bold" FontSize="12"/>
+                                        <ItemsControl ItemsSource="{Binding InfectionReports}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="local:InfectionReportModel">
+                                                    <Border Margin="0,2" Padding="6" Background="{DynamicResource SemiColorBackground0}" CornerRadius="4">
+                                                        <StackPanel Spacing="2">
+                                                            <TextBlock Text="{Binding ReportNo}" FontWeight="Bold" FontSize="11"/>
+                                                            <TextBlock Text="{Binding InfectionSite, StringFormat='{}部位: {0}'}" FontSize="11"/>
+                                                            <TextBlock Text="{Binding Pathogen}" FontSize="11" Foreground="{DynamicResource SemiColorDanger}"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+
+                            <!-- Col 2: Isolation Orders -->
+                            <Border Grid.Column="1" Classes="InpCard" Padding="12">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="隔离医嘱与防护下发" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="隔离类型 (CONTACT/DROPLET/AIRBORNE)" FontSize="11"/>
+                                            <TextBox Text="{Binding IsoType}" Height="28"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="开立隔离医嘱原因" FontSize="11"/>
+                                            <TextBox Text="{Binding IsoReason}" Height="50" AcceptsReturn="True" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button Content="开立床旁隔离医嘱" Classes="Primary" Command="{Binding SubmitIsolationOrderCommand}" Height="30" HorizontalAlignment="Stretch"/>
+
+                                        <u:Divider Margin="0,4"/>
+                                        <TextBlock Text="病区隔离医嘱台账" FontWeight="Bold" FontSize="12"/>
+                                        <ItemsControl ItemsSource="{Binding IsolationOrders}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="local:IsolationOrderModel">
+                                                    <Border Margin="0,2" Padding="6" Background="{DynamicResource SemiColorBackground0}" CornerRadius="4">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                                <TextBlock Text="{Binding OrderNo}" FontWeight="Bold" FontSize="11"/>
+                                                                <TextBlock Text="{Binding IsolationType, StringFormat='{}类型: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                                <TextBlock Text="{Binding StatusText}" FontSize="11"/>
+                                                            </StackPanel>
+                                                            <Button Grid.Column="1" Content="解除隔离" Height="24" FontSize="11" IsVisible="{Binding CanEnd}"
+                                                                    Command="{Binding $parent[UserControl].((local:IpdNurseViewModel)DataContext).EndIsolationOrderCommand}"
+                                                                    CommandParameter="{Binding .}"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+
+                            <!-- Col 3: Hand Hygiene Audit -->
+                            <Border Grid.Column="2" Classes="InpCard" Padding="12">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="手卫生督查录入 (WHO 5时刻)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="手卫生时刻" FontSize="11"/>
+                                            <TextBox Text="{Binding HandMoment}" Height="28"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="人员类别" FontSize="11"/>
+                                            <TextBox Text="{Binding HandStaffCat}" Height="28"/>
+                                        </StackPanel>
+                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock Text="应洗时机" FontSize="10"/>
+                                                <NumericUpDown Value="{Binding HandOppCount}" Minimum="1" Maximum="100"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="实洗次数" FontSize="10"/>
+                                                <NumericUpDown Value="{Binding HandPerfCount}" Minimum="0" Maximum="100"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Spacing="2">
+                                                <TextBlock Text="正确次数" FontSize="10"/>
+                                                <NumericUpDown Value="{Binding HandCorrCount}" Minimum="0" Maximum="100"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Button Content="提交手卫生督查记录" Classes="Primary" Command="{Binding SubmitHandAuditCommand}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </TabItem>
             </TabControl>
         </Grid>
     </Grid>

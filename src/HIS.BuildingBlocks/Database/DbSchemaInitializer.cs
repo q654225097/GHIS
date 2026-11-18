@@ -860,6 +860,235 @@ CREATE TABLE IF NOT EXISTS mte_postop_followups (
     version_no INT NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS ix_mte_postop_anes ON mte_postop_followups (anesthesia_record_id);
+
+-- P1-D: Nursing Management
+CREATE TABLE IF NOT EXISTS nur_care_plans (
+    id VARCHAR(36) PRIMARY KEY,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    diagnosis_or_problem VARCHAR(255) NOT NULL,
+    goal VARCHAR(500) NOT NULL,
+    interventions_json TEXT,
+    target_date_ms BIGINT,
+    status INT NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_nur_care_plans_enc ON nur_care_plans (encounter_id, status);
+
+CREATE TABLE IF NOT EXISTS nur_care_plan_evaluations (
+    id VARCHAR(36) PRIMARY KEY,
+    plan_id VARCHAR(36) NOT NULL,
+    evaluation_result VARCHAR(1000) NOT NULL,
+    is_goal_met SMALLINT NOT NULL DEFAULT 0,
+    evaluated_at_ms BIGINT NOT NULL,
+    evaluator_id VARCHAR(36) NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_nur_eval_plan ON nur_care_plan_evaluations (plan_id);
+
+CREATE TABLE IF NOT EXISTS nur_pressure_ulcer_assessments (
+    id VARCHAR(36) PRIMARY KEY,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    sensory_perception INT NOT NULL,
+    moisture INT NOT NULL,
+    activity INT NOT NULL,
+    mobility INT NOT NULL,
+    nutrition INT NOT NULL,
+    friction_shear INT NOT NULL,
+    total_score INT NOT NULL,
+    risk_level VARCHAR(32) NOT NULL,
+    preventive_measures_json TEXT,
+    assessor_id VARCHAR(36) NOT NULL,
+    assessed_at_ms BIGINT NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_nur_braden_enc ON nur_pressure_ulcer_assessments (encounter_id);
+
+CREATE TABLE IF NOT EXISTS nur_fall_assessments (
+    id VARCHAR(36) PRIMARY KEY,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    history_of_falling INT NOT NULL,
+    secondary_diagnosis INT NOT NULL,
+    ambulatory_aid INT NOT NULL,
+    iv_or_saline_lock INT NOT NULL,
+    gait INT NOT NULL,
+    mental_status INT NOT NULL,
+    total_score INT NOT NULL,
+    risk_level VARCHAR(32) NOT NULL,
+    preventive_measures_json TEXT,
+    assessor_id VARCHAR(36) NOT NULL,
+    assessed_at_ms BIGINT NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_nur_fall_enc ON nur_fall_assessments (encounter_id);
+
+CREATE TABLE IF NOT EXISTS nur_quality_indicators (
+    id VARCHAR(36) PRIMARY KEY,
+    ward_id VARCHAR(36) NOT NULL,
+    month_str VARCHAR(16) NOT NULL,
+    patient_days INT NOT NULL DEFAULT 0,
+    fall_count INT NOT NULL DEFAULT 0,
+    pressure_ulcer_count INT NOT NULL DEFAULT 0,
+    unplanned_extubation_count INT NOT NULL DEFAULT 0,
+    cauti_count INT NOT NULL DEFAULT 0,
+    clabsi_count INT NOT NULL DEFAULT 0,
+    reporter_id VARCHAR(36) NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_nur_quality_ward_mo ON nur_quality_indicators (ward_id, month_str);
+
+-- P1-E: Infection Control (IPC)
+CREATE TABLE IF NOT EXISTS ipc_infection_reports (
+    id VARCHAR(36) PRIMARY KEY,
+    report_no VARCHAR(40) NOT NULL UNIQUE,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    patient_name VARCHAR(128) NOT NULL,
+    ward_id VARCHAR(36) NOT NULL,
+    infection_site VARCHAR(64) NOT NULL,
+    pathogen VARCHAR(200),
+    is_mdro SMALLINT NOT NULL DEFAULT 0,
+    diagnosed_at_ms BIGINT NOT NULL,
+    clinical_manifestation VARCHAR(1000),
+    status INT NOT NULL DEFAULT 0,
+    reporter_id VARCHAR(36) NOT NULL,
+    reviewer_id VARCHAR(36),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ipc_inf_enc ON ipc_infection_reports (encounter_id);
+CREATE INDEX IF NOT EXISTS ix_ipc_inf_status ON ipc_infection_reports (status, is_mdro);
+
+CREATE TABLE IF NOT EXISTS ipc_isolation_orders (
+    id VARCHAR(36) PRIMARY KEY,
+    order_no VARCHAR(40) NOT NULL UNIQUE,
+    encounter_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    ward_id VARCHAR(36) NOT NULL,
+    isolation_type VARCHAR(64) NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    start_ms BIGINT NOT NULL,
+    end_ms BIGINT,
+    status INT NOT NULL DEFAULT 0,
+    end_reason VARCHAR(500),
+    prescribed_by VARCHAR(36) NOT NULL,
+    ended_by VARCHAR(36),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ipc_isolation_enc ON ipc_isolation_orders (encounter_id, status);
+
+CREATE TABLE IF NOT EXISTS ipc_occupational_exposures (
+    id VARCHAR(36) PRIMARY KEY,
+    report_no VARCHAR(40) NOT NULL UNIQUE,
+    staff_id VARCHAR(36) NOT NULL,
+    staff_name VARCHAR(128) NOT NULL,
+    dept_id VARCHAR(36) NOT NULL,
+    exposure_type VARCHAR(64) NOT NULL,
+    source_patient_id VARCHAR(36),
+    source_pathogen VARCHAR(128),
+    exposed_at_ms BIGINT NOT NULL,
+    emergency_disposition VARCHAR(1000),
+    pep_treatment VARCHAR(1000),
+    status INT NOT NULL DEFAULT 0,
+    reporter_id VARCHAR(36) NOT NULL,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ipc_exposure_staff ON ipc_occupational_exposures (staff_id, status);
+
+CREATE TABLE IF NOT EXISTS ipc_adverse_events (
+    id VARCHAR(36) PRIMARY KEY,
+    event_no VARCHAR(40) NOT NULL UNIQUE,
+    reporter_id VARCHAR(36) NOT NULL,
+    reporter_name VARCHAR(128) NOT NULL,
+    dept_id VARCHAR(36) NOT NULL,
+    encounter_id VARCHAR(36),
+    patient_id VARCHAR(36),
+    event_category VARCHAR(64) NOT NULL,
+    severity_level VARCHAR(32) NOT NULL,
+    description VARCHAR(2000) NOT NULL,
+    immediate_action VARCHAR(1000),
+    status INT NOT NULL DEFAULT 0,
+    closure_comment VARCHAR(1000),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ipc_adverse_dept ON ipc_adverse_events (dept_id, status);
+
+CREATE TABLE IF NOT EXISTS ipc_hand_hygiene_audits (
+    id VARCHAR(36) PRIMARY KEY,
+    ward_id VARCHAR(36) NOT NULL,
+    observer_id VARCHAR(36) NOT NULL,
+    audit_date VARCHAR(16) NOT NULL,
+    moment_type VARCHAR(64) NOT NULL,
+    staff_category VARCHAR(64) NOT NULL,
+    opportunity_count INT NOT NULL,
+    performed_count INT NOT NULL,
+    correct_count INT NOT NULL,
+    compliance_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+    accuracy_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ipc_hand_ward ON ipc_hand_hygiene_audits (ward_id, audit_date);
 ");
 	}
 

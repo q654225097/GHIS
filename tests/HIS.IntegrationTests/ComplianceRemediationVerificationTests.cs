@@ -1053,4 +1053,239 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
         Assert.Single(getFollowup.Data);
         Assert.Equal(1, getFollowup.Data[0].FollowupDay);
     }
+
+    [Fact]
+    public async Task P1D_NursingManagement_CarePlan_Braden_Morse_QualityReport()
+    {
+        var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+
+        // 1. Create a Care Plan
+        var planReq = new CreateCarePlanRequest(
+            EncounterId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            DiagnosisOrProblem: "有皮肤完整性受损的危险-" + uniqueSuffix,
+            Goal: "住院期间受压皮肤完好无破损",
+            Interventions: new List<string> { "每2小时协助翻身一次", "使用减压床垫", "保持床单位平整干燥" }
+        );
+        var planRes = await _client.PostAsJsonAsync("/api/v4/nursing/care-plans", planReq);
+        Assert.Equal(HttpStatusCode.OK, planRes.StatusCode);
+        var planData = await planRes.Content.ReadFromJsonAsync<ApiResponse<NurCarePlan>>();
+        Assert.NotNull(planData?.Data);
+        var planId = planData.Data.Id;
+        Assert.Equal(0, planData.Data.Status);
+
+        // 2. Query care plans by encounter
+        var listRes = await _client.GetFromJsonAsync<ApiResponse<List<NurCarePlan>>>("/api/v4/nursing/care-plans/ADM20261105001");
+        Assert.NotNull(listRes?.Data);
+        Assert.Contains(listRes.Data, p => p.Id == planId);
+
+        // 3. Evaluate Care Plan (Goal met)
+        var evalRes = await _client.PostAsJsonAsync($"/api/v4/nursing/care-plans/{planId}/evaluate", new EvaluateCarePlanRequest(
+            EvaluationResult: "受压部位皮肤潮红完全消退，无压疮发生，目标达成",
+            IsGoalMet: true
+        ));
+        Assert.Equal(HttpStatusCode.OK, evalRes.StatusCode);
+
+        // Query evaluations
+        var evalList = await _client.GetFromJsonAsync<ApiResponse<List<NurCarePlanEvaluation>>>($"/api/v4/nursing/care-plans/{planId}/evaluations");
+        Assert.NotNull(evalList?.Data);
+        Assert.Single(evalList.Data);
+        Assert.Equal(1, evalList.Data[0].IsGoalMet);
+
+        // 4. Braden Pressure Ulcer Assessment
+        var bradenReq = new AssessBradenRequest(
+            EncounterId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            SensoryPerception: 2,
+            Moisture: 2,
+            Activity: 2,
+            Mobility: 2,
+            Nutrition: 2,
+            FrictionShear: 1,
+            PreventiveMeasures: new List<string> { "减压床垫", "定时翻身" }
+        );
+        var bradenRes = await _client.PostAsJsonAsync("/api/v4/nursing/assessments/braden", bradenReq);
+        Assert.Equal(HttpStatusCode.OK, bradenRes.StatusCode);
+        var bradenData = await bradenRes.Content.ReadFromJsonAsync<ApiResponse<NurPressureUlcerAssessment>>();
+        Assert.NotNull(bradenData?.Data);
+        Assert.Equal(11, bradenData.Data.TotalScore);
+        Assert.Equal("HIGH", bradenData.Data.RiskLevel);
+
+        // Query Braden history
+        var bradenHist = await _client.GetFromJsonAsync<ApiResponse<List<NurPressureUlcerAssessment>>>("/api/v4/nursing/assessments/braden/ADM20261105001");
+        Assert.NotNull(bradenHist?.Data);
+        Assert.True(bradenHist.Data.Count >= 1);
+
+        // 5. Morse Fall Assessment
+        var morseReq = new AssessMorseRequest(
+            EncounterId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            HistoryOfFalling: 25,
+            SecondaryDiagnosis: 15,
+            AmbulatoryAid: 15,
+            IvOrSalineLock: 20,
+            Gait: 10,
+            MentalStatus: 0,
+            PreventiveMeasures: new List<string> { "开启床档", "悬挂防跌倒警示标识" }
+        );
+        var morseRes = await _client.PostAsJsonAsync("/api/v4/nursing/assessments/morse", morseReq);
+        Assert.Equal(HttpStatusCode.OK, morseRes.StatusCode);
+        var morseData = await morseRes.Content.ReadFromJsonAsync<ApiResponse<NurFallAssessment>>();
+        Assert.NotNull(morseData?.Data);
+        Assert.Equal(85, morseData.Data.TotalScore);
+        Assert.Equal("HIGH", morseData.Data.RiskLevel);
+
+        // Query Morse history
+        var morseHist = await _client.GetFromJsonAsync<ApiResponse<List<NurFallAssessment>>>("/api/v4/nursing/assessments/morse/ADM20261105001");
+        Assert.NotNull(morseHist?.Data);
+        Assert.True(morseHist.Data.Count >= 1);
+
+        // 6. Save Quality Indicators & Query Report
+        var qiReq = new SaveQualityIndicatorRequest(
+            WardId: "DEPT-WARD-01",
+            MonthStr: "2026-11",
+            PatientDays: 1500,
+            FallCount: 1,
+            PressureUlcerCount: 0,
+            UnplannedExtubationCount: 0,
+            CautiCount: 0,
+            ClabsiCount: 0
+        );
+        var qiRes = await _client.PostAsJsonAsync("/api/v4/nursing/quality-indicators", qiReq);
+        Assert.Equal(HttpStatusCode.OK, qiRes.StatusCode);
+
+        var rptRes = await _client.GetFromJsonAsync<ApiResponse<List<NursingQualityReportDto>>>("/api/v4/nursing/quality-report?wardId=DEPT-WARD-01");
+        Assert.NotNull(rptRes?.Data);
+        Assert.True(rptRes.Data.Count >= 1);
+        Assert.True(rptRes.Data[0].TotalPatientDays >= 1000);
+    }
+
+    [Fact]
+    public async Task P1E_InfectionControl_FullLifecycle()
+    {
+        var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+
+        // 1. Submit Infection Report (HAI)
+        var haiReq = new CreateInfectionReportRequest(
+            EncounterId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            PatientName: "李建国-" + uniqueSuffix,
+            WardId: "DEPT-WARD-01",
+            InfectionSite: "泌尿系统",
+            Pathogen: "产ESBL大肠埃希菌",
+            IsMdro: true,
+            ClinicalManifestation: "尿频、尿急伴高热39.0℃"
+        );
+        var haiRes = await _client.PostAsJsonAsync("/api/v4/ipc/infection-reports", haiReq);
+        Assert.Equal(HttpStatusCode.OK, haiRes.StatusCode);
+        var haiData = await haiRes.Content.ReadFromJsonAsync<ApiResponse<IpcInfectionReport>>();
+        Assert.NotNull(haiData?.Data);
+        var reportId = haiData.Data.Id;
+        Assert.StartsWith("HAI", haiData.Data.ReportNo);
+        Assert.Equal(1, haiData.Data.IsMdro);
+
+        // Update status
+        var statusRes = await _client.PutAsJsonAsync($"/api/v4/ipc/infection-reports/{reportId}/status", new UpdateInfectionReportStatusRequest(
+            Status: 1,
+            ReviewerId: "USER-ADMIN",
+            Note: "院感专职人员现场核实确认"
+        ));
+        Assert.Equal(HttpStatusCode.OK, statusRes.StatusCode);
+
+        // 2. Prescribe Isolation Order
+        var isoReq = new CreateIsolationOrderRequest(
+            EncounterId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            WardId: "DEPT-WARD-01",
+            IsolationType: "CONTACT",
+            Reason: "ESBL大肠埃希菌尿路感染接触隔离"
+        );
+        var isoRes = await _client.PostAsJsonAsync("/api/v4/ipc/isolation-orders", isoReq);
+        Assert.Equal(HttpStatusCode.OK, isoRes.StatusCode);
+        var isoData = await isoRes.Content.ReadFromJsonAsync<ApiResponse<IpcIsolationOrder>>();
+        Assert.NotNull(isoData?.Data);
+        var orderId = isoData.Data.Id;
+        Assert.Equal(0, isoData.Data.Status);
+
+        // End Isolation Order
+        var endIsoRes = await _client.PostAsJsonAsync($"/api/v4/ipc/isolation-orders/{orderId}/end", new EndIsolationOrderRequest(
+            EndReason: "复查尿常规培养3次阴性，准予解除隔离"
+        ));
+        Assert.Equal(HttpStatusCode.OK, endIsoRes.StatusCode);
+        var endIsoData = await endIsoRes.Content.ReadFromJsonAsync<ApiResponse<IpcIsolationOrder>>();
+        Assert.Equal(1, endIsoData?.Data?.Status);
+
+        // 3. Occupational Exposure
+        var expReq = new CreateOccupationalExposureRequest(
+            StaffId: "USER-NURSE-01",
+            StaffName: "王护士",
+            DeptId: "DEPT-WARD-01",
+            ExposureType: "SHARP_INJURY",
+            SourcePatientId: "PAT85061801",
+            SourcePathogen: "HBV",
+            EmergencyDisposition: "流动水冲洗，自近心端向远心端挤血，碘伏消毒",
+            PepTreatment: "注射乙肝高效价免疫球蛋白并在0-1-6月接种乙肝疫苗"
+        );
+        var expRes = await _client.PostAsJsonAsync("/api/v4/ipc/occupational-exposures", expReq);
+        Assert.Equal(HttpStatusCode.OK, expRes.StatusCode);
+        var expData = await expRes.Content.ReadFromJsonAsync<ApiResponse<IpcOccupationalExposure>>();
+        Assert.NotNull(expData?.Data);
+        var expId = expData.Data.Id;
+
+        // Update disposition
+        var dispRes = await _client.PutAsJsonAsync($"/api/v4/ipc/occupational-exposures/{expId}/disposition", new UpdateExposureDispositionRequest(
+            Status: 1,
+            EmergencyDisposition: "完成紧急局部处理",
+            PepTreatment: "第一针乙肝免疫球蛋白已完成注射"
+        ));
+        Assert.Equal(HttpStatusCode.OK, dispRes.StatusCode);
+
+        // 4. Adverse Event
+        var advReq = new CreateAdverseEventRequest(
+            DeptId: "DEPT-WARD-01",
+            EncounterId: "ADM20261105001",
+            PatientId: "PAT85061801",
+            EventCategory: "FALL",
+            SeverityLevel: "III",
+            Description: "患者下床如厕时滑倒，未造成骨折或软组织挫伤",
+            ImmediateAction: "当班护士立即协助扶起并通知管床医生体检"
+        );
+        var advRes = await _client.PostAsJsonAsync("/api/v4/ipc/adverse-events", advReq);
+        Assert.Equal(HttpStatusCode.OK, advRes.StatusCode);
+        var advData = await advRes.Content.ReadFromJsonAsync<ApiResponse<IpcAdverseEvent>>();
+        Assert.NotNull(advData?.Data);
+        var advId = advData.Data.Id;
+        Assert.Equal(0, advData.Data.Status);
+
+        // Close Adverse Event
+        var closeRes = await _client.PutAsJsonAsync($"/api/v4/ipc/adverse-events/{advId}/close", new CloseAdverseEventRequest(
+            ClosureComment: "已增加卫生间防滑地垫并加装夜灯，予以结案"
+        ));
+        Assert.Equal(HttpStatusCode.OK, closeRes.StatusCode);
+
+        // 5. Hand Hygiene Audit
+        var handReq = new CreateHandHygieneAuditRequest(
+            WardId: "DEPT-WARD-01",
+            AuditDate: "2026-11-18",
+            MomentType: "TOUCH_PATIENT",
+            StaffCategory: "NURSE",
+            OpportunityCount: 20,
+            PerformedCount: 19,
+            CorrectCount: 18
+        );
+        var handRes = await _client.PostAsJsonAsync("/api/v4/ipc/hand-hygiene-audits", handReq);
+        Assert.Equal(HttpStatusCode.OK, handRes.StatusCode);
+        var handData = await handRes.Content.ReadFromJsonAsync<ApiResponse<IpcHandHygieneAudit>>();
+        Assert.NotNull(handData?.Data);
+        Assert.Equal(95.00m, handData.Data.ComplianceRate);
+
+        // 6. IPC Summary
+        var sumRes = await _client.GetAsync("/api/v4/ipc/summary");
+        Assert.Equal(HttpStatusCode.OK, sumRes.StatusCode);
+        var sumData = await sumRes.Content.ReadFromJsonAsync<ApiResponse<IpcSummaryDto>>();
+        Assert.NotNull(sumData?.Data);
+        Assert.True(sumData.Data.TotalInfectionReports >= 1);
+        Assert.True(sumData.Data.OccupationalExposuresCount >= 1);
+        Assert.True(sumData.Data.AverageHandHygieneComplianceRate >= 0);
+    }
 }

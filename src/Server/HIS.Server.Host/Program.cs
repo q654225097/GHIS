@@ -153,6 +153,18 @@ public class Program
 		RegisterRepo<MteRecoveryRecord>(builder.Services, "mte_recovery_records");
 		RegisterRepo<MtePostopFollowup>(builder.Services, "mte_postop_followups");
 
+		RegisterRepo<NurCarePlan>(builder.Services, "nur_care_plans");
+		RegisterRepo<NurCarePlanEvaluation>(builder.Services, "nur_care_plan_evaluations");
+		RegisterRepo<NurPressureUlcerAssessment>(builder.Services, "nur_pressure_ulcer_assessments");
+		RegisterRepo<NurFallAssessment>(builder.Services, "nur_fall_assessments");
+		RegisterRepo<NurQualityIndicator>(builder.Services, "nur_quality_indicators");
+
+		RegisterRepo<IpcInfectionReport>(builder.Services, "ipc_infection_reports");
+		RegisterRepo<IpcIsolationOrder>(builder.Services, "ipc_isolation_orders");
+		RegisterRepo<IpcOccupationalExposure>(builder.Services, "ipc_occupational_exposures");
+		RegisterRepo<IpcAdverseEvent>(builder.Services, "ipc_adverse_events");
+		RegisterRepo<IpcHandHygieneAudit>(builder.Services, "ipc_hand_hygiene_audits");
+
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);
 		builder.Services.AddSingleton(new JwtTokenService(securityKeys.JwtSigningKey));

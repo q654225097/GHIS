@@ -433,6 +433,44 @@ VALUES
      3, 'USER-DOC-IPD', 'USER-ANES-01', 'USER-NURSE-IPD',
      0, 0, 0, 0, 0, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
 ", new { Now = nowMs });
+
+		// Step 19: P1-D Nursing & P1-E Infection Control seed
+		await conn.ExecuteAsync("""
+INSERT OR IGNORE INTO nur_care_plans
+    (id, encounter_id, patient_id, diagnosis_or_problem, goal, interventions_json, target_date_ms, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('PLAN-SEED-01', 'ADM20261105001', 'PAT85061801', '气体交换受损（与肺部感染及支气管痉挛有关）', '患者3天内呼吸平稳，SpO2维持在95%以上', '["遵医嘱低流量鼻导管吸氧","协助患者取半卧位，指导有效咳嗽排痰","密切监测血气分析与生命体征"]', @Now + 259200000, 0, 1, @Now, 'USER-NURSE-W2', @Now, 'USER-NURSE-W2', 1);
+
+INSERT OR IGNORE INTO nur_pressure_ulcer_assessments
+    (id, encounter_id, patient_id, sensory_perception, moisture, activity, mobility, nutrition, friction_shear, total_score, risk_level, preventive_measures_json, assessor_id, assessed_at_ms, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('BRADEN-SEED-01', 'ADM20261105001', 'PAT85061801', 3, 3, 2, 2, 3, 2, 15, 'MILD', '["保持床单位清洁干燥","每2小时协助翻身"]', 'USER-NURSE-W2', @Now, 1, @Now, 'USER-NURSE-W2', @Now, 'USER-NURSE-W2', 1);
+
+INSERT OR IGNORE INTO nur_fall_assessments
+    (id, encounter_id, patient_id, history_of_falling, secondary_diagnosis, ambulatory_aid, iv_or_saline_lock, gait, mental_status, total_score, risk_level, preventive_measures_json, assessor_id, assessed_at_ms, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('MORSE-SEED-01', 'ADM20261105001', 'PAT85061801', 0, 15, 0, 20, 0, 0, 35, 'MEDIUM', '["开启床档防护","呼叫器置于易取处","下床活动需家属或护士搀扶"]', 'USER-NURSE-W2', @Now, 1, @Now, 'USER-NURSE-W2', @Now, 'USER-NURSE-W2', 1);
+
+INSERT OR IGNORE INTO nur_quality_indicators
+    (id, ward_id, month_str, patient_days, fall_count, pressure_ulcer_count, unplanned_extubation_count, cauti_count, clabsi_count, reporter_id, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('QI-SEED-01', 'DEPT-WARD-01', '2026-11', 1250, 1, 0, 0, 0, 0, 'USER-NURSE-W2', 1, @Now, 'USER-NURSE-W2', @Now, 'USER-NURSE-W2', 1);
+
+INSERT OR IGNORE INTO ipc_infection_reports
+    (id, report_no, encounter_id, patient_id, patient_name, ward_id, infection_site, pathogen, is_mdro, diagnosed_at_ms, clinical_manifestation, status, reporter_id, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('HAI-SEED-01', 'HAI20261118001', 'ADM20261105001', 'PAT85061801', '李建国', 'DEPT-WARD-01', '呼吸系统', '耐甲氧西林金黄色葡萄球菌 (MRSA)', 1, @Now, '发热38.8℃，咳黄脓痰，肺部湿啰音', 0, 'USER-DOC-ATTENDING', 1, @Now, 'USER-DOC-ATTENDING', @Now, 'USER-DOC-ATTENDING', 1);
+
+INSERT OR IGNORE INTO ipc_isolation_orders
+    (id, order_no, encounter_id, patient_id, ward_id, isolation_type, reason, start_ms, status, prescribed_by, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('ISO-SEED-01', 'ISO20261118001', 'ADM20261105001', 'PAT85061801', 'DEPT-WARD-01', 'CONTACT', 'MRSA 肺部感染，接触隔离防护', @Now, 0, 'USER-DOC-ATTENDING', 1, @Now, 'USER-DOC-ATTENDING', @Now, 'USER-DOC-ATTENDING', 1);
+
+INSERT OR IGNORE INTO ipc_hand_hygiene_audits
+    (id, ward_id, observer_id, audit_date, moment_type, staff_category, opportunity_count, performed_count, correct_count, compliance_rate, accuracy_rate, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('HAND-SEED-01', 'DEPT-WARD-01', 'USER-NURSE-W2', '2026-11-18', 'TOUCH_PATIENT', 'NURSE', 20, 19, 18, 95.00, 94.74, 1, @Now, 'USER-NURSE-W2', @Now, 'USER-NURSE-W2', 1);
+""", new { Now = nowMs });
 	}
 
 	private static async Task ResetDemoPasswordsAsync(DbConnection conn, long nowMs)
