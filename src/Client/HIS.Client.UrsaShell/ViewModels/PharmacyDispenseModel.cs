@@ -28,6 +28,12 @@ public class PharmacyDispenseModel : ClientModelBase
 
 	public string PatientName { get; set; } = string.Empty;
 
+	public string? PatientId { get; set; }
+
+	public string? VisitId { get; set; }
+
+	public string? PaymentOrderNo { get; set; }
+
 	public string DrugId { get; set; } = "DRUG-03";
 
 	public int DispenseQuantity { get; set; } = 2;

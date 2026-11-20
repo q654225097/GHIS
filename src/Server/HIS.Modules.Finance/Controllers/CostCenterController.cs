@@ -7,6 +7,7 @@ using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
+using HIS.BuildingBlocks.Security;
 using HIS.Modules.Finance.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +15,7 @@ namespace HIS.Modules.Finance.Controllers;
 
 [ApiController]
 [Route("api/v4/finance/cost-centers")]
+[RequireRole(RoleCode.Admin, RoleCode.Cashier, "FINANCE", "ACCOUNTANT")]
 public class CostCenterController : ControllerBase
 {
     private readonly IRepository<FinCostCenter> _costCenterRepo;

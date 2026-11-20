@@ -16,5 +16,9 @@ public class InvStockTake : BaseEntity
 	public string CreatedByUserId { get; set; } = string.Empty;
 	public string? ApprovedByUserId { get; set; }
 	public long? ApprovedAtMs { get; set; }
+	public string? ApprovedBy { get; set; }
+	public string ApprovalStatus { get; set; } = "DRAFT";
+	public string? WorkflowInstanceId { get; set; }
+	public long? SubmittedAtMs { get; set; }
 	public string? Remark { get; set; }
 }

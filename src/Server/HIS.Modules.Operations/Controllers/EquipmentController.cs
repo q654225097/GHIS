@@ -7,6 +7,7 @@ using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
+using HIS.BuildingBlocks.Security;
 using HIS.Modules.Operations.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +15,7 @@ namespace HIS.Modules.Operations.Controllers;
 
 [ApiController]
 [Route("api/v4/equipment")]
+[RequireRole(RoleCode.Admin, RoleCode.DoctorOpd, RoleCode.DoctorIpd, RoleCode.NurseIpd, RoleCode.Pharmacist, RoleCode.Cashier, "MED_TECH", "EQUIPMENT_ADMIN")]
 public class EquipmentController : ControllerBase
 {
     private readonly IRepository<EqpEquipment> _eqpRepo;

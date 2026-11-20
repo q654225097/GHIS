@@ -8,23 +8,23 @@ public class CriticalValueAlertModel : ClientModelBase
 
 	private string _nurseAck = "未签收 (需先完成步骤A医生审签)";
 
-	public string ReportId { get; set; } = "CRIT-LAB-2026110509";
+	public string ReportId { get; set; } = string.Empty;
 
-	public string PatientName { get; set; } = "周建强";
+	public string PatientName { get; set; } = string.Empty;
 
-	public string BedCode { get; set; } = "02床 (借床)";
+	public string BedCode { get; set; } = string.Empty;
 
-	public string TestItem { get; set; } = "超敏肌钙蛋白 I (hs-cTnI)";
+	public string TestItem { get; set; } = string.Empty;
 
-	public string MeasuredValue { get; set; } = "12.85 ng/mL";
+	public string MeasuredValue { get; set; } = string.Empty;
 
-	public string ReferenceRange { get; set; } = "0.00 ~ 0.04 ng/mL";
+	public string ReferenceRange { get; set; } = string.Empty;
 
-	public string AlertLevel { get; set; } = "超危急值 (超高警戒线 300 倍)";
+	public string AlertLevel { get; set; } = "危急值预警";
 
-	public string ReportingTime { get; set; } = "2026-11-06 08:05:12";
+	public string ReportingTime { get; set; } = string.Empty;
 
-	public string ReportingDept { get; set; } = "医学检验科 急诊急救生化室";
+	public string ReportingDept { get; set; } = "医学检验科";
 
 	public string DoctorAck
 	{

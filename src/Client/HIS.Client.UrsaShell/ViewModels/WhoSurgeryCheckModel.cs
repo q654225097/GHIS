@@ -12,7 +12,7 @@ public class WhoSurgeryCheckModel : ClientModelBase
 
 	private string _checkStatus = "请按顺序完成：阶段A(麻醉前Sign-In) ➔ 阶段B(切皮前Time-Out) ➔ 阶段C(离室前Sign-Out)";
 
-	public string PatientName { get; set; } = "周建强";
+	public string PatientName { get; set; } = "待选患者";
 
 	public string AdmissionNo { get; set; } = "ADM20261105001";
 

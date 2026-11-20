@@ -10,6 +10,10 @@ internal static class Program
     {
         try
         {
+            if (OperatingSystem.IsWindows())
+            {
+                HIS.Client.UrsaShell.Services.DesktopPrintServiceLocator.Current = new WindowsPrintService();
+            }
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)

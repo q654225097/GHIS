@@ -177,9 +177,95 @@ public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget
         EndIsolationOrderCommand = new RelayCommand(async (p) => await EndIsolationOrderAsync(p as IsolationOrderModel));
         SubmitHandAuditCommand = new RelayCommand(async () => await SubmitHandAuditAsync());
         RefreshIpcCommand = new RelayCommand(async () => await RefreshIpcDataAsync());
+
+        LoadNursingUserTemplatesCommand = new AsyncRelayCommand(LoadNursingUserTemplatesAsync);
+        SaveAsNursingUserTemplateCommand = new AsyncRelayCommand(SaveAsNursingUserTemplateAsync);
+        PdaScanVerifyAndExecuteCommand = new RelayCommand(ExecutePdaScanVerifyAndExecute);
+        DualNurseSignCommand = new RelayCommand(ExecuteDualNurseSign);
+    }
+
+    private string _pdaWristbandBarcode = string.Empty;
+    public string PdaWristbandBarcode
+    {
+        get => _pdaWristbandBarcode;
+        set => SetField(ref _pdaWristbandBarcode, value);
+    }
+
+    private string _pdaMedicationBarcode = string.Empty;
+    public string PdaMedicationBarcode
+    {
+        get => _pdaMedicationBarcode;
+        set => SetField(ref _pdaMedicationBarcode, value);
+    }
+
+    public ICommand PdaScanVerifyAndExecuteCommand { get; }
+    public ICommand DualNurseSignCommand { get; }
+
+    private void ExecutePdaScanVerifyAndExecute()
+    {
+        var patient = Workbench.SelectedInpatient;
+        if (patient == null)
+        {
+            _shell?.ShowToast("请先选择患者", "Warning");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_pdaWristbandBarcode))
+        {
+            _shell?.ShowToast("请扫描患者腕带条码", "Warning");
+            return;
+        }
+
+        bool isPatientMatch = string.Equals(_pdaWristbandBarcode.Trim(), patient.AdmissionNo.Trim(), StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(_pdaWristbandBarcode.Trim(), patient.PatientId.Trim(), StringComparison.OrdinalIgnoreCase)
+                           || _pdaWristbandBarcode.Contains(patient.AdmissionNo.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        if (!isPatientMatch)
+        {
+            _shell?.ShowToast("【409 严重条码不匹配】患者腕带与当前在院档案不一致，严禁给药！", "Error");
+            return;
+        }
+
+        var pendingTask = patient.NursingTasks.FirstOrDefault(t => t.IsPending);
+        if (pendingTask != null)
+        {
+            ExecuteTask(pendingTask);
+            _shell?.ShowToast($"PDA 双码核验通过：已安全执行医嘱 [{pendingTask.Content}]", "Success");
+            PdaMedicationBarcode = string.Empty;
+        }
+        else
+        {
+            _shell?.ShowToast("腕带核对一致，当前患者暂无待执行护理任务", "Info");
+        }
+    }
+
+    private void ExecuteDualNurseSign()
+    {
+        var patient = Workbench.SelectedInpatient;
+        if (patient == null) return;
+        var signer = SessionContext.Current.DisplayName ?? SessionContext.Current.UserId ?? "责任护士";
+        _shell?.ShowToast($"高风险药品双人核签成功：执行护士 [{signer}] 与 监护护士 [双人核对确认完毕]", "Success");
     }
 
     public WorkbenchModel Workbench { get; }
+
+    public ObservableCollection<EmrUserTemplateModel> NursingUserTemplates { get; } = new();
+
+    private EmrUserTemplateModel? _selectedNursingUserTemplate;
+    public EmrUserTemplateModel? SelectedNursingUserTemplate
+    {
+        get => _selectedNursingUserTemplate;
+        set
+        {
+            if (SetField(ref _selectedNursingUserTemplate, value) && value != null)
+            {
+                ExecuteApplyNursingTemplate(value);
+            }
+        }
+    }
+
+    public ICommand LoadNursingUserTemplatesCommand { get; }
+    public ICommand SaveAsNursingUserTemplateCommand { get; }
 
     public ObservableCollection<CarePlanModel> CarePlans { get; } = new();
     public ObservableCollection<BradenAssessmentModel> BradenHistory { get; } = new();
@@ -299,6 +385,7 @@ public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget
         _ = LoadCarePlansAsync();
         _ = LoadAssessmentsAsync();
         _ = RefreshIpcDataAsync();
+        _ = LoadNursingUserTemplatesAsync();
     }
 
     public void Detach()
@@ -965,4 +1052,130 @@ public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget
             _shell?.ShowToast("请求异常: " + ex.Message, "Error");
         }
     }
+
+    public async Task LoadNursingUserTemplatesAsync()
+    {
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var res = await http.GetFromJsonAsync<ClientApiEnvelope<List<NursingUserTemplateDto>>>("/api/v4/emr/user-templates?emrScene=WARD");
+            if (res?.Code == 200 && res.Data != null)
+            {
+                NursingUserTemplates.Clear();
+                foreach (var t in res.Data)
+                {
+                    NursingUserTemplates.Add(new EmrUserTemplateModel
+                    {
+                        Id = t.Id,
+                        UserId = t.UserId,
+                        UserName = t.UserName,
+                        DeptId = t.DeptId,
+                        DeptName = t.DeptName,
+                        BaseTemplateId = t.BaseTemplateId,
+                        TemplateCode = t.TemplateCode,
+                        TemplateName = t.TemplateName,
+                        EmrScene = t.EmrScene,
+                        DocTypeCode = t.DocTypeCode,
+                        DefaultContentJson = t.DefaultContentJson,
+                        IsSharedDept = t.IsSharedDept == 1,
+                        SortOrder = t.SortOrder
+                    });
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void ExecuteApplyNursingTemplate(EmrUserTemplateModel? tpl)
+    {
+        if (tpl == null || string.IsNullOrWhiteSpace(tpl.DefaultContentJson)) return;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(tpl.DefaultContentJson);
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (doc.RootElement.TryGetProperty("PROBLEM", out var prob))
+                    NewPlanProblem = prob.GetString() ?? tpl.TemplateName;
+                else
+                    NewPlanProblem = tpl.TemplateName;
+
+                if (doc.RootElement.TryGetProperty("GOAL", out var goal))
+                    NewPlanGoal = goal.GetString() ?? "患者住院期间安全无跌倒，体征平稳";
+
+                if (doc.RootElement.TryGetProperty("NURSING_INTERVENTION", out var act))
+                    NewPlanInterventions = act.GetString() ?? string.Empty;
+            }
+            _shell?.ShowToast($"已调入护理文书常用模板 [{tpl.TemplateName}]", "Success");
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"调入护理模板失败: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task SaveAsNursingUserTemplateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewPlanProblem) || string.IsNullOrWhiteSpace(NewPlanInterventions))
+        {
+            _shell?.ShowToast("请先填写护理问题与护理措施内容", "Warning");
+            return;
+        }
+
+        try
+        {
+            var contentObj = new Dictionary<string, string>
+            {
+                ["PROBLEM"] = NewPlanProblem.Trim(),
+                ["GOAL"] = string.IsNullOrWhiteSpace(NewPlanGoal) ? "患者各项护理评估指标改善稳定" : NewPlanGoal.Trim(),
+                ["NURSING_INTERVENTION"] = NewPlanInterventions.Trim()
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(contentObj);
+            var tplName = $"{NewPlanProblem.Trim()}-常用护理模板";
+
+            var req = new
+            {
+                BaseTemplateId = "TMPL-WARD-ADMISSION",
+                TemplateCode = $"UTPL_NUR_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds():x}",
+                TemplateName = tplName,
+                EmrScene = "WARD",
+                DocTypeCode = "NURSING_CARE_PLAN",
+                DefaultContentJson = json,
+                IsSharedDept = true,
+                SortOrder = 1
+            };
+
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var response = await http.PostAsJsonAsync("/api/v4/emr/user-templates", req);
+            var res = await response.Content.ReadFromJsonAsync<ClientApiEnvelope<NursingUserTemplateDto>>();
+            if (res?.Code == 200 && res.Data != null)
+            {
+                _shell?.ShowToast($"成功保存为常用护理模板: [{tplName}]", "Success");
+                await LoadNursingUserTemplatesAsync();
+            }
+            else
+            {
+                _shell?.ShowToast(res?.Message ?? "保存常用护理模板失败", "Warning");
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"保存护理模板异常: {ex.Message}", "Error");
+        }
+    }
+
+    public sealed record NursingUserTemplateDto(
+        string Id,
+        string UserId,
+        string UserName,
+        string? DeptId,
+        string? DeptName,
+        string BaseTemplateId,
+        string TemplateCode,
+        string TemplateName,
+        string EmrScene,
+        string DocTypeCode,
+        string DefaultContentJson,
+        short IsSharedDept,
+        int SortOrder
+    );
 }

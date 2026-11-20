@@ -1,0 +1,375 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:u="https://irihi.tech/ursa"
+             xmlns:local="clr-namespace:HIS.Client.UrsaShell.Stations.EmrDesigner"
+             xmlns:vm="clr-namespace:HIS.Client.UrsaShell.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="850"
+             x:Class="HIS.Client.UrsaShell.Stations.EmrDesigner.EmrDesignerStationView"
+             x:DataType="local:EmrDesignerStationViewModel">
+
+    <Grid RowDefinitions="Auto,*" Background="{DynamicResource SemiColorBackground0}" Margin="16">
+        <!-- Top Toolbar Banner -->
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" Padding="14,12" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                <!-- Title & Meta -->
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="📐 结构化文书设计器" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                            <TextBlock Text="国家卫健委标准数据元引擎" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="住院病历与护理文书高度结构化定制 · 填写模式动态栅格 / 打印模式纸张绝对边界防超限"
+                               FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+
+                <!-- Scene Filter Tabs -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="24,0,0,0" VerticalAlignment="Center">
+                    <Button Content="全部场景" Height="28" Padding="10,0" FontSize="11"
+                            Classes.Primary="{Binding IsSceneAll}"
+                            Command="{Binding SelectSceneCommand}" CommandParameter="ALL"/>
+                    <Button Content="🏥 住院病历" Height="28" Padding="10,0" FontSize="11"
+                            Classes.Primary="{Binding IsSceneIpd}"
+                            Command="{Binding SelectSceneCommand}" CommandParameter="IPD"/>
+                    <Button Content="💉 病区护理" Height="28" Padding="10,0" FontSize="11"
+                            Classes.Primary="{Binding IsSceneWard}"
+                            Command="{Binding SelectSceneCommand}" CommandParameter="WARD"/>
+                    <Button Content="🩺 门诊病历" Height="28" Padding="10,0" FontSize="11"
+                            Classes.Primary="{Binding IsSceneOpd}"
+                            Command="{Binding SelectSceneCommand}" CommandParameter="OPD"/>
+                </StackPanel>
+
+                <!-- Mode Switcher -->
+                <Border Grid.Column="3" Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="3" Margin="0,0,16,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Button Content="📝 填写模式 (组件布局)" Height="28" Padding="12,0" FontSize="11"
+                                Classes.Primary="{Binding IsFillMode}"
+                                Command="{Binding SwitchModeCommand}" CommandParameter="FILL"/>
+                        <Button Content="🖨️ 打印模式 (纸张防超限)" Height="28" Padding="12,0" FontSize="11"
+                                Classes.Primary="{Binding IsPrintMode}"
+                                Command="{Binding SwitchModeCommand}" CommandParameter="PRINT"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Actions -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="＋ 新建模板" Height="30" Padding="12,0" FontSize="11" Command="{Binding NewTemplateCommand}"/>
+                    <Button Content="🔄 刷新" Height="30" Padding="12,0" FontSize="11" Command="{Binding RefreshCommand}"/>
+                    <Button Content="💾 保存模板设计" Classes="Primary" Height="30" Padding="14,0" FontSize="11"
+                            Command="{Binding SaveDesignCommand}"
+                            IsEnabled="{Binding CanSaveDesign}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Workspace 3 Columns -->
+        <Grid Grid.Row="1" ColumnDefinitions="280,*,300" ColumnSpacing="12">
+            <!-- Left: Template List -->
+            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" Padding="12">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBox Grid.Row="0" Text="{Binding SearchKeyword, Mode=TwoWay}"
+                             PlaceholderText="🔍 搜索文书模板名称/编码..." Height="30" FontSize="11" Margin="0,0,0,10"/>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding FilteredTemplates}"
+                             SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}"
+                             Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:EmrVisualTemplateModel">
+                                <Border Padding="8,7" Margin="0,2" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="3">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding TemplateName}" FontWeight="SemiBold" FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Border Grid.Column="1" Background="{Binding SceneBrush}" CornerRadius="3" Padding="4,1">
+                                                <TextBlock Text="{Binding EmrScene}" FontSize="9" Foreground="White" FontWeight="Bold"/>
+                                            </Border>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding TemplateCode}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding VersionBadge}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Center: Workspace (Fill Mode vs Print Mode) -->
+            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" Padding="14">
+                <Grid RowDefinitions="Auto,*">
+                    <!-- Status & Metrics Header -->
+                    <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground2}" CornerRadius="6"
+                            Padding="12,8" Margin="0,0,0,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedTemplate.TemplateName}" FontWeight="Bold" FontSize="13"/>
+                                <TextBlock Text="|" Foreground="{DynamicResource SemiColorBorder}"/>
+                                <TextBlock Text="{Binding SelectedTemplate.PrintSafetyStatusText}"
+                                           Foreground="{Binding SelectedTemplate.PrintSafetyBrush}"
+                                           FontWeight="SemiBold" FontSize="11"/>
+                            </StackPanel>
+                            <!-- Print Mode Geometry Indicator -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" IsVisible="{Binding IsPrintMode}" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedTemplate.PageSizeCode, StringFormat='纸张: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding SelectedTemplate.PageWidthMm, StringFormat='宽: {0:0.#}mm'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding SelectedTemplate.PageHeightMm, StringFormat='高: {0:0.#}mm'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Workspace ViewSwitcher: Mode 1 = Fill Mode (Grid Layout) -->
+                    <ScrollViewer Grid.Row="1" IsVisible="{Binding IsFillMode}"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="14">
+                            <!-- Section Controls Builder -->
+                            <ItemsControl ItemsSource="{Binding SelectedTemplate.Sections}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:EmrVisualSectionModel">
+                                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="7"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                                                Padding="12" Margin="0,0,0,10">
+                                            <StackPanel Spacing="10">
+                                                <!-- Section Header -->
+                                                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding SectionTitle}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding SectionCode, StringFormat=' ({0})'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                    <Border Grid.Column="2" Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                                        <TextBlock Text="{Binding RenderModeDisplay}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </Border>
+                                                    <Button Grid.Column="3" Content="＋ 添加数据元控件" Height="26" Padding="8,0" FontSize="10"
+                                                            Command="{Binding $parent[UserControl].((local:EmrDesignerStationViewModel)DataContext).AddFieldCommand}"/>
+                                                </Grid>
+                                                <u:Divider Margin="0,2"/>
+
+                                                <!-- Controls Grid Tiles -->
+                                                <ItemsControl ItemsSource="{Binding Fields}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel Orientation="Horizontal"/>
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:EmrVisualFieldItemModel">
+                                                            <Border Margin="4" Padding="10,8" CornerRadius="6"
+                                                                    Width="{Binding WidthPx}" MinHeight="60"
+                                                                    Background="{DynamicResource SemiColorBackground1}"
+                                                                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                                <Grid RowDefinitions="Auto,Auto">
+                                                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                                                        <TextBlock Grid.Column="0" Text="{Binding ElementName}" FontWeight="SemiBold" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                                        <Border Grid.Column="1" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="3" Padding="4,1">
+                                                                            <TextBlock Text="{Binding ControlTypeDisplay}" FontSize="9" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                                        </Border>
+                                                                    </Grid>
+                                                                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0">
+                                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                                                                            <TextBlock Text="{Binding Row, StringFormat='行{0}'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                                                            <TextBlock Text="{Binding ColSpan, StringFormat='跨{0}列'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                                                        </StackPanel>
+                                                                        <Button Grid.Column="1" Content="▲" Height="20" Width="20" Padding="0" FontSize="8" Margin="0,0,3,0"
+                                                                                Command="{Binding $parent[UserControl].((local:EmrDesignerStationViewModel)DataContext).MoveFieldUpCommand}"
+                                                                                CommandParameter="{Binding}"/>
+                                                                        <Button Grid.Column="2" Content="▼" Height="20" Width="20" Padding="0" FontSize="8"
+                                                                                Command="{Binding $parent[UserControl].((local:EmrDesignerStationViewModel)DataContext).MoveFieldDownCommand}"
+                                                                                CommandParameter="{Binding}"/>
+                                                                    </Grid>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Workspace ViewSwitcher: Mode 2 = Print Mode (Virtual Paper & Strict Boundary Canvas) -->
+                    <ScrollViewer Grid.Row="1" IsVisible="{Binding IsPrintMode}"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="12" HorizontalAlignment="Center" Margin="0,0,0,24">
+                            <!-- Paper Dimension Settings Bar -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="7"
+                                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                                    Padding="12,8" Width="680">
+                                <Grid ColumnDefinitions="Auto,120,Auto,80,Auto,80,Auto,80,Auto,80" ColumnSpacing="6" VerticalAlignment="Center">
+                                    <TextBlock Grid.Column="0" Text="纸张规格:" FontSize="11" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1" SelectedItem="{Binding SelectedTemplate.PageSizeCode, Mode=TwoWay}" Height="28" FontSize="11">
+                                        <ComboBoxItem Content="A4 (210×297mm)"/>
+                                        <ComboBoxItem Content="B5 (176×250mm)"/>
+                                        <ComboBoxItem Content="A5 (148×210mm)"/>
+                                        <ComboBoxItem Content="16K (185×260mm)"/>
+                                    </ComboBox>
+                                    <TextBlock Grid.Column="2" Text="上边距(mm):" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="3" Text="{Binding SelectedTemplate.MarginTopMm, Mode=TwoWay}" Height="28" FontSize="11"/>
+                                    <TextBlock Grid.Column="4" Text="下边距(mm):" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="5" Text="{Binding SelectedTemplate.MarginBottomMm, Mode=TwoWay}" Height="28" FontSize="11"/>
+                                    <TextBlock Grid.Column="6" Text="左边距(mm):" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="7" Text="{Binding SelectedTemplate.MarginLeftMm, Mode=TwoWay}" Height="28" FontSize="11"/>
+                                    <TextBlock Grid.Column="8" Text="右边距(mm):" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="9" Text="{Binding SelectedTemplate.MarginRightMm, Mode=TwoWay}" Height="28" FontSize="11"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Strict Paper Boundary Warning Banner if exceeded -->
+                            <Border Background="#FEE2E2" BorderBrush="#EF4444" BorderThickness="1" CornerRadius="6"
+                                    Padding="12,8" Width="680" IsVisible="{Binding SelectedTemplate.IsPrintExceeded}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="⛔" FontSize="14" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding SelectedTemplate.PrintOverflowMm, StringFormat='内容高度超限 {0:0.#}mm！打印模式下设计内容不可超过纸张大小，已锁定保存，请压缩控件高度或精简章节。'}"
+                                               FontSize="11" FontWeight="Bold" Foreground="#DC2626" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Virtual Realistic Paper Canvas (A4 / B5 High Fidelity Simulation) -->
+                            <Border Width="680" Background="White" CornerRadius="2"
+                                    BorderBrush="#D1D5DB" BorderThickness="1"
+                                    BoxShadow="0 4 16 0 #20000000"
+                                    Padding="36,32">
+                                <StackPanel Spacing="10">
+                                    <!-- Hospital Title Header (Print Mode) -->
+                                    <StackPanel Spacing="3" HorizontalAlignment="Center">
+                                        <TextBlock Text="国家区域医疗中心 · 三级甲等综合医院" FontSize="14" FontWeight="Bold" Foreground="#111827" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SelectedTemplate.TemplateName}" FontSize="18" FontWeight="Bold" Foreground="#1F2937" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="（归档电子病历版式 · GB/T 33190-2016 标准）" FontSize="10" Foreground="#6B7280" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <!-- Patient Info Print Banner -->
+                                    <Border Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,6">
+                                        <Grid ColumnDefinitions="*,*,*,*">
+                                            <TextBlock Grid.Column="0" Text="姓名: 张*强" FontSize="10" Foreground="#374151"/>
+                                            <TextBlock Grid.Column="1" Text="性别: 男  年龄: 52岁" FontSize="10" Foreground="#374151"/>
+                                            <TextBlock Grid.Column="2" Text="住院号: IPD202611002" FontSize="10" Foreground="#374151"/>
+                                            <TextBlock Grid.Column="3" Text="床号: 08床" FontSize="10" Foreground="#374151"/>
+                                        </Grid>
+                                    </Border>
+                                    <u:Divider Margin="0,2"/>
+
+                                    <!-- Sections Content Rendering -->
+                                    <ItemsControl ItemsSource="{Binding SelectedTemplate.Sections}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:EmrVisualSectionModel">
+                                                <StackPanel Spacing="6" Margin="0,0,0,10">
+                                                    <!-- Section Print Header -->
+                                                    <TextBlock Text="{Binding SectionTitle, StringFormat='【{0}】'}"
+                                                               FontWeight="Bold" FontSize="11" Foreground="#111827"/>
+                                                    <!-- Section Fields Grid/Flow -->
+                                                    <ItemsControl ItemsSource="{Binding Fields}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:EmrVisualFieldItemModel">
+                                                                <Grid ColumnDefinitions="140,*" Margin="0,2">
+                                                                    <TextBlock Grid.Column="0" Text="{Binding ElementName, StringFormat='{}{0}:'}"
+                                                                               FontWeight="SemiBold" FontSize="10" Foreground="#4B5563"/>
+                                                                    <TextBlock Grid.Column="1" Text="{Binding PlaceholderText}"
+                                                                               FontSize="10" Foreground="#1F2937" TextWrapping="Wrap"/>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- Signature Block -->
+                                    <Border Margin="0,16,0,8" Padding="8" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0">
+                                        <Grid ColumnDefinitions="*,*,*">
+                                            <TextBlock Grid.Column="0" Text="书写医师签名: 李主治 (经治)" FontSize="10" Foreground="#374151"/>
+                                            <TextBlock Grid.Column="1" Text="上级医师审签: 王主任 (审签)" FontSize="10" Foreground="#374151"/>
+                                            <TextBlock Grid.Column="2" Text="审签日期: 2026-11-19" FontSize="10" Foreground="#374151" HorizontalAlignment="Right"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Print Footer -->
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                        <TextBlock Grid.Column="0" Text="遵循《电子病历基本数据集标准》与病历书写基本规范" FontSize="9" Foreground="#9CA3AF"/>
+                                        <TextBlock Grid.Column="1" Text="第 1 页 / 共 1 页" FontSize="9" Foreground="#9CA3AF"/>
+                                    </Grid>
+
+                                    <!-- Red Boundary Indicator if Exceeded -->
+                                    <Border Background="#FEE2E2" BorderBrush="#EF4444" BorderThickness="1"
+                                            CornerRadius="4" Padding="10" Margin="0,14,0,0"
+                                            IsVisible="{Binding SelectedTemplate.IsPrintExceeded}">
+                                        <TextBlock Text="---------------- ⚠️ 此处超出纸张物理打印边界 (超出高度不可落纸) ----------------"
+                                                   FontSize="10" FontWeight="Bold" Foreground="#DC2626" HorizontalAlignment="Center"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Right: Control Properties & Attributes Inspector -->
+            <Border Grid.Column="2" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" Padding="14">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" Text="⚙️ 控件属性检查器" FontSize="13" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="10" IsVisible="{Binding HasSelectedField}">
+                            <TextBlock Text="数据元名称" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding SelectedField.ElementName, Mode=TwoWay}" Height="28" FontSize="11"/>
+
+                            <TextBlock Text="数据元编码 (ElementCode)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding SelectedField.ElementCode, Mode=TwoWay}" Height="28" FontSize="11"/>
+
+                            <TextBlock Text="控件展现类型" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <ComboBox SelectedItem="{Binding SelectedField.ControlType, Mode=TwoWay}" Height="28" FontSize="11">
+                                <ComboBoxItem Content="SINGLE_TEXT"/>
+                                <ComboBoxItem Content="MULTI_TEXT"/>
+                                <ComboBoxItem Content="INT_INPUT"/>
+                                <ComboBoxItem Content="DECIMAL_INPUT"/>
+                                <ComboBoxItem Content="SELECT"/>
+                                <ComboBoxItem Content="DATE"/>
+                                <ComboBoxItem Content="DATETIME"/>
+                                <ComboBoxItem Content="CHECKBOX"/>
+                                <ComboBoxItem Content="MACRO_LABEL"/>
+                            </ComboBox>
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock Text="所在行 (Row)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding SelectedField.Row, Mode=TwoWay}" Height="28" FontSize="11"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="跨列数 (ColSpan)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding SelectedField.ColSpan, Mode=TwoWay}" Height="28" FontSize="11"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock Text="控件宽度 (px)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding SelectedField.WidthPx, Mode=TwoWay}" Height="28" FontSize="11"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="打印高度 (mm)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding SelectedField.PrintHeightMm, Mode=TwoWay}" Height="28" FontSize="11"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock Text="占位提示文字" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBox Text="{Binding SelectedField.PlaceholderText, Mode=TwoWay}" Height="28" FontSize="11"/>
+
+                            <CheckBox Content="设为必填数据元项" IsChecked="{Binding SelectedField.IsRequired, Mode=TwoWay}" FontSize="11" Margin="0,4"/>
+
+                            <u:Divider Margin="0,6"/>
+
+                            <Button Content="🗑️ 从当前章节移除控件" Classes="Danger" Height="30" FontSize="11"
+                                    Command="{Binding RemoveFieldCommand}" CommandParameter="{Binding SelectedField}"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

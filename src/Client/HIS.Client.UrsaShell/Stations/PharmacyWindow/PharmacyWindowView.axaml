@@ -406,6 +406,165 @@
                     </Border>
                 </Grid>
             </TabItem>
+
+            <!-- Tab 4: 处方点评与专家质控 (Level 7) -->
+            <TabItem Header="处方点评与专家质控">
+                <Grid ColumnDefinitions="*,440" Margin="12,10,12,12" ColumnSpacing="12">
+                    <!-- 左侧：随机抽样处方列表 -->
+                    <Border Grid.Column="0" Classes="panel">
+                        <Grid RowDefinitions="Auto,Auto,*">
+                            <Grid Grid.Row="0" ColumnDefinitions="Auto,120,Auto,100,*,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+                                <TextBlock Text="抽样类型:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                                <ComboBox Grid.Column="1" SelectedItem="{Binding ReviewSourceType, Mode=TwoWay}" Height="30" FontSize="12">
+                                    <x:String>OPD</x:String>
+                                    <x:String>IPD</x:String>
+                                </ComboBox>
+                                <TextBlock Grid.Column="2" Text="抽样数:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                                <TextBox Grid.Column="3" Text="{Binding SampleCount, Mode=TwoWay}" Height="30" FontSize="12"/>
+                                <Button Grid.Column="5" Content="随机抽样 (RANDOM)" Classes="Primary" Height="30"
+                                        Command="{Binding SamplePrescriptionsCommand}"/>
+                            </Grid>
+
+                            <Grid Grid.Row="1" ColumnDefinitions="200,160,*" Margin="6,0,6,8">
+                                <TextBlock Grid.Column="0" Text="处方/医嘱标识" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="1" Text="患者编号" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="2" Text="开立时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            </Grid>
+
+                            <ListBox Grid.Row="2" ItemsSource="{Binding SampledPrescriptions}" SelectedItem="{Binding SelectedSamplePrescription, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:SampledPrescriptionModel">
+                                        <Border Margin="0,2" Padding="8,8" CornerRadius="4">
+                                            <Grid ColumnDefinitions="200,160,*">
+                                                <TextBlock Grid.Column="0" Text="{Binding Id}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding PatientId}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding TimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧：点评表单与质控意见 -->
+                    <Border Grid.Column="1" Classes="panel">
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="专家药师处方点评意见" FontSize="15" FontWeight="Bold"/>
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="{Binding SelectedSamplePrescription.Id, FallbackValue='请在左侧选取待点评处方', StringFormat='选中处方: {0}'}" FontWeight="Bold"/>
+                                        <TextBlock Text="{Binding SelectedSamplePrescription.PatientId, StringFormat='患者: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+
+                                        <TextBlock Text="处方合理性评价" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <WrapPanel>
+                                            <RadioButton Content="合理处方" IsChecked="{Binding CommentIsRational, Mode=TwoWay}" Margin="0,0,16,0"/>
+                                            <RadioButton Content="不合理处方 (缺陷干预)" IsChecked="{Binding !CommentIsRational, Mode=TwoWay}"/>
+                                        </WrapPanel>
+
+                                        <TextBlock Text="缺陷类型代码 (逗号分隔)" FontSize="12"/>
+                                        <TextBox Text="{Binding CommentDefectCodes, Mode=TwoWay}" PlaceholderText="如 DOSAGE_OVER, DRUG_INTERACTION, CONTRAINDICATION"/>
+
+                                        <TextBlock Text="药学专业点评意见说明" FontSize="12"/>
+                                        <TextBox Text="{Binding CommentText, Mode=TwoWay}" Height="70" AcceptsReturn="True" TextWrapping="Wrap"/>
+
+                                        <Button Content="提交处方点评与质控意见" Classes="Primary" HorizontalAlignment="Stretch" Height="34"
+                                                Command="{Binding SubmitCommentCommand}"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 5: PIVAS静配与用药重整 (Level 7) -->
+            <TabItem Header="PIVAS静配与用药重整">
+                <Grid ColumnDefinitions="*,440" Margin="12,10,12,12" ColumnSpacing="12">
+                    <!-- 左侧：入院患者既往用药重整 -->
+                    <Border Grid.Column="0" Classes="panel">
+                        <Grid RowDefinitions="Auto,Auto,*">
+                            <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,10">
+                                <TextBlock Text="入院用药重整闭环 (Medication Reconciliation)" FontSize="14" FontWeight="Bold"/>
+                                <TextBlock Text="在患者入院 24 小时内全面核对院外长期用药，避免漏服、重复用药或相互作用。" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Text="{Binding ReconEncounterId, Mode=TwoWay}" PlaceholderText="输入就诊/住院编号 (如 ADM20261105001)"/>
+                                    <Button Grid.Column="1" Content="调入历史重整" Classes="Primary" Height="30" Command="{Binding LoadMedicationReconCommand}"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <Grid Grid.Row="1" ColumnDefinitions="140,120,90,90,*,90" Margin="6,0,6,8">
+                                <TextBlock Grid.Column="0" Text="既往用药" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="1" Text="用法用量" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="2" Text="信息来源" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="3" Text="重整决策" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="4" Text="重整药师" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Grid.Column="5" Text="登记时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            </Grid>
+
+                            <ScrollViewer Grid.Row="2">
+                                <ItemsControl ItemsSource="{Binding Reconciliations}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:MedicationReconciliationModel">
+                                            <Border Margin="0,2" Padding="6,6" Background="{DynamicResource SemiColorBackground0}" CornerRadius="4">
+                                                <Grid ColumnDefinitions="140,120,90,90,*,90">
+                                                    <TextBlock Grid.Column="0" Text="{Binding DrugName}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding DosageText}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Source}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding Decision}" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="4" Text="{Binding ReconciledBy}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="5" Text="{Binding TimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧：录入用药重整与 PIVAS 静配批次 -->
+                    <Border Grid.Column="1" Classes="panel">
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <!-- 录入重整 -->
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="新增用药重整记录" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <TextBox Text="{Binding ReconPatientId, Mode=TwoWay}" PlaceholderText="患者编号"/>
+                                        <TextBox Text="{Binding ReconDrugName, Mode=TwoWay}" PlaceholderText="既往用药名称 (如 氨氯地平片 5mg)"/>
+                                        <TextBox Text="{Binding ReconDosage, Mode=TwoWay}" PlaceholderText="院外用法频次 (如 5mg 口服 每日一次)"/>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                            <TextBlock Text="临床决策:" VerticalAlignment="Center" FontSize="12"/>
+                                            <ComboBox Grid.Column="1" SelectedItem="{Binding ReconDecision, Mode=TwoWay}" Height="30" FontSize="12">
+                                                <x:String>CONTINUE</x:String>
+                                                <x:String>MODIFY</x:String>
+                                                <x:String>DISCONTINUE</x:String>
+                                            </ComboBox>
+                                        </Grid>
+                                        <Button Content="保存用药重整记录" Classes="Primary" HorizontalAlignment="Stretch" Height="34"
+                                                Command="{Binding SaveMedicationReconCommand}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- PIVAS 批次管理 -->
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="PIVAS 静脉用药集中调配批次配置" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <TextBox Text="{Binding PivasWardId, Mode=TwoWay}" PlaceholderText="病区编号"/>
+                                        <TextBox Text="{Binding PivasBatchNo, Mode=TwoWay}" PlaceholderText="静配批号"/>
+                                        <TextBox Text="{Binding PivasPrepType, Mode=TwoWay}" PlaceholderText="调配类别 (如 ANTIBIOTICS / TPN / CHEMO)"/>
+                                        <Button Content="下发 PIVAS 批次与条码" Classes="Warning" HorizontalAlignment="Stretch" Height="34"
+                                                Command="{Binding CreatePivasBatchCommand}"/>
+                                        <TextBlock Text="{Binding PivasResult}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </UserControl>

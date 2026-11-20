@@ -35,4 +35,14 @@ public class IpdDischargeRequest : BaseEntity
     public decimal SelfPayAmount { get; set; }
 
     public decimal RefundAmount { get; set; }
+
+    public string ApprovalStatus { get; set; } = "DRAFT";
+
+    public string? WorkflowInstanceId { get; set; }
+
+    public long? SubmittedAtMs { get; set; }
+
+    public long? ApprovedAtMs { get; set; }
+
+    public string? ApprovedBy { get; set; }
 }

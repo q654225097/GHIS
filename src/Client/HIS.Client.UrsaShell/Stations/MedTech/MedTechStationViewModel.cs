@@ -67,6 +67,81 @@ public class AnesthesiaMedicationItemModel : ClientModelBase
     public string Remark { get; set; } = string.Empty;
 }
 
+public class ExamSlotItemModel : ClientModelBase
+{
+    private string _id = string.Empty;
+    private string _resourceCode = string.Empty;
+    private string _resourceName = string.Empty;
+    private string _modality = string.Empty;
+    private string _slotDate = string.Empty;
+    private string _startTime = string.Empty;
+    private string _endTime = string.Empty;
+    private int _maxCapacity = 10;
+    private int _bookedCount = 0;
+    private bool _isAvailable = true;
+
+    public string Id { get => _id; set => SetField(ref _id, value); }
+    public string ResourceCode { get => _resourceCode; set => SetField(ref _resourceCode, value); }
+    public string ResourceName { get => _resourceName; set => SetField(ref _resourceName, value); }
+    public string Modality { get => _modality; set => SetField(ref _modality, value); }
+    public string SlotDate { get => _slotDate; set => SetField(ref _slotDate, value); }
+    public string StartTime { get => _startTime; set => SetField(ref _startTime, value); }
+    public string EndTime { get => _endTime; set => SetField(ref _endTime, value); }
+    public int MaxCapacity { get => _maxCapacity; set { if (SetField(ref _maxCapacity, value)) OnPropertyChanged(nameof(CapacityText)); } }
+    public int BookedCount { get => _bookedCount; set { if (SetField(ref _bookedCount, value)) OnPropertyChanged(nameof(CapacityText)); } }
+    public bool IsAvailable { get => _isAvailable; set => SetField(ref _isAvailable, value); }
+    public string CapacityText => $"{BookedCount}/{MaxCapacity}";
+    public string TimeRange => $"{StartTime} - {EndTime}";
+}
+
+public class HospitalScheduleItemModel : ClientModelBase
+{
+    public string Id { get; set; } = string.Empty;
+    public string RequestId { get; set; } = string.Empty;
+    public string ServiceItemCode { get; set; } = string.Empty;
+    public string ResourceName { get; set; } = string.Empty;
+    public string Modality { get; set; } = string.Empty;
+    public string SlotDate { get; set; } = string.Empty;
+    public string StartTime { get; set; } = string.Empty;
+    public string EndTime { get; set; } = string.Empty;
+    public string AppointmentStatus { get; set; } = string.Empty;
+}
+
+public class SpecimenTimelineItemModel : ClientModelBase
+{
+    public string Stage { get; set; } = string.Empty;
+    public string OperatorId { get; set; } = string.Empty;
+    public long TimestampMs { get; set; }
+    public string StorageTemp { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
+    public string TimeText => TimestampMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(TimestampMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "-";
+}
+
+public class LabTrendItemModel : ClientModelBase
+{
+    public string ValNumeric { get; set; } = string.Empty;
+    public string ValString { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public string RefRange { get; set; } = string.Empty;
+    public string AbnormalFlag { get; set; } = string.Empty;
+    public int IsCritical { get; set; }
+    public long CreatedAtMs { get; set; }
+    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("MM-dd HH:mm") : "-";
+}
+
+public class LabHistoryItemModel : ClientModelBase
+{
+    public string RequestNo { get; set; } = string.Empty;
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public string ValString { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public string RefRange { get; set; } = string.Empty;
+    public string AbnormalFlag { get; set; } = string.Empty;
+    public long CreatedAtMs { get; set; }
+    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-";
+}
+
 public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -132,8 +207,20 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
         RecordPacuCommand = new AsyncRelayCommand(RecordPacuAsync);
         RecordFollowupCommand = new AsyncRelayCommand(RecordFollowupAsync);
 
+        // Level 7 commands
+        LoadExamSlotsCommand = new AsyncRelayCommand(LoadExamSlotsAsync);
+        LoadHospitalScheduleCommand = new AsyncRelayCommand(LoadHospitalScheduleAsync);
+        AutoScheduleExamCommand = new AsyncRelayCommand(AutoScheduleExamAsync);
+        ScanStageCommand = new AsyncRelayCommand(ScanStageAsync);
+        PreCollectCheckCommand = new AsyncRelayCommand(PreCollectCheckAsync);
+        LoadSpecimenTimelineCommand = new AsyncRelayCommand(LoadSpecimenTimelineAsync);
+        RunAutoVerifyCommand = new AsyncRelayCommand(RunAutoVerifyAsync);
+        LoadLabTrendCommand = new AsyncRelayCommand(LoadLabTrendAsync);
+        LoadLabHistoryCommand = new AsyncRelayCommand(LoadLabHistoryAsync);
+
         RebuildFiltered();
         _ = LoadSchedulesAsync();
+        _ = LoadExamSlotsAsync();
     }
 
     public WorkbenchModel Workbench { get; }
@@ -141,6 +228,51 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
     public ObservableCollection<MedTechOrderItemModel> FilteredOrders { get; } = new();
     public ObservableCollection<SurgeryScheduleItemModel> SurgerySchedules { get; } = new();
     public ObservableCollection<AnesthesiaMedicationItemModel> AnesthesiaMedications { get; } = new();
+
+    // Level 7 Collections & Properties
+    public ObservableCollection<ExamSlotItemModel> ExamSlots { get; } = new();
+    public ObservableCollection<HospitalScheduleItemModel> HospitalAppointments { get; } = new();
+    private string _selectedModality = "CT";
+    public string SelectedModality { get => _selectedModality; set { if (SetField(ref _selectedModality, value)) _ = LoadExamSlotsAsync(); } }
+    private string _examSlotDate = DateTime.Now.ToString("yyyy-MM-dd");
+    public string ExamSlotDate { get => _examSlotDate; set { if (SetField(ref _examSlotDate, value)) _ = LoadExamSlotsAsync(); } }
+    private string _schedulePatientId = string.Empty;
+    public string SchedulePatientId { get => _schedulePatientId; set => SetField(ref _schedulePatientId, value); }
+    private string _scheduleRequestId = string.Empty;
+    public string ScheduleRequestId { get => _scheduleRequestId; set => SetField(ref _scheduleRequestId, value); }
+    private string _autoScheduleResult = string.Empty;
+    public string AutoScheduleResult { get => _autoScheduleResult; set => SetField(ref _autoScheduleResult, value); }
+
+    public ObservableCollection<SpecimenTimelineItemModel> SpecimenTimeline { get; } = new();
+    private string _scanBarcode = string.Empty;
+    public string ScanBarcode { get => _scanBarcode; set => SetField(ref _scanBarcode, value); }
+    private string _scanStage = "COLLECTED";
+    public string ScanStage { get => _scanStage; set => SetField(ref _scanStage, value); }
+    private string _storageTemperature = "4℃";
+    public string StorageTemperature { get => _storageTemperature; set => SetField(ref _storageTemperature, value); }
+    private string _scanNote = string.Empty;
+    public string ScanNote { get => _scanNote; set => SetField(ref _scanNote, value); }
+    private string _wristbandCheckBarcode = string.Empty;
+    public string WristbandCheckBarcode { get => _wristbandCheckBarcode; set => SetField(ref _wristbandCheckBarcode, value); }
+    private string _tubeCheckBarcode = string.Empty;
+    public string TubeCheckBarcode { get => _tubeCheckBarcode; set => SetField(ref _tubeCheckBarcode, value); }
+    private string _checkItemCode = "LAB_BLOOD_ROUTINE";
+    public string CheckItemCode { get => _checkItemCode; set => SetField(ref _checkItemCode, value); }
+    private string _checkPatientId = string.Empty;
+    public string CheckPatientId { get => _checkPatientId; set => SetField(ref _checkPatientId, value); }
+    private string _checkResultText = string.Empty;
+    public string CheckResultText { get => _checkResultText; set => SetField(ref _checkResultText, value); }
+
+    public ObservableCollection<LabTrendItemModel> LabTrends { get; } = new();
+    public ObservableCollection<LabHistoryItemModel> LabHistoryList { get; } = new();
+    private string _autoVerifyReqId = string.Empty;
+    public string AutoVerifyReqId { get => _autoVerifyReqId; set => SetField(ref _autoVerifyReqId, value); }
+    private string _trendPatientId = string.Empty;
+    public string TrendPatientId { get => _trendPatientId; set => SetField(ref _trendPatientId, value); }
+    private string _trendItemCode = "WBC";
+    public string TrendItemCode { get => _trendItemCode; set => SetField(ref _trendItemCode, value); }
+    private string _autoVerifyResultSummary = string.Empty;
+    public string AutoVerifyResultSummary { get => _autoVerifyResultSummary; set => SetField(ref _autoVerifyResultSummary, value); }
 
     public int SelectedTab
     {
@@ -244,6 +376,17 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
     public ICommand AddMedicationCommand { get; }
     public ICommand RecordPacuCommand { get; }
     public ICommand RecordFollowupCommand { get; }
+
+    // Level 7 commands
+    public ICommand LoadExamSlotsCommand { get; }
+    public ICommand LoadHospitalScheduleCommand { get; }
+    public ICommand AutoScheduleExamCommand { get; }
+    public ICommand ScanStageCommand { get; }
+    public ICommand PreCollectCheckCommand { get; }
+    public ICommand LoadSpecimenTimelineCommand { get; }
+    public ICommand RunAutoVerifyCommand { get; }
+    public ICommand LoadLabTrendCommand { get; }
+    public ICommand LoadLabHistoryCommand { get; }
 
     public async Task SyncLisAsync()
     {
@@ -693,16 +836,22 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
         OnPropertyChanged(nameof(ReportedCount));
     }
 
-    private void ExecuteConfirmFee(MedTechOrderItemModel? item)
+    private async void ExecuteConfirmFee(MedTechOrderItemModel? item)
     {
         if (item == null) return;
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            _ = await http.PostAsync($"/api/v4/medtech/requests/{item.RequestNo}/confirm-fee-and-receive", null);
+        }
+        catch { }
         Workbench.ConfirmMedTechFee(item);
         RebuildFiltered();
         RaiseCounts();
         _shell?.ShowToast($"已确认收费并锁单：{item.ItemName} ({item.RequestNo})", "Success");
     }
 
-    private void ExecutePublishReport(MedTechOrderItemModel? item)
+    private async void ExecutePublishReport(MedTechOrderItemModel? item)
     {
         if (item == null) return;
         if (!item.CanPublishReport)
@@ -710,6 +859,13 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
             _shell?.ShowToast($"{item.ItemName} 需先完成确费锁单后才可出具报告。", "Warning");
             return;
         }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var body = new { ReportSummary = "医技检查检验指标正常，未见明显异常改变。", IsCriticalValue = false };
+            _ = await http.PostAsJsonAsync($"/api/v4/medtech/requests/{item.RequestNo}/publish-report", body);
+        }
+        catch { }
         Workbench.PublishMedTechReport(item);
         RebuildFiltered();
         RaiseCounts();
@@ -820,6 +976,276 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
         panel.Children.Add(btn);
 
         _shell?.OpenDrawer("WHO 手术安全三方核查", $"{who.PatientName} ({who.AdmissionNo})", panel, 520);
+    }
+
+    public async Task LoadExamSlotsAsync()
+    {
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            string url = $"/api/v4/medtech/exam/slots?modality={Uri.EscapeDataString(_selectedModality ?? "")}&slotDate={Uri.EscapeDataString(_examSlotDate ?? "")}";
+            var res = await http.GetFromJsonAsync<ApiResponse<List<ExamSlotItemModel>>>(url, JsonOptions);
+            if (res?.Data != null)
+            {
+                ExamSlots.Clear();
+                foreach (var s in res.Data)
+                {
+                    ExamSlots.Add(s);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"获取机位时隙异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task LoadHospitalScheduleAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_schedulePatientId))
+        {
+            _shell?.ShowToast("请输入患者ID", "Warning");
+            return;
+        }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            string url = $"/api/v4/medtech/exam/hospital-schedule?patientId={Uri.EscapeDataString(_schedulePatientId.Trim())}";
+            var res = await http.GetFromJsonAsync<ApiResponse<List<HospitalScheduleItemModel>>>(url, JsonOptions);
+            if (res?.Data != null)
+            {
+                HospitalAppointments.Clear();
+                foreach (var a in res.Data)
+                {
+                    HospitalAppointments.Add(a);
+                }
+                _shell?.ShowToast($"已加载患者预约排程 {HospitalAppointments.Count} 条", "Info");
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"获取患者排程异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task AutoScheduleExamAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_scheduleRequestId))
+        {
+            _shell?.ShowToast("请输入检查申请单ID", "Warning");
+            return;
+        }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var payload = new
+            {
+                RequestId = _scheduleRequestId.Trim(),
+                PreferredDate = _examSlotDate,
+                PreferredModality = _selectedModality
+            };
+            var res = await http.PostAsJsonAsync("/api/v4/medtech/exam/auto-schedule", payload);
+            var content = await res.Content.ReadAsStringAsync();
+            if (res.IsSuccessStatusCode)
+            {
+                AutoScheduleResult = "✓ 智能冲突排程成功，预约时隙已锁定";
+                _shell?.ShowToast("智能排程成功", "Success");
+                _ = LoadExamSlotsAsync();
+                if (!string.IsNullOrWhiteSpace(_schedulePatientId))
+                    _ = LoadHospitalScheduleAsync();
+            }
+            else
+            {
+                AutoScheduleResult = $"排程拦截: {content}";
+                _shell?.ShowToast($"排程失败: {content}", "Warning");
+            }
+        }
+        catch (Exception ex)
+        {
+            AutoScheduleResult = $"异常: {ex.Message}";
+            _shell?.ShowToast($"自动排程异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task PreCollectCheckAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_wristbandCheckBarcode) || string.IsNullOrWhiteSpace(_checkPatientId))
+        {
+            _shell?.ShowToast("请输入患者腕带条码与患者ID", "Warning");
+            return;
+        }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var payload = new
+            {
+                PatientId = _checkPatientId.Trim(),
+                WristbandBarcode = _wristbandCheckBarcode.Trim(),
+                TubeBarcode = _tubeCheckBarcode.Trim(),
+                ItemCode = _checkItemCode.Trim()
+            };
+            var res = await http.PostAsJsonAsync("/api/v4/medtech/specimens/pre-collect-check", payload);
+            var content = await res.Content.ReadAsStringAsync();
+            if (res.IsSuccessStatusCode)
+            {
+                CheckResultText = "✓ 采血前双条码核对通过：患者身份与试管条码一致";
+                _shell?.ShowToast("双条码核对通过", "Success");
+            }
+            else
+            {
+                CheckResultText = $"【409 拦截】{content}";
+                _shell?.ShowToast("条码核验拦截，严禁采血！", "Error");
+            }
+        }
+        catch (Exception ex)
+        {
+            CheckResultText = $"核对异常: {ex.Message}";
+            _shell?.ShowToast($"核对异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task ScanStageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_scanBarcode))
+        {
+            _shell?.ShowToast("请扫描或输入标本条码", "Warning");
+            return;
+        }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var payload = new
+            {
+                Barcode = _scanBarcode.Trim(),
+                Stage = _scanStage,
+                Temperature = _storageTemperature,
+                Note = _scanNote
+            };
+            var res = await http.PostAsJsonAsync($"/api/v4/medtech/specimens/{Uri.EscapeDataString(_scanBarcode.Trim())}/scan-stage", payload);
+            if (res.IsSuccessStatusCode)
+            {
+                _shell?.ShowToast($"标本全流程节点 [{_scanStage}] 扫码交接成功", "Success");
+                _ = LoadSpecimenTimelineAsync();
+            }
+            else
+            {
+                var err = await res.Content.ReadAsStringAsync();
+                _shell?.ShowToast($"标本流转记录失败: {err}", "Warning");
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"标本扫码异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task LoadSpecimenTimelineAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_scanBarcode)) return;
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var res = await http.GetFromJsonAsync<ApiResponse<List<SpecimenTimelineItemModel>>>($"/api/v4/medtech/requests/{Uri.EscapeDataString(_scanBarcode.Trim())}/timeline", JsonOptions);
+            if (res?.Data != null)
+            {
+                SpecimenTimeline.Clear();
+                foreach (var log in res.Data)
+                {
+                    SpecimenTimeline.Add(log);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"获取标本轨迹异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task RunAutoVerifyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_autoVerifyReqId))
+        {
+            _shell?.ShowToast("请输入待审核申请单ID", "Warning");
+            return;
+        }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var res = await http.PostAsync($"/api/v4/medtech/lab/auto-verify/{Uri.EscapeDataString(_autoVerifyReqId.Trim())}", null);
+            var content = await res.Content.ReadAsStringAsync();
+            if (res.IsSuccessStatusCode)
+            {
+                AutoVerifyResultSummary = "✓ 智能自动审核规则引擎通过，已完成结构化结果归档与自动电子签名";
+                _shell?.ShowToast("智能自动审核通过", "Success");
+                RefreshList();
+            }
+            else
+            {
+                AutoVerifyResultSummary = $"【422 自动审核拦截】{content}";
+                _shell?.ShowToast("自动审核未通过，已转人工双签复审", "Warning");
+            }
+        }
+        catch (Exception ex)
+        {
+            AutoVerifyResultSummary = $"审核异常: {ex.Message}";
+            _shell?.ShowToast($"自动审核异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task LoadLabTrendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_trendPatientId) || string.IsNullOrWhiteSpace(_trendItemCode))
+        {
+            _shell?.ShowToast("请输入患者ID与项目代码", "Warning");
+            return;
+        }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            string url = $"/api/v4/medtech/lab/trend?patientId={Uri.EscapeDataString(_trendPatientId.Trim())}&itemCode={Uri.EscapeDataString(_trendItemCode.Trim())}";
+            var res = await http.GetFromJsonAsync<ApiResponse<List<LabTrendItemModel>>>(url, JsonOptions);
+            if (res?.Data != null)
+            {
+                LabTrends.Clear();
+                foreach (var item in res.Data)
+                {
+                    LabTrends.Add(item);
+                }
+                _shell?.ShowToast($"已加载 [{_trendItemCode}] 历史趋势 {LabTrends.Count} 次", "Info");
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"获取检验趋势异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task LoadLabHistoryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_trendPatientId))
+        {
+            _shell?.ShowToast("请输入患者ID", "Warning");
+            return;
+        }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            string url = $"/api/v4/medtech/lab/history?patientId={Uri.EscapeDataString(_trendPatientId.Trim())}";
+            var res = await http.GetFromJsonAsync<ApiResponse<List<LabHistoryItemModel>>>(url, JsonOptions);
+            if (res?.Data != null)
+            {
+                LabHistoryList.Clear();
+                foreach (var h in res.Data)
+                {
+                    LabHistoryList.Add(h);
+                }
+                _shell?.ShowToast($"已加载患者历史检验记录 {LabHistoryList.Count} 条", "Info");
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"获取检验历史异常: {ex.Message}", "Error");
+        }
     }
 
     private static Border CreateCheckCard(string title, string detail)

@@ -20,11 +20,18 @@ public class EmrOfdRenderService
 
 	private readonly IRepository<EmrOfdLayoutSchema>? _layoutRepo;
 
-	public EmrOfdRenderService(IRepository<EmrOfdArchive> archiveRepo, IRepository<EmrDocTemplate>? templateRepo = null, IRepository<EmrOfdLayoutSchema>? layoutRepo = null)
+	private readonly IExternalTsaClient? _tsaClient;
+
+	public EmrOfdRenderService(
+		IRepository<EmrOfdArchive> archiveRepo,
+		IRepository<EmrDocTemplate>? templateRepo = null,
+		IRepository<EmrOfdLayoutSchema>? layoutRepo = null,
+		IExternalTsaClient? tsaClient = null)
 	{
 		_archiveRepo = archiveRepo;
 		_templateRepo = templateRepo;
 		_layoutRepo = layoutRepo;
+		_tsaClient = tsaClient;
 	}
 
 	public async Task<EmrOfdLayoutSchema?> ResolveLayoutForDocumentAsync(string? templateIdOrCode, string emrScene, string? overrideLayoutId = null, CancellationToken ct = default(CancellationToken))
@@ -104,7 +111,16 @@ public class EmrOfdRenderService
 		byte[] sm3Bytes = CryptoHelper.ComputeSm3Bytes(ofdBytes);
 		string sm3Digest = Convert.ToHexString(sm3Bytes).ToLowerInvariant();
 		string caSignSerialNo = $"CA-2026-{Math.Abs(signerName.GetHashCode()):X8}";
-		string tsaTimestampToken = TsaHelper.GenerateTimeStampToken(sm3Bytes);
+		string tsaTimestampToken;
+		if (_tsaClient != null)
+		{
+			var tsaResult = await _tsaClient.RequestTimestampAsync(sm3Bytes, ct);
+			tsaTimestampToken = tsaResult.TokenBase64;
+		}
+		else
+		{
+			tsaTimestampToken = TsaHelper.GenerateTimeStampToken(sm3Bytes);
+		}
 
 		string storageDir = Path.Combine("AppData", "OfdStorage");
 		Directory.CreateDirectory(storageDir);
@@ -153,7 +169,6 @@ public class EmrOfdRenderService
 			existingArchive.CaSignSerialNo = caSignSerialNo;
 			existingArchive.TsaTimestampToken = tsaTimestampToken;
 			existingArchive.GeneratedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-			existingArchive.VersionNo = doc.Status;
 			existingArchive.ExtDataJson = JsonSerializer.Serialize(new { signChain = signChainList });
 			await _archiveRepo.UpdateAsync(existingArchive, ct);
 			return existingArchive;

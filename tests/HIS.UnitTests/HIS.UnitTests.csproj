@@ -26,6 +26,14 @@
     <ProjectReference Include="..\..\src\Server\HIS.Modules.Inventory\HIS.Modules.Inventory.csproj" />
     <ProjectReference Include="..\..\src\Server\HIS.Modules.Operations\HIS.Modules.Operations.csproj" />
     <ProjectReference Include="..\..\src\Server\HIS.Modules.Patient\HIS.Modules.Patient.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.KnowledgeBase\HIS.Modules.KnowledgeBase.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.ClinicalPathway\HIS.Modules.ClinicalPathway.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.Treatment\HIS.Modules.Treatment.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.Monitoring\HIS.Modules.Monitoring.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.BloodBank\HIS.Modules.BloodBank.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.EmrQc\HIS.Modules.EmrQc.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.HieGateway\HIS.Modules.HieGateway.csproj" />
+    <ProjectReference Include="..\..\src\Server\HIS.Modules.Workflow\HIS.Modules.Workflow.csproj" />
     <ProjectReference Include="..\..\src\Server\HIS.Server.Host\HIS.Server.Host.csproj" />
   </ItemGroup>
 </Project>

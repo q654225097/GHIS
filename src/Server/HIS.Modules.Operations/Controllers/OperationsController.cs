@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.BuildingBlocks.Security;
@@ -15,9 +17,12 @@ namespace HIS.Modules.Operations.Controllers;
 
 [ApiController]
 [Route("api/v4/operations")]
-public class OperationsController : ControllerBase
+public partial class OperationsController : ControllerBase
 {
-	public sealed record AuditLogPagedResultDto(IReadOnlyList<OpsAuditEvent> Items, int TotalCount, int Page, int PageSize);
+	public sealed record AuditLogPagedResultDto(IReadOnlyList<OpsAuditEvent> Items, int TotalCount, int Page, int PageSize)
+	{
+		public int Total => TotalCount;
+	}
 
 	private readonly IRepository<OpsAuditEvent> _auditRepo;
 	private readonly IRepository<OpsOutboxMessage> _outboxRepo;
@@ -26,6 +31,7 @@ public class OperationsController : ControllerBase
 	private readonly IUserSession? _userSession;
 	private readonly SecurityIntrusionDetectionService? _idpsService;
 	private readonly KmsKeyLifecycleService? _kmsService;
+	private readonly IDbConnectionFactory? _connFactory;
 
 	public OperationsController(
 		IRepository<OpsAuditEvent> auditRepo,
@@ -34,7 +40,8 @@ public class OperationsController : ControllerBase
 		OutboxService outboxService,
 		IUserSession? userSession = null,
 		SecurityIntrusionDetectionService? idpsService = null,
-		KmsKeyLifecycleService? kmsService = null)
+		KmsKeyLifecycleService? kmsService = null,
+		IDbConnectionFactory? connFactory = null)
 	{
 		_auditRepo = auditRepo;
 		_outboxRepo = outboxRepo;
@@ -43,6 +50,7 @@ public class OperationsController : ControllerBase
 		_userSession = userSession;
 		_idpsService = idpsService;
 		_kmsService = kmsService;
+		_connFactory = connFactory;
 	}
 
 	[RequireAdmin]
@@ -52,35 +60,56 @@ public class OperationsController : ControllerBase
 		[FromQuery] string? targetEntity = null,
 		[FromQuery] string? userId = null,
 		[FromQuery] string? operatorName = null,
+		[FromQuery(Name = "operator")] string? op = null,
 		[FromQuery] long? startTimeMs = null,
 		[FromQuery] long? endTimeMs = null,
 		[FromQuery] int page = 1,
-		[FromQuery] int pageSize = 50)
+		[FromQuery] int pageSize = 50,
+		CancellationToken ct = default)
 	{
 		int safePage = Math.Max(1, page);
 		int safeSize = Math.Clamp(pageSize, 1, 200);
 		int offset = (safePage - 1) * safeSize;
+		string? effectiveOp = string.IsNullOrWhiteSpace(operatorName) ? op : operatorName;
 
-		var all = await _auditRepo.QueryAsync(@"
-SELECT * FROM ops_audit_events
+		var whereClause = @"
 WHERE (@EventType IS NULL OR event_type = @EventType)
   AND (@TargetEntity IS NULL OR target_entity = @TargetEntity)
   AND (@UserId IS NULL OR user_id = @UserId)
   AND (@OperatorName IS NULL OR operator_name LIKE '%' || @OperatorName || '%')
   AND (@StartTimeMs IS NULL OR created_at_ms >= @StartTimeMs)
-  AND (@EndTimeMs IS NULL OR created_at_ms <= @EndTimeMs)
-ORDER BY created_at_ms DESC, rowid DESC", new
+  AND (@EndTimeMs IS NULL OR created_at_ms <= @EndTimeMs)";
+
+		var p = new
 		{
 			EventType = string.IsNullOrWhiteSpace(eventType) ? null : eventType.Trim(),
 			TargetEntity = string.IsNullOrWhiteSpace(targetEntity) ? null : targetEntity.Trim(),
 			UserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim(),
-			OperatorName = string.IsNullOrWhiteSpace(operatorName) ? null : operatorName.Trim(),
+			OperatorName = string.IsNullOrWhiteSpace(effectiveOp) ? null : effectiveOp.Trim(),
 			StartTimeMs = startTimeMs,
-			EndTimeMs = endTimeMs
-		});
+			EndTimeMs = endTimeMs,
+			SafeSize = safeSize,
+			Offset = offset
+		};
 
-		var pagedItems = all.Skip(offset).Take(safeSize).ToList();
-		return ApiResponse<AuditLogPagedResultDto>.Success(new AuditLogPagedResultDto(pagedItems, all.Count, safePage, safeSize));
+		int totalCount = 0;
+		if (_connFactory != null)
+		{
+			using var conn = _connFactory.CreateConnection();
+			totalCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+				"SELECT count(*) FROM ops_audit_events " + whereClause, p, cancellationToken: ct));
+		}
+		else
+		{
+			totalCount = (await _auditRepo.QueryAsync("SELECT * FROM ops_audit_events " + whereClause, p, ct)).Count;
+		}
+
+		var pagedItems = (await _auditRepo.QueryAsync(@"
+SELECT * FROM ops_audit_events " + whereClause + @"
+ORDER BY created_at_ms DESC, rowid DESC
+LIMIT @SafeSize OFFSET @Offset", p, ct)).ToList();
+
+		return ApiResponse<AuditLogPagedResultDto>.Success(new AuditLogPagedResultDto(pagedItems, totalCount, safePage, safeSize));
 	}
 
 	[RequireAdmin]
@@ -147,6 +176,7 @@ LIMIT 1000", new
 
 	[RequireAdmin]
 	[HttpGet("audit-logs/verify-chain")]
+	[HttpGet("audit-logs/verify")]
 	public async Task<ApiResponse<AuditChainVerificationResult>> VerifyAuditChain()
 	{
 		AuditChainVerificationResult result = await _auditService.VerifyChainIntegrityAsync();

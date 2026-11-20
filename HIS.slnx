@@ -11,18 +11,26 @@
   <Folder Name="/src/Server/">
     <Project Path="src/Server/HIS.Modules.Config/HIS.Modules.Config.csproj" />
     <Project Path="src/Server/HIS.Modules.Consumables/HIS.Modules.Consumables.csproj" />
+    <Project Path="src/Server/HIS.Modules.ClinicalPathway/HIS.Modules.ClinicalPathway.csproj" />
+    <Project Path="src/Server/HIS.Modules.BloodBank/HIS.Modules.BloodBank.csproj" />
     <Project Path="src/Server/HIS.Modules.Emr/HIS.Modules.Emr.csproj" />
+    <Project Path="src/Server/HIS.Modules.EmrQc/HIS.Modules.EmrQc.csproj" />
     <Project Path="src/Server/HIS.Modules.Finance/HIS.Modules.Finance.csproj" />
+    <Project Path="src/Server/HIS.Modules.HieGateway/HIS.Modules.HieGateway.csproj" />
     <Project Path="src/Server/HIS.Modules.Inpatient/HIS.Modules.Inpatient.csproj" />
     <Project Path="src/Server/HIS.Modules.Integration/HIS.Modules.Integration.csproj" />
     <Project Path="src/Server/HIS.Modules.Inventory/HIS.Modules.Inventory.csproj" />
+    <Project Path="src/Server/HIS.Modules.KnowledgeBase/HIS.Modules.KnowledgeBase.csproj" />
     <Project Path="src/Server/HIS.Modules.MedTech/HIS.Modules.MedTech.csproj" />
+    <Project Path="src/Server/HIS.Modules.Monitoring/HIS.Modules.Monitoring.csproj" />
     <Project Path="src/Server/HIS.Modules.Operations/HIS.Modules.Operations.csproj" />
     <Project Path="src/Server/HIS.Modules.Ordering/HIS.Modules.Ordering.csproj" />
     <Project Path="src/Server/HIS.Modules.Outpatient/HIS.Modules.Outpatient.csproj" />
     <Project Path="src/Server/HIS.Modules.Patient/HIS.Modules.Patient.csproj" />
     <Project Path="src/Server/HIS.Modules.Pharmacy/HIS.Modules.Pharmacy.csproj" />
     <Project Path="src/Server/HIS.Modules.Platform/HIS.Modules.Platform.csproj" />
+    <Project Path="src/Server/HIS.Modules.Treatment/HIS.Modules.Treatment.csproj" />
+    <Project Path="src/Server/HIS.Modules.Workflow/HIS.Modules.Workflow.csproj" />
     <Project Path="src/Server/HIS.Server.Host/HIS.Server.Host.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -679,6 +679,44 @@ WHERE id = @Id", new { PatientId = req.PatientId, EncounterId = req.EncounterId,
         trace.UsedAtMs = now;
         trace.UsedBy = userId;
 
+        if (!string.IsNullOrWhiteSpace(req.EncounterId))
+        {
+            var csm = await conn.QuerySingleOrDefaultAsync<CsmConsumable>(
+                "SELECT * FROM csm_consumables WHERE id = @Id", new { Id = trace.ConsumableId });
+            decimal price = csm?.Price ?? 0m;
+            string csmName = csm?.Name ?? "高值医用耗材";
+            string csmCode = csm?.Code ?? trace.ConsumableId;
+            await conn.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO fin_inpatient_fee_items
+                    (id, encounter_id, patient_id, fee_date_int, item_category, item_code, item_name,
+                     spec, unit_name, unit_price, quantity, total_amount, self_pay_ratio, reimburse_type,
+                     charge_dept_id, exec_dept_id, order_id, is_settled, is_refunded,
+                     created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                VALUES
+                    (@Id, @EncounterId, @PatientId, @FeeDateInt, 'CONSUMABLE', @ItemCode, @ItemName,
+                     @Spec, @Unit, @UnitPrice, 1, @TotalPrice, 0, 'CLASS_A',
+                     '', '', @TraceCode, 0, 0,
+                     @Now, @UserId, @Now, @UserId, 1)
+                """,
+                new
+                {
+                    Id = Guid.NewGuid().ToString("D"),
+                    EncounterId = req.EncounterId,
+                    PatientId = req.PatientId,
+                    FeeDateInt = int.Parse(DateTimeOffset.UtcNow.ToString("yyyyMMdd")),
+                    ItemCode = csmCode,
+                    ItemName = csmName,
+                    Spec = csm?.Spec ?? "",
+                    Unit = csm?.Unit ?? "件",
+                    UnitPrice = price,
+                    TotalPrice = price,
+                    TraceCode = trace.TraceCode,
+                    Now = now,
+                    UserId = userId
+                }, cancellationToken: ct));
+        }
+
         if (_auditTrail != null)
         {
             await _auditTrail.RecordAuditAsync("CSM_TRACE_USE", "CsmTraceCode", trace.Id,

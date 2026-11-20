@@ -307,5 +307,287 @@
                 </Border>
             </Grid>
         </TabItem>
+
+        <!-- Tab 3: 检查智能预约与冲突检测 (Level 7) -->
+        <TabItem Header="检查智能预约与冲突检测">
+            <Grid ColumnDefinitions="*,440" Margin="0,12,0,0" ColumnSpacing="14">
+                <!-- 左侧：机位时隙与预约列表 -->
+                <Border Grid.Column="0" CornerRadius="8" Padding="14"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid RowDefinitions="Auto,Auto,*">
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,120,Auto,130,*,Auto" ColumnSpacing="8" Margin="0,0,0,12">
+                            <TextBlock Text="检查类型:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBox Grid.Column="1" Text="{Binding SelectedModality, Mode=TwoWay}" Height="30" FontSize="12"/>
+                            <TextBlock Grid.Column="2" Text="预约日期:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBox Grid.Column="3" Text="{Binding ExamSlotDate, Mode=TwoWay}" Height="30" FontSize="12"/>
+                            <Button Grid.Column="5" Content="查询机位时隙" Classes="Primary" Height="30"
+                                    Command="{Binding LoadExamSlotsCommand}"/>
+                        </Grid>
+
+                        <Grid Grid.Row="1" ColumnDefinitions="140,140,80,100,100,*" Margin="8,0,8,8">
+                            <TextBlock Grid.Column="0" Text="设备资源" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="预约时段" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="类型" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="3" Text="已约/容量" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="4" Text="状态" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="5" Text="时隙编号" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="2">
+                            <ItemsControl ItemsSource="{Binding ExamSlots}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:ExamSlotItemModel">
+                                        <Border Margin="0,3" Padding="8,8" CornerRadius="6"
+                                                Background="{DynamicResource SemiColorBackground0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <Grid ColumnDefinitions="140,140,80,100,100,*">
+                                                <TextBlock Grid.Column="0" Text="{Binding ResourceName}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding TimeRange}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Modality}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding CapacityText}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding IsAvailable, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=true, StringFormat='{}余量充足'}"
+                                                           Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding Id}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- 右侧：智能防冲突排程引擎 -->
+                <Border Grid.Column="1" CornerRadius="8" Padding="14"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <ScrollViewer>
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="智能防冲突自动排程引擎" FontSize="15" FontWeight="Bold"/>
+                            <TextBlock Text="自动检测检查禁忌冲突（如胃肠钡餐与腹部CT冲突排斥矩阵），智能锁定最优空闲时隙。" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="检查申请单与排程参数" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <TextBox Text="{Binding ScheduleRequestId, Mode=TwoWay}" PlaceholderText="检查申请单 ID (如 REQ-xxx)"/>
+                                    <Button Content="⚡ 一键防冲突智能预约排程" Classes="Primary" HorizontalAlignment="Stretch" Height="34"
+                                            Command="{Binding AutoScheduleExamCommand}"/>
+                                    <TextBlock Text="{Binding AutoScheduleResult}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="患者全院检查预约总日程" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                        <TextBox Grid.Column="0" Text="{Binding SchedulePatientId, Mode=TwoWay}" PlaceholderText="输入患者编号"/>
+                                        <Button Grid.Column="1" Content="查询日程" Classes="Secondary" Height="30"
+                                                Command="{Binding LoadHospitalScheduleCommand}"/>
+                                    </Grid>
+
+                                    <ItemsControl ItemsSource="{Binding HospitalAppointments}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="local:HospitalScheduleItemModel">
+                                                <Border Margin="0,3" Padding="8,6" Background="{DynamicResource SemiColorBackground1}" CornerRadius="4">
+                                                    <StackPanel Spacing="2">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <TextBlock Grid.Column="0" Text="{Binding ResourceName}" FontWeight="Bold" FontSize="12"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding SlotDate}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding ServiceItemCode, StringFormat='项目: {0}'}" FontSize="11"/>
+                                                        <TextBlock Text="{Binding StartTime, StringFormat='预约时间: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- Tab 4: 标本全流程闭环追踪 (Level 7) -->
+        <TabItem Header="标本全流程闭环追踪">
+            <Grid ColumnDefinitions="*,420" Margin="0,12,0,0" ColumnSpacing="14">
+                <!-- 左侧：标本生命周期轨迹日志 -->
+                <Border Grid.Column="0" CornerRadius="8" Padding="14"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid RowDefinitions="Auto,Auto,*">
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,12">
+                            <TextBlock Text="标本条码检索:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBox Grid.Column="1" Text="{Binding ScanBarcode, Mode=TwoWay}" PlaceholderText="扫描或输入标本试管条码 (如 SPEC-xxx)" Height="30" FontSize="12"/>
+                            <Button Grid.Column="2" Content="查看流转轨迹" Classes="Primary" Height="30"
+                                    Command="{Binding LoadSpecimenTimelineCommand}"/>
+                        </Grid>
+
+                        <Grid Grid.Row="1" ColumnDefinitions="140,120,100,100,*" Margin="8,0,8,8">
+                            <TextBlock Grid.Column="0" Text="流转阶段" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="操作人" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="温度环境" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="3" Text="时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="4" Text="交接备注" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="2">
+                            <ItemsControl ItemsSource="{Binding SpecimenTimeline}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:SpecimenTimelineItemModel">
+                                        <Border Margin="0,3" Padding="8,8" CornerRadius="6"
+                                                Background="{DynamicResource SemiColorBackground0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <Grid ColumnDefinitions="140,120,100,100,*">
+                                                <TextBlock Grid.Column="0" Text="{Binding Stage}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding OperatorId}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding StorageTemp}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding TimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding Notes}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- 右侧：PDA扫码交接与采血前双条码核对 -->
+                <Border Grid.Column="1" CornerRadius="8" Padding="14"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <ScrollViewer>
+                        <StackPanel Spacing="12">
+                            <!-- 采血前双条码核对 -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="采血前双条码比对核验 (身份安全红线)" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                    <TextBlock Text="严格校验患者腕带与试管条码一致性，并在24小时内比对重复采血指征。" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+
+                                    <TextBox Text="{Binding CheckPatientId, Mode=TwoWay}" PlaceholderText="患者编号 (Patient ID)"/>
+                                    <TextBox Text="{Binding WristbandCheckBarcode, Mode=TwoWay}" PlaceholderText="扫描患者腕带条码"/>
+                                    <TextBox Text="{Binding TubeCheckBarcode, Mode=TwoWay}" PlaceholderText="扫描检验试管条码"/>
+                                    <TextBox Text="{Binding CheckItemCode, Mode=TwoWay}" PlaceholderText="采血项目代码 (如 LAB_BLOOD_ROUTINE)"/>
+
+                                    <Button Content="PDA 双条码一致性核验" Classes="Warning" HorizontalAlignment="Stretch" Height="34"
+                                            Command="{Binding PreCollectCheckCommand}"/>
+                                    <TextBlock Text="{Binding CheckResultText}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 流转节点扫码 -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="标本流转节点扫码记录" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <TextBox Text="{Binding ScanStage, Mode=TwoWay}" PlaceholderText="流转阶段 (COLLECTED / SENT / RECEIVED / TESTING / VERIFIED / STORED)"/>
+                                    <TextBox Text="{Binding StorageTemperature, Mode=TwoWay}" PlaceholderText="标本冷链温度 (如 4℃)"/>
+                                    <TextBox Text="{Binding ScanNote, Mode=TwoWay}" PlaceholderText="交接说明 / 运输箱编号"/>
+                                    <Button Content="确认扫码节点交接" Classes="Primary" HorizontalAlignment="Stretch" Height="34"
+                                            Command="{Binding ScanStageCommand}"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- Tab 5: 检验智能审核与历史趋势 (Level 7) -->
+        <TabItem Header="检验智能审核与历史趋势">
+            <Grid ColumnDefinitions="*,440" Margin="0,12,0,0" ColumnSpacing="14">
+                <!-- 左侧：指标历史趋势与明细 -->
+                <Border Grid.Column="0" CornerRadius="8" Padding="14"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid RowDefinitions="Auto,Auto,*">
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,120,Auto,100,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,12">
+                            <TextBlock Text="患者ID:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBox Grid.Column="1" Text="{Binding TrendPatientId, Mode=TwoWay}" Height="30" FontSize="12"/>
+                            <TextBlock Grid.Column="2" Text="项目代码:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBox Grid.Column="3" Text="{Binding TrendItemCode, Mode=TwoWay}" Height="30" FontSize="12"/>
+                            <Button Grid.Column="4" Content="查询单项趋势" Classes="Primary" Height="30" Command="{Binding LoadLabTrendCommand}"/>
+                            <Button Grid.Column="5" Content="全量检验历史" Classes="Secondary" Height="30" Command="{Binding LoadLabHistoryCommand}"/>
+                        </Grid>
+
+                        <Grid Grid.Row="1" ColumnDefinitions="110,90,90,90,90,*" Margin="8,0,8,8">
+                            <TextBlock Grid.Column="0" Text="报告时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="测定值" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="单位" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="3" Text="参考范围" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="4" Text="异常标识" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="5" Text="危急值" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="2">
+                            <ItemsControl ItemsSource="{Binding LabTrends}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:LabTrendItemModel">
+                                        <Border Margin="0,3" Padding="8,8" CornerRadius="6"
+                                                Background="{DynamicResource SemiColorBackground0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <Grid ColumnDefinitions="110,90,90,90,90,*">
+                                                <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="11" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding ValString}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Unit}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding RefRange}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding AbnormalFlag}" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding IsCritical, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=1, StringFormat='{}危急值'}"
+                                                           Foreground="{DynamicResource SemiColorDanger}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- 右侧：规则引擎智能自动审核工作区 -->
+                <Border Grid.Column="1" CornerRadius="8" Padding="14"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <ScrollViewer>
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="检验智能自动审核规则引擎" FontSize="15" FontWeight="Bold"/>
+                            <TextBlock Text="全量比对极值、危急值、Delta Check (历史波动率超过红线)；正常标本自动签署电子封包，异常标本强制阻断转人工双签名复审。"
+                                       FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="执行自动审核" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <TextBox Text="{Binding AutoVerifyReqId, Mode=TwoWay}" PlaceholderText="待审核检验申请单 ID"/>
+                                    <Button Content="🤖 运行规则引擎自动审签" Classes="Primary" HorizontalAlignment="Stretch" Height="34"
+                                            Command="{Binding RunAutoVerifyCommand}"/>
+                                    <TextBlock Text="{Binding AutoVerifyResultSummary}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="全量检验项目一览" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <ItemsControl ItemsSource="{Binding LabHistoryList}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="local:LabHistoryItemModel">
+                                                <Border Margin="0,2" Padding="6,4" Background="{DynamicResource SemiColorBackground1}" CornerRadius="4">
+                                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding ItemName}" FontSize="11" FontWeight="SemiBold"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding ValString, StringFormat='{} = {0}'}" FontSize="11" Margin="8,0"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding AbnormalFlag}" FontSize="10" Foreground="{DynamicResource SemiColorWarning}"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </TabItem>
     </TabControl>
 </UserControl>

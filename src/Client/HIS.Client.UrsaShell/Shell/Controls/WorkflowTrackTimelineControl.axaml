@@ -1,0 +1,93 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
+             xmlns:local="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Shell.Controls.WorkflowTrackTimelineControl"
+             x:DataType="local:WorkflowTrackTimelineViewModel">
+    <Border Background="{DynamicResource SemiColorBackground0}"
+            BorderBrush="{DynamicResource SemiColorBorder}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="12">
+        <Grid RowDefinitions="Auto,*">
+            <!-- Current Stage Banner -->
+            <Border Grid.Row="0" Background="{DynamicResource SemiColorPrimaryLight}"
+                    CornerRadius="6" Padding="10,6" Margin="0,0,0,10"
+                    IsVisible="{Binding HasTracks}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="当前状态: " FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding CurrentStatusText}" FontWeight="Bold" FontSize="12" Foreground="{Binding StatusBrush}"/>
+                        <TextBlock Text=" | 当前节点: " FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding CurrentNodeText}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding TrackCountText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- Empty State -->
+            <Border Grid.Row="1" MinHeight="100" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    IsVisible="{Binding !HasTracks}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                    <TextBlock Text="⏳ 暂无流程流转轨迹" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="单据提交后将按审批流节点自动生成轨迹" FontSize="11" Foreground="{DynamicResource SemiColorText3}" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Timeline Items -->
+            <ScrollViewer Grid.Row="1" MaxHeight="450" IsVisible="{Binding HasTracks}">
+                <ItemsControl ItemsSource="{Binding Tracks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:WorkflowTrackDisplayModel">
+                            <Grid ColumnDefinitions="32,*" Margin="0,0,0,14">
+                                <!-- Timeline vertical line + icon indicator -->
+                                <Grid Grid.Column="0">
+                                    <!-- Vertical line connecting to next step -->
+                                    <Border Width="2" Background="{DynamicResource SemiColorBorder}" HorizontalAlignment="Center" Margin="0,16,0,-16"
+                                            IsVisible="{Binding !IsLastItem}"/>
+                                    <!-- Step Circle -->
+                                    <Border Width="24" Height="24" CornerRadius="12"
+                                            Background="{Binding ActionBrush}"
+                                            HorizontalAlignment="Center" VerticalAlignment="Top">
+                                        <TextBlock Text="{Binding ActionIcon}" Foreground="White" FontSize="11" FontWeight="Bold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+
+                                <!-- Step Content -->
+                                <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                                        CornerRadius="6" Padding="10,8" Margin="4,0,0,0">
+                                    <StackPanel Spacing="4">
+                                        <!-- Line 1: Node Name, Action Badge, Time -->
+                                        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding NodeName}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
+                                            <Border Grid.Column="1" Background="{Binding ActionBrush}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding ActionTitle}" FontSize="10" Foreground="White" FontWeight="Bold"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="3" Text="{Binding TimeString}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                        </Grid>
+
+                                        <!-- Line 2: Operator Name & ID -->
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="操作人:" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <TextBlock Text="{Binding OperatorName}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText0}"/>
+                                            <TextBlock Text="{Binding OperatorUserId, StringFormat='({0})'}" FontSize="10" Foreground="{DynamicResource SemiColorText3}"/>
+                                        </StackPanel>
+
+                                        <!-- Line 3: Comment Balloon if present -->
+                                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}"
+                                                BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="0,3,0,0"
+                                                IsVisible="{Binding HasComment}">
+                                            <TextBlock Text="{Binding Comment}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SemiColorText1}"/>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

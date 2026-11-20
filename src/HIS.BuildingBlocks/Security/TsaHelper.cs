@@ -60,7 +60,7 @@ public static class TsaHelper
 
         // 对 TSTInfo 进行国密签名封装
         string signature = CryptoHelper.SignSm2(tstInfoDer);
-        byte[] sigBytes = Encoding.UTF8.GetBytes(signature);
+        byte[] sigBytes = Convert.FromBase64String(signature);
 
         // 封装为 ContentInfo
         // id-ct-TSTInfo: 1.2.840.113549.1.9.16.1.4
@@ -97,11 +97,22 @@ public static class TsaHelper
             string policyOid = ((DerObjectIdentifier)tstInfo[1]).Id;
             var msgImprint = (Asn1Sequence)tstInfo[2];
             byte[] recordedDigest = ((DerOctetString)msgImprint[1]).GetOctets();
-            var genTime = ((DerGeneralizedTime)tstInfo[4]).ToDateTime();
+            var genTime = Asn1GeneralizedTime.GetInstance(tstInfo[4]).ToDateTime();
 
             if (!CryptographicOperations.FixedTimeEquals(recordedDigest, expectedDigest))
             {
                 return (false, genTime, policyOid, "时间戳绑定的哈希与原始数据摘要不一致");
+            }
+
+            if (innerSeq.Count < 2)
+            {
+                return (false, DateTime.MinValue, string.Empty, "RFC 3161 令牌缺少 SM2 签名节点");
+            }
+            byte[] sigBytes = ((DerOctetString)innerSeq[1]).GetOctets();
+            byte[] tstInfoBytes = tstInfo.GetDerEncoded();
+            if (!CryptoHelper.VerifySm2(tstInfoBytes, Convert.ToBase64String(sigBytes)))
+            {
+                return (false, DateTime.MinValue, string.Empty, "RFC 3161 时间戳 SM2 数字签名验证失败，Token 疑似伪造");
             }
 
             return (true, genTime, policyOid, null);

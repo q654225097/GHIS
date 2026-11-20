@@ -1,0 +1,243 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.WorkflowInbox"
+             x:Class="HIS.Client.UrsaShell.Stations.WorkflowInbox.WorkflowInboxStationView"
+             x:DataType="local:WorkflowInboxViewModel">
+    <Grid RowDefinitions="Auto,*" Background="{DynamicResource SemiColorBackground0}" Margin="16">
+        <!-- Top Header Strip -->
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                CornerRadius="8" Padding="14,10" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <TextBlock Text="统一审批工作中心" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="集中处理耗材请领、临床用血、病历跨科授权、药品调拨等全院审批业务" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding StatusNotice}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <Button Content="🔄 刷新" Classes="Secondary" Height="32" Padding="14,0" FontWeight="Bold"
+                            Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Workspace: Master List (Left) + Detail & Timeline (Right) -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,420" ColumnSpacing="12">
+            <!-- Left: 4 Tabs -->
+            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="12">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <!-- Tab Headers -->
+                    <TabControl Grid.Row="0" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}" Margin="0,0,0,8">
+                        <TabItem Header="我的待办"/>
+                        <TabItem Header="我的已办"/>
+                        <TabItem Header="抄送给我"/>
+                        <TabItem Header="我发起的"/>
+                    </TabControl>
+
+                    <!-- Content depending on tab -->
+                    <Grid Grid.Row="1">
+                        <!-- Tab 0: Todo List -->
+                        <ListBox ItemsSource="{Binding TodoTasks}"
+                                 SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                                 IsVisible="{Binding SelectedTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"
+                                 Background="Transparent" BorderThickness="0">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0,0,0,8"/>
+                                    <Setter Property="CornerRadius" Value="6"/>
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="local:WorkflowTaskDisplayItem">
+                                    <Border Padding="12,10" CornerRadius="6"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="4">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="3" Padding="6,1">
+                                                        <TextBlock Text="{Binding BoType}" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="Bold"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding InstanceNo}" FontWeight="Bold" FontSize="13"/>
+                                                    <Border Background="#FEF3C7" CornerRadius="3" Padding="4,1">
+                                                        <TextBlock Text="{Binding ModeBadge}" FontSize="10" Foreground="#D97706" FontWeight="SemiBold"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding BoSummary}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock Text="{Binding InitiatorName, StringFormat='发起人: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <TextBlock Text="{Binding InitiatorDeptName, StringFormat='科室: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <TextBlock Text="{Binding TimeString, StringFormat='发起时间: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText3}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- Status Tag & Current Node -->
+                                            <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="4">
+                                                <Border Background="#FEE2E2" CornerRadius="4" Padding="8,2" HorizontalAlignment="Right">
+                                                    <TextBlock Text="{Binding NodeName}" FontSize="11" Foreground="#DC2626" FontWeight="Bold"/>
+                                                </Border>
+                                                <TextBlock Text="待您办理" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" FontWeight="Bold" HorizontalAlignment="Right"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <!-- Tab 1: Done List -->
+                        <ListBox ItemsSource="{Binding DoneTasks}"
+                                 SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                                 IsVisible="{Binding SelectedTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=1}"
+                                 Background="Transparent" BorderThickness="0">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0,0,0,8"/>
+                                    <Setter Property="CornerRadius" Value="6"/>
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="local:WorkflowTaskDisplayItem">
+                                    <Border Padding="12,10" CornerRadius="6"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="4">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="3" Padding="6,1">
+                                                        <TextBlock Text="{Binding BoType}" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="Bold"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding InstanceNo}" FontWeight="Bold" FontSize="13"/>
+                                                    <TextBlock Text="{Binding NodeName, StringFormat='办理节点: {0}'}" FontSize="11" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding BoSummary}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <TextBlock Text="{Binding Comment, StringFormat='我的审批意见: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="1" Background="{Binding StatusBrush}" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding StatusBadge}" FontSize="11" Foreground="White" FontWeight="Bold"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <!-- Tab 2: CC List -->
+                        <ListBox ItemsSource="{Binding CcNotifications}"
+                                 SelectedItem="{Binding SelectedNotification, Mode=TwoWay}"
+                                 IsVisible="{Binding SelectedTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=2}"
+                                 Background="Transparent" BorderThickness="0">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0,0,0,8"/>
+                                    <Setter Property="CornerRadius" Value="6"/>
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="local:WorkflowNotificationDisplayItem">
+                                    <Border Padding="12,10" CornerRadius="6"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="4">
+                                                <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13"/>
+                                                <TextBlock Text="{Binding Content}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <TextBlock Text="{Binding TimeString}" FontSize="10" Foreground="{DynamicResource SemiColorText3}"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="1" Background="#EDE9FE" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
+                                                <TextBlock Text="抄送传阅" FontSize="11" Foreground="#7C3AED" FontWeight="Bold"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <!-- Tab 3: My Initiated List -->
+                        <ListBox ItemsSource="{Binding MyInitiatedTasks}"
+                                 SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                                 IsVisible="{Binding SelectedTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=3}"
+                                 Background="Transparent" BorderThickness="0">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0,0,0,8"/>
+                                    <Setter Property="CornerRadius" Value="6"/>
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="local:WorkflowTaskDisplayItem">
+                                    <Border Padding="12,10" CornerRadius="6"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="4">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{Binding InstanceNo}" FontWeight="Bold" FontSize="13"/>
+                                                    <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="3" Padding="6,1">
+                                                        <TextBlock Text="{Binding BoType}" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="Bold"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding BoSummary}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <TextBlock Text="{Binding TimeString, StringFormat='发起时间: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText3}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="撤回申请" Classes="Danger" Height="26" Padding="8,0" FontSize="11"
+                                                    Command="{Binding $parent[UserControl].((local:WorkflowInboxViewModel)DataContext).WithdrawCommand}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+
+                    <!-- Bottom Action Strip (Visible when a pending task is selected) -->
+                    <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground0}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                            CornerRadius="6" Padding="12,10" Margin="0,10,0,0"
+                            IsVisible="{Binding HasSelectedPendingTask}">
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="审批意见:" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding ActionComment, Mode=TwoWay}"
+                                         PlaceholderText="填写审批意见/核准说明..." Height="30" FontSize="12"/>
+                                <TextBlock Grid.Column="2" Text="转办工号:" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                <TextBox Grid.Column="3" Text="{Binding DelegateUserId, Mode=TwoWay}"
+                                         PlaceholderText="目标人员ID" Width="100" Height="30" FontSize="11"/>
+                            </Grid>
+
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="请选择审批动作:" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="✓ 同意 (APPROVE)" Classes="Primary" Height="30" Padding="14,0" FontWeight="Bold"
+                                        Command="{Binding ApproveCommand}"/>
+                                <Button Grid.Column="2" Content="✕ 拒绝 (REJECT)" Classes="Danger" Height="30" Padding="12,0" FontWeight="Bold"
+                                        Command="{Binding RejectCommand}"/>
+                                <Button Grid.Column="3" Content="↩ 驳回上一步" Classes="Warning" Height="30" Padding="10,0"
+                                        Command="{Binding ReturnPrevCommand}"/>
+                                <Button Grid.Column="4" Content="↩ 驳回发起人" Classes="Warning" Height="30" Padding="10,0"
+                                        Command="{Binding ReturnStartCommand}"/>
+                                <Button Grid.Column="5" Content="⇶ 转办" Classes="Secondary" Height="30" Padding="10,0"
+                                        Command="{Binding TransferCommand}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Right: Real-time Timeline & Business Snapshot -->
+            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="12">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" Text="实时审批流转时间轴" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
+                    <controls:WorkflowTrackTimelineControl Grid.Row="1" DataContext="{Binding TimelineViewModel}"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

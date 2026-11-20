@@ -27,4 +27,9 @@ public class MtcBloodRequest : BaseEntity
 	public short EmptyBagReturned { get; set; } = 0;
 
 	public int Status { get; set; } = 0;
+	public string ApprovalStatus { get; set; } = "DRAFT";
+	public string? WorkflowInstanceId { get; set; }
+	public long? SubmittedAtMs { get; set; }
+	public long? ApprovedAtMs { get; set; }
+	public string? ApprovedBy { get; set; }
 }

@@ -1,0 +1,269 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Monitoring"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Monitoring.MonitoringStationView"
+             x:DataType="local:MonitoringStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14">
+        <!-- 0. Station Action Toolbar -->
+        <Border Grid.Row="0" Margin="0,0,0,10" Padding="12,10" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="🚨 重症监护工作站 (06.04 ICU连续生命体征与危重评分)" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource SemiColorText0}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Content="＋ 绑定床位监护仪" Height="30" Classes="Secondary" Command="{Binding ToggleDeviceBindPanelCommand}"/>
+                    <Button Content="📝 采集录入体征流" Height="30" Classes="Secondary" Command="{Binding ToggleTelemetryInputPanelCommand}"/>
+                    <Button Content="🚨 未确认报警列表" Height="30" Classes="Warning" Command="{Binding ToggleAlarmsPanelCommand}"/>
+                    <Button Content="🔄 刷新监护数据" Height="30" Classes="Primary" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1" ColumnDefinitions="420,*">
+            <!-- Left: ICU Multi-Bed Live Dashboard -->
+            <Border Grid.Column="0" Margin="0,0,10,0" Padding="12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" Text="在院监护床位实时视图:" FontWeight="Bold" FontSize="13" Margin="0,0,0,8"/>
+
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding Beds}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:IcuBedTelemetryItem">
+                                    <Button Classes="Tertiary" HorizontalAlignment="Stretch" Padding="0" Margin="0,4"
+                                            Command="{Binding $parent[UserControl].((local:MonitoringStationViewModel)DataContext).SelectBedCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border Padding="10" CornerRadius="6"
+                                                Background="{DynamicResource SemiColorBackground0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}"
+                                                BorderThickness="1.5">
+                                            <StackPanel Spacing="6">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <Border Grid.Column="0" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                                                        <TextBlock Text="{Binding BedCode}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="1" Text="{Binding PatientName}" FontWeight="Bold" FontSize="13" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                                    <controls:StatusTag Grid.Column="2" Text="危急报警" Kind="Danger" IsVisible="{Binding HasAlarm}"/>
+                                                    <controls:StatusTag Grid.Column="2" Text="正常监护" Kind="Success" IsVisible="{Binding !HasAlarm}"/>
+                                                </Grid>
+
+                                                <!-- Telemetry Grid -->
+                                                <Grid ColumnDefinitions="*,*,*,*" Margin="0,4">
+                                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                                        <TextBlock Text="{Binding Hr, StringFormat='{}心率 {0}'}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorDanger}"/>
+                                                        <TextBlock Text="bpm" FontSize="10" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                                        <TextBlock Text="{Binding Bp, StringFormat='{}BP {0}'}" FontWeight="Bold" FontSize="12"/>
+                                                        <TextBlock Text="mmHg" FontSize="10" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                                        <TextBlock Text="{Binding Spo2, StringFormat='{}SpO2 {0}%'}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                        <TextBlock Text="%" FontSize="10" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                                        <TextBlock Text="{Binding TempC, StringFormat='{}T {0}℃'}" FontWeight="Bold" FontSize="12"/>
+                                                        <TextBlock Text="℃" FontSize="10" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <Border Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="6,3" IsVisible="{Binding HasAlarm}">
+                                                    <TextBlock Text="{Binding AlarmMessage}" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Right: Detail, Risk Scores, Panels -->
+            <Border Grid.Column="1" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+                <ScrollViewer>
+                    <StackPanel Spacing="12">
+                        <!-- Panel: Device Bind Form (Toggleable) -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1.5" CornerRadius="6" Padding="12" IsVisible="{Binding ShowDeviceBindPanel}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="🔌 监护设备床位绑定登记" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <Grid ColumnDefinitions="*,*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,6,0" Spacing="2">
+                                        <TextBlock Text="设备序列号/编码:" FontSize="11"/>
+                                        <TextBox Text="{Binding BindDeviceCode, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="3,0,3,0" Spacing="2">
+                                        <TextBlock Text="设备型号名称:" FontSize="11"/>
+                                        <TextBox Text="{Binding BindDeviceName, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Margin="6,0,0,0" Spacing="2">
+                                        <TextBlock Text="绑定床位号:" FontSize="11"/>
+                                        <TextBox Text="{Binding BindBedCode, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                    <Button Content="取消" Height="30" Classes="Tertiary" Command="{Binding ToggleDeviceBindPanelCommand}"/>
+                                    <Button Content="确认绑定床位" Height="30" Classes="Primary" Command="{Binding BindDeviceCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Panel: Telemetry Stream Input (Toggleable) -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorSuccess}" BorderThickness="1.5" CornerRadius="6" Padding="12" IsVisible="{Binding ShowTelemetryInputPanel}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="📊 连续生命体征采集录入 (自动触发越限报警检测)" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                <Grid ColumnDefinitions="*,*,*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,4,0" Spacing="2">
+                                        <TextBlock Text="心率 HR (bpm):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding InputHr, Mode=TwoWay}" Minimum="20" Maximum="250" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="4,0,4,0" Spacing="2">
+                                        <TextBlock Text="呼吸 RR (次/分):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding InputRr, Mode=TwoWay}" Minimum="5" Maximum="60" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Margin="4,0,4,0" Spacing="2">
+                                        <TextBlock Text="收缩压 SysBP (mmHg):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding InputSysBp, Mode=TwoWay}" Minimum="40" Maximum="260" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" Margin="4,0,0,0" Spacing="2">
+                                        <TextBlock Text="舒张压 DiaBP (mmHg):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding InputDiaBp, Mode=TwoWay}" Minimum="20" Maximum="160" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*,*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,4,0" Spacing="2">
+                                        <TextBlock Text="血氧 SpO2 (%):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding InputSpo2, Mode=TwoWay}" Minimum="50" Maximum="100" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="4,0,4,0" Spacing="2">
+                                        <TextBlock Text="体温 Temp (℃):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding InputTempC, Mode=TwoWay}" Minimum="30" Maximum="45" Increment="0.1" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Margin="4,0,4,0" Spacing="2">
+                                        <TextBlock Text="中心静脉压 CVP (cmH2O):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding InputCvp, Mode=TwoWay}" Minimum="0" Maximum="30" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" Margin="4,0,0,0" Spacing="2">
+                                        <TextBlock Text="格拉斯哥 GCS (分):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding InputGcs, Mode=TwoWay}" Minimum="3" Maximum="15" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                    <Button Content="取消" Height="30" Classes="Tertiary" Command="{Binding ToggleTelemetryInputPanelCommand}"/>
+                                    <Button Content="采集上报数据并检测报警" Height="30" Classes="Primary" Command="{Binding IngestTelemetryCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Panel: Alarms List (Toggleable) -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="1.5" CornerRadius="6" Padding="12" IsVisible="{Binding ShowAlarmsPanel}">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="🚨 未确认监护报警事件队列:" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                <ItemsControl ItemsSource="{Binding Alarms}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:MonAlarmItem">
+                                            <Border Margin="0,2" Padding="8,4" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4">
+                                                <Grid ColumnDefinitions="80,100,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <controls:StatusTag Grid.Column="1" Text="{Binding Severity}" Kind="Danger"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Message}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                    <Button Grid.Column="3" Content="签收解除" Classes="Tertiary" Height="26" Command="{Binding $parent[UserControl].((local:MonitoringStationViewModel)DataContext).AckAlarmCommand}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Selected Bed Banner -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                                            <TextBlock Text="{Binding SelectedBed.BedCode, FallbackValue='未选床位'}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding SelectedBed.PatientName, FallbackValue='请从左侧选择床位'}" FontWeight="Bold" FontSize="15"/>
+                                        <TextBlock Text="{Binding SelectedBed.DeviceCode, StringFormat='[设备: {0}]', FallbackValue='[未绑设备]'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding SelectedBed.Diagnosis, StringFormat='临床诊断: {0}', FallbackValue='-'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                    <Button Content="🔔 签收报警" Classes="Warning" Height="32" Command="{Binding AckAlarmCommand}" IsVisible="{Binding SelectedBed.HasAlarm}"/>
+                                    <Button Content="📊 重新计算重症评分" Classes="Primary" Height="32" Command="{Binding CalculateScoresCommand}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Risk Scores Row (APACHE II, SOFA, MEWS) -->
+                        <Grid ColumnDefinitions="*,*,*" Margin="0,4">
+                            <Border Grid.Column="0" Margin="0,0,6,0" Padding="12" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="4" HorizontalAlignment="Center">
+                                    <TextBlock Text="APACHE II 急性生理评分" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding SelectedBed.Apache2Score, StringFormat='{}{0} 分'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding SelectedBed.RiskLevel, StringFormat='风险评估: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Margin="3,0" Padding="12" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="4" HorizontalAlignment="Center">
+                                    <TextBlock Text="SOFA 多器官功能衰竭评分" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding SelectedBed.SofaScore, StringFormat='{}{0} 分'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="多器官综合受损指征" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2" Margin="6,0,0,0" Padding="12" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="4" HorizontalAlignment="Center">
+                                    <TextBlock Text="MEWS 早期预警评分" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding SelectedBed.MewsScore, StringFormat='{}{0} 分'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="快速反应小组 (RRT) 联动" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Real-time Physiological Stream Breakdown -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="连续监测时序生命体征细项" FontWeight="Bold" FontSize="13"/>
+                                <Grid ColumnDefinitions="*,*,*,*">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="中心静脉压 (CVP):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Text="{Binding SelectedBed.Cvp, StringFormat='{}{0} cmH2O'}" FontWeight="Bold" FontSize="14"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="格拉斯哥昏迷 (GCS):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Text="{Binding SelectedBed.Gcs, StringFormat='{}{0} 分'}" FontWeight="Bold" FontSize="14"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="呼吸频率 (RR):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Text="{Binding SelectedBed.Rr, StringFormat='{}{0} 次/分'}" FontWeight="Bold" FontSize="14"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3">
+                                        <TextBlock Text="脉搏血氧 (SpO2):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Text="{Binding SelectedBed.Spo2, StringFormat='{}{0}%'}" FontWeight="Bold" FontSize="14"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- CDSS & Guideline Guidance -->
+                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="12">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="💡 CDSS 智能诊疗决策支持与专家知识库建议" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <TextBlock Text="{Binding KbGuidance}" FontSize="12" Foreground="{DynamicResource SemiColorText0}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

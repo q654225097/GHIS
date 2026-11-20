@@ -21,4 +21,20 @@ public class OrdExecutionPlan : BaseEntity
 	public long? ExecutedAtMs { get; set; }
 
 	public string? PdaScanToken { get; set; }
+
+	public string? PatientWristbandCode { get; set; }
+
+	public string? ItemBarcode { get; set; }
+
+	public int ScanMatched { get; set; } = 0;
+
+	public long? InfusionStartMs { get; set; }
+
+	public long? InfusionEndMs { get; set; }
+
+	public string? HighRiskWarningJson { get; set; }
+
+	public string? HighRiskAckBy { get; set; }
+
+	public string? ClinicalCheckSnapshotJson { get; set; }
 }

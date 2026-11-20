@@ -1,0 +1,312 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.BloodBank"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.BloodBank.BloodBankStationView"
+             x:DataType="local:BloodBankStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14">
+        <!-- 0. Station Action Toolbar -->
+        <Border Grid.Row="0" Margin="0,0,0,10" Padding="12,10" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="🩸 血库工作站 (07.01/07.02 输血全流程闭环)" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource SemiColorText0}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Content="＋ 血袋扫码入库" Height="30" Classes="Secondary" Command="{Binding ToggleStockInPanelCommand}"/>
+                    <Button Content="📝 临床用血申请" Height="30" Classes="Secondary" Command="{Binding ToggleNewReqPanelCommand}"/>
+                    <Button Content="⚠ 输血反应登记" Height="30" Classes="Warning" Command="{Binding ToggleReactionPanelCommand}"/>
+                    <Button Content="🌐 同步外部血站" Height="30" Classes="Tertiary" Command="{Binding SyncExternalBloodCenterCommand}"/>
+                    <Button Content="🔄 刷新数据" Height="30" Classes="Primary" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content Grid -->
+        <Grid Grid.Row="1" ColumnDefinitions="420,*">
+            <!-- Left: Advisory, Patient Blood Distribution & Request Queue -->
+            <Border Grid.Column="0" Margin="0,0,10,0" Padding="12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+                <Grid RowDefinitions="Auto,Auto,Auto,*">
+                    <!-- 1. Smart Stock Advisory -->
+                    <Border Grid.Row="0" Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="6" Padding="10" Margin="0,0,0,8">
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="🩸 智能备血与拟手术血型需求预警" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}"/>
+                            <TextBlock Text="{Binding StockAdvisoryText}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SemiColorText0}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 2. Patient Blood Type Distribution -->
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,8">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="👥 在院患者血型分布统计:" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorText1}"/>
+                            <ItemsControl ItemsSource="{Binding PatientBloodDistribution}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:PatientBloodDistItem">
+                                        <Border Margin="0,2,6,2" Padding="6,2" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4">
+                                            <TextBlock Text="{Binding DisplayText}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Grid.Row="2" Text="待处置临床用血申请队列:" FontWeight="Bold" FontSize="13" Margin="0,0,0,6"/>
+
+                    <!-- 3. Requests List -->
+                    <ScrollViewer Grid.Row="3">
+                        <ItemsControl ItemsSource="{Binding Requests}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:BloodRequestItem">
+                                    <Button Classes="Tertiary" HorizontalAlignment="Stretch" Padding="0" Margin="0,3"
+                                            Command="{Binding $parent[UserControl].((local:BloodBankStationViewModel)DataContext).SelectRequestCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border Padding="10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="4">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding PatientName}" FontWeight="Bold" FontSize="13"/>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                        <Border Background="{Binding ApprovalBadgeBrush}" CornerRadius="3" Padding="4,1" IsVisible="{Binding WorkflowInstanceId, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                            <TextBlock Text="{Binding ApprovalBadgeText}" FontSize="10" Foreground="White" FontWeight="Bold"/>
+                                                        </Border>
+                                                        <controls:StatusTag Text="{Binding StatusText}" Kind="Primary"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                                <Grid ColumnDefinitions="*,*">
+                                                    <TextBlock Grid.Column="0" Text="{Binding BloodGroup, StringFormat='血型: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding VarietyName, StringFormat='品种: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </Grid>
+                                                <Grid ColumnDefinitions="*,*">
+                                                    <TextBlock Grid.Column="0" Text="{Binding AmountRequested, StringFormat='申请量: {0} ml'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding LatestHgb, StringFormat='最新HGB: {0}g/L'}" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold"/>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Right: Details, Forms, Crossmatch, Dual Dispense, In-Stock Bags -->
+            <Border Grid.Column="1" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+                <ScrollViewer>
+                    <StackPanel Spacing="12">
+                        <!-- Panel: Stock In Form (Toggleable) -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1.5" CornerRadius="6" Padding="12" IsVisible="{Binding ShowStockInPanel}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="📦 血袋扫码入库登记" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <Grid ColumnDefinitions="*,*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,6,0" Spacing="2">
+                                        <TextBlock Text="血袋唯一码 (扫码):" FontSize="11"/>
+                                        <TextBox Text="{Binding StockInBarcode, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="3,0,3,0" Spacing="2">
+                                        <TextBlock Text="献血编号:" FontSize="11"/>
+                                        <TextBox Text="{Binding StockInDonationCode, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Margin="6,0,0,0" Spacing="2">
+                                        <TextBlock Text="血液品种:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.BloodCodeOptions}" SelectedItem="{Binding StockInBloodCode, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*,*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,4,0" Spacing="2">
+                                        <TextBlock Text="ABO 血型:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.AboOptions}" SelectedItem="{Binding StockInAbo, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="4,0,4,0" Spacing="2">
+                                        <TextBlock Text="Rh(D) 血型:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.RhOptions}" SelectedItem="{Binding StockInRh, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Margin="4,0,4,0" Spacing="2">
+                                        <TextBlock Text="容量 (ml):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding StockInVolume, Mode=TwoWay}" Minimum="50" Maximum="1000" Increment="50" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" Margin="4,0,0,0" Spacing="2">
+                                        <TextBlock Text="冷链测温 (℃):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding StockInTemp, Mode=TwoWay}" Minimum="0" Maximum="20" Increment="0.1" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                    <Button Content="取消" Height="30" Classes="Tertiary" Command="{Binding ToggleStockInPanelCommand}"/>
+                                    <Button Content="确认扫码入库" Height="30" Classes="Primary" Command="{Binding StockInBagCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Panel: New Blood Request Form (Toggleable) -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorSuccess}" BorderThickness="1.5" CornerRadius="6" Padding="12" IsVisible="{Binding ShowNewReqPanel}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="📝 临床用血申请开立 (自动关联在院患者与最新 HGB)" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                <Grid ColumnDefinitions="*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,6,0" Spacing="2">
+                                        <TextBlock Text="在院患者选择:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{Binding InpatientOptions}" SelectedItem="{Binding SelectedInpatient, Mode=TwoWay}" DisplayMemberBinding="{Binding DisplayText}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="6,0,0,0" Spacing="2">
+                                        <TextBlock Text="申请血液品种:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.BloodCodeOptions}" SelectedItem="{Binding ReqBloodCode, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,6,0" Spacing="2">
+                                        <TextBlock Text="申请用量 (ml):" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding ReqVolume, Mode=TwoWay}" Minimum="100" Maximum="2000" Increment="100" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="6,0,0,0" Spacing="2">
+                                        <TextBlock Text="用血指征说明:" FontSize="11"/>
+                                        <TextBox Text="{Binding ReqReason, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                    <Button Content="取消" Height="30" Classes="Tertiary" Command="{Binding ToggleNewReqPanelCommand}"/>
+                                    <Button Content="提交申请并进行合理性审核" Height="30" Classes="Primary" Command="{Binding SubmitRequestCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Panel: Transfusion Reaction Report (Toggleable) -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="1.5" CornerRadius="6" Padding="12" IsVisible="{Binding ShowReactionPanel}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="⚠ 输血不良反应紧急处置与联网上报" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                <Grid ColumnDefinitions="*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,6,0" Spacing="2">
+                                        <TextBlock Text="反应类型:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.ReactionTypeOptions}" SelectedItem="{Binding ReactionType, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="6,0,0,0" Spacing="2">
+                                        <TextBlock Text="严重程度:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.SeverityOptions}" SelectedItem="{Binding ReactionSeverity, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="临床症状表现:" FontSize="11"/>
+                                    <TextBox Text="{Binding ReactionSymptoms, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="紧急处置措施与用药:" FontSize="11"/>
+                                    <TextBox Text="{Binding ReactionDisposition, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                    <Button Content="取消" Height="30" Classes="Tertiary" Command="{Binding ToggleReactionPanelCommand}"/>
+                                    <Button Content="上报血库及区域平台" Height="30" Classes="Danger" Command="{Binding SubmitReactionCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Selected Request Banner -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock Text="{Binding SelectedRequest.PatientName, FallbackValue='请从左侧选择临床用血申请'}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <TextBlock Text="{Binding SelectedRequest.BloodGroup, StringFormat='患者血型: {0}', FallbackValue='-'}" FontWeight="Bold" FontSize="12"/>
+                                        <TextBlock Text="{Binding SelectedRequest.VarietyName, StringFormat='品种: {0}', FallbackValue='-'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBlock Text="{Binding SelectedRequest.AmountRequested, StringFormat='申请量: {0} ml', FallbackValue='-'}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorDanger}"/>
+                                        <TextBlock Text="{Binding SelectedRequest.BagBarcode, StringFormat='绑定血袋: {0}', FallbackValue='尚未绑定'}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <controls:StatusTag Grid.Column="1" Text="{Binding SelectedRequest.StatusText, FallbackValue='待处理'}" Kind="Warning"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Rational Blood Use Check Result -->
+                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="10">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="📋 合理用血规则智能核查 (依据国家卫健委临床输血规范)" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" FontSize="12"/>
+                                <TextBlock Text="{Binding SelectedRequest.RationalCheckResult, FallbackValue='暂无核查结论'}" FontSize="11" Foreground="{DynamicResource SemiColorText0}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Step 1: Crossmatch Section -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="环节一：实验室 ABO/Rh 交叉配血核验 (主/次侧凝集强校验)" FontWeight="Bold" FontSize="13"/>
+                                <Grid ColumnDefinitions="*,*">
+                                    <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
+                                        <TextBlock Text="配血检验师 (操作人):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding CrossmatchTechnician, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
+                                        <TextBlock Text="复核检验师 (复核人):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding CrossmatchVerifier, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*,*">
+                                    <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
+                                        <TextBlock Text="不规则抗体筛查:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.AntibodyScreenOptions}" SelectedItem="{Binding AntibodyScreen, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,4,0">
+                                        <TextBlock Text="主侧配血:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.CompatibilityOptions}" SelectedItem="{Binding MajorCrossmatch, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Spacing="2" Margin="4,0,0,0">
+                                        <TextBlock Text="次侧配血:" FontSize="11"/>
+                                        <ComboBox ItemsSource="{x:Static local:BloodBankStationViewModel.CompatibilityOptions}" SelectedItem="{Binding MinorCrossmatch, Mode=TwoWay}" Height="30" HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Button Content="🔬 执行交叉配血核验 (相容方可继续，不合由后端强拦截)" Classes="Secondary" Height="34" Command="{Binding PerformCrossmatchCommand}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Step 2: Dual Check Dispense Section -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="环节二：血库出库双人双签核发 (发血闭环与过程签名)" FontWeight="Bold" FontSize="13"/>
+                                <Grid ColumnDefinitions="*,*">
+                                    <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
+                                        <TextBlock Text="发血第一人 (操作人):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding DispenseStaff1, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
+                                        <TextBlock Text="发血第二复核人 (工号):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        <TextBox Text="{Binding DispenseStaff2, Mode=TwoWay}" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Button Content="✓ 双人电子签名完成发血出库" Classes="Primary" Height="36" FontWeight="Bold" Command="{Binding DualCheckDispenseCommand}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- In-Stock Blood Bags Real Table -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="血库当前在库实物血袋清单 (冷链温控监控中):" FontWeight="Bold" FontSize="12"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding InventoryBags.Count, StringFormat='在库总计: {0} 袋'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding InventoryBags}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:BloodBagItem">
+                                            <Border Margin="0,2" Padding="8,5" Background="{DynamicResource SemiColorBackground1}" CornerRadius="4">
+                                                <Grid ColumnDefinitions="140,160,90,80,80,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding BagBarcode}" FontWeight="Bold" FontSize="11"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding VarietyName}" FontSize="11"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding BloodGroup}" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}" FontSize="11"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding VolumeMl, StringFormat='{}{0} ml'}" FontSize="11"/>
+                                                    <TextBlock Grid.Column="4" Text="{Binding ColdChainTemp, StringFormat='{}{0}℃'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                    <TextBlock Grid.Column="5" Text="{Binding ExpireDate, StringFormat='效期至: {0}'}" Foreground="{DynamicResource SemiColorText2}" FontSize="11"/>
+                                                    <controls:StatusTag Grid.Column="6" Text="{Binding StatusText}" Kind="Success"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,128 +1,350 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:HIS.Client.UrsaShell.Stations.Analytics"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
              x:Class="HIS.Client.UrsaShell.Stations.Analytics.AnalyticsStationView"
              x:DataType="local:AnalyticsStationViewModel">
-    <DockPanel Margin="16">
-        <!-- Top Title Bar -->
-        <Border DockPanel.Dock="Top" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16,12">
-            <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="全院医疗运营统计分析工作站 (BI / 院长决策看板)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
-                    <TextBlock Text="全院门急诊流量、住院床位周转、药占比监管、财务日结总览与医疗质控等保安全运营态势" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="0,4,0,0"/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button Content="导出综合报表 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="overview" Classes="Primary" Height="32"/>
-                    <Button Content="刷新数据" Command="{Binding RefreshCommand}" Height="32"/>
-                </StackPanel>
+    <TabControl SelectedIndex="{Binding SelectedTabIndex}" Margin="12,8,12,12">
+        <!-- TAB 1: 运营决策看板 -->
+        <TabItem Header="📊 全院运营决策看板">
+            <DockPanel Margin="0,12,0,0">
+                <!-- Top Title Bar -->
+                <Border DockPanel.Dock="Top" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16,12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="全院医疗运营统计分析工作站 (BI / 院长决策看板)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                            <TextBlock Text="全院门急诊流量、住院床位周转、药占比监管、财务日结总览与医疗质控等保安全运营态势" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button Content="导出综合报表 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="overview" Classes="Primary" Height="32"/>
+                            <Button Content="刷新数据" Command="{Binding RefreshCommand}" Height="32"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- KPI Summary Cards Row -->
+                <Border DockPanel.Dock="Top" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid ColumnDefinitions="*,*,*,*,*,*" ColumnSpacing="12">
+                        <!-- Card 1: 门诊 -->
+                        <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="今日在诊/就诊" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding ActiveOutpatientVisits, StringFormat='{}{0} 人'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <TextBlock Text="{Binding TotalRegisteredPatients, StringFormat='累计建档 {0} 人'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Card 2: 住院 -->
+                        <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="在院患者 / 额定床位" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding OccupiedBeds, StringFormat='{}{0} 床'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                <TextBlock Text="{Binding TotalBeds, StringFormat='总床位 {0} 张'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Card 3: 床位使用率 -->
+                        <Border Grid.Column="2" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="床位使用率" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding BedOccupancyRate, StringFormat='{}{0:F1}%'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
+                                <TextBlock Text="考核基线 &gt; 85%" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Card 4: 今日营收 -->
+                        <Border Grid.Column="3" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="全院结算收入" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding TotalRevenue, StringFormat='¥{0:F2}'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                                <TextBlock Text="门急诊+住院预交" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Card 5: 药占比 -->
+                        <Border Grid.Column="4" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="药费占比 (公立医院考核)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding PharmacyRatio, StringFormat='{}{0:F1}%'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                <TextBlock Text="{Binding PharmacyRevenue, StringFormat='药费 ¥{0:F2}'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Card 6: 质控与安全 -->
+                        <Border Grid.Column="5" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="危急值待闭环" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding PendingCriticalValues, StringFormat='{}{0} 例'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                <TextBlock Text="{Binding UnresolvedSecurityAlerts, StringFormat='等保待处置告警: {0}'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Detailed Domain Panels -->
+                <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="16">
+                            <!-- Domain 1: 门诊运营 -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="门急诊诊疗与挂号指标" FontSize="14" FontWeight="Bold"/>
+                                        <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="outpatient" Height="26" Padding="8,0"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding OutpatientSummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Domain 2: 住院运营 -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="住院病区周转与医嘱负荷" FontSize="14" FontWeight="Bold"/>
+                                        <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="inpatient" Height="26" Padding="8,0"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding InpatientSummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Domain 3: 药事与进销存 -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="药事进销存、效期与库存货值" FontSize="14" FontWeight="Bold"/>
+                                        <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="pharmacy" Height="26" Padding="8,0"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding PharmacySummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Domain 4: 医疗质控与等保安全 -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="医疗安全、病案归档与等保合规态势" FontSize="14" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding QualitySummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </DockPanel>
+        </TabItem>
+
+        <!-- TAB 2: 自定义报表与动态SQL查询 -->
+        <TabItem Header="📑 自定义报表与动态SQL查询">
+            <Grid RowDefinitions="Auto,*" Margin="0,12,0,0" RowSpacing="10">
+                <!-- Top Toolbar -->
+                <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <TextBlock Text="自定义SQL报表工作台" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                                <controls:StatusTag Text="参数化查询引擎" Kind="Primary"/>
+                            </StackPanel>
+                            <TextBlock Text="管理员可输入只读SQL并配置参数占位符（如 @StartDate、@EndDate、@DeptName），动态生成WHERE条件进行报表即席分析" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button Content="刷新报表列表" Command="{Binding RefreshReportsCommand}" Height="32"/>
+                            <Button Content="＋ 新建自定义报表" Command="{Binding OpenNewReportDesignerCommand}" Classes="Primary" Height="32"
+                                    IsVisible="{Binding IsAdmin}" ToolTip.Tip="仅系统管理员可创建自定义 SQL 报表"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Main Content 2-Column Grid -->
+                <Grid Grid.Row="1" ColumnDefinitions="310,*" ColumnSpacing="12">
+                    <!-- Left Column: Report List -->
+                    <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                            <!-- Filter row -->
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding SearchKeyword, Mode=TwoWay}" PlaceholderText="搜索报表名称或编码..." Height="30" FontSize="12"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory, Mode=TwoWay}" Width="100" Height="30" FontSize="12"/>
+                            </Grid>
+
+                            <TextBlock Grid.Row="1" Text="{Binding FilteredReports.Count, StringFormat='可用报表模板 ({0})'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+
+                            <!-- ListBox -->
+                            <ListBox Grid.Row="2" ItemsSource="{Binding FilteredReports}" SelectedItem="{Binding SelectedReport, Mode=TwoWay}"
+                                     Background="Transparent" BorderThickness="0">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:AnalyticsStationViewModel+ReportDefinitionItemModel">
+                                        <Border Padding="10,8" Margin="0,2" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="4">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding ReportName}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap"/>
+                                                    <controls:StatusTag Grid.Column="1" Text="{Binding Category}" Kind="{Binding CategoryBadgeKind}"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding ReportCode}" FontFamily="Consolas,Menlo,Monospace" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- Right Column: Designer OR Execution View -->
+                    <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Panel>
+                            <!-- Mode 1: Admin Designer -->
+                            <Grid RowDefinitions="Auto,*" RowSpacing="12" IsVisible="{Binding IsDesignerOpen}">
+                            <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="🛠️ 自定义报表设计器 (SQL 参数化配置)" FontSize="15" FontWeight="Bold"/>
+                                        <TextBlock Text="请输入以 SELECT 或 WITH 开头的只读查询，系统禁止写入或修改指令，支持通过 @占位符 实现参数绑定" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                        <Button Content="🧪 试运行测试" Command="{Binding TestSqlInDesignerCommand}" Height="30"/>
+                                        <Button Content="💾 保存报表" Command="{Binding SaveReportDefinitionCommand}" Classes="Primary" Height="30"/>
+                                        <Button Content="关闭设计器" Command="{Binding CloseDesignerCommand}" Height="30"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="12">
+                                    <!-- Meta fields -->
+                                    <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="10">
+                                        <StackPanel Grid.Column="0" Spacing="4">
+                                            <TextBlock Text="报表编码 (唯一标识)" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding EditReportCode, Mode=TwoWay}" PlaceholderText="例如: RPT_OPD_VISIT_DEPT"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="报表名称" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding EditReportName, Mode=TwoWay}" PlaceholderText="例如: 门诊科室收入统计"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="4">
+                                            <TextBlock Text="业务分类" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding EditCategory, Mode=TwoWay}" Width="120" PlaceholderText="门急诊/住院..."/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Description -->
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="报表说明 / 业务含义" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding EditDescription, Mode=TwoWay}" PlaceholderText="简要描述报表的统计口径与业务价值..."/>
+                                    </StackPanel>
+
+                                    <!-- SQL Template -->
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="6">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="SQL 查询模板 (支持参数占位符 @ParamName)" FontSize="13" FontWeight="Bold"/>
+                                                <Button Grid.Column="1" Content="⚡ 自动从 SQL 中提取参数占位符" Command="{Binding AutoExtractParametersCommand}" Height="26" Padding="8,0" FontSize="11"/>
+                                            </Grid>
+                                            <TextBlock Text="提示：使用 @StartDate、@EndDate、@DeptName 等占位符。在 WHERE 条件中推荐使用: (@DeptName IS NULL OR dept_name LIKE '%' || @DeptName || '%')"
+                                                       FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <TextBox Text="{Binding EditSqlTemplate, Mode=TwoWay}"
+                                                     FontFamily="Consolas,Menlo,Monospace"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     AcceptsTab="True"
+                                                     Height="180"
+                                                     TextWrapping="NoWrap"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Parameters JSON Schema -->
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="参数元数据定义 (JSON Schema)" FontSize="13" FontWeight="Bold"/>
+                                            <TextBlock Text="定义每个参数的显示标签 (Label)、数据类型 (Type: STRING/INT/DECIMAL/DATE) 与默认值 (DefaultValue)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <TextBox Text="{Binding EditParametersJson, Mode=TwoWay}"
+                                                     FontFamily="Consolas,Menlo,Monospace"
+                                                     FontSize="11"
+                                                     AcceptsReturn="True"
+                                                     Height="110"
+                                                     TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Validation message bar -->
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="10"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                                            IsVisible="{Binding DesignerValidationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                        <TextBlock Text="{Binding DesignerValidationMessage}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <!-- Mode 2: Query Execution View -->
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10" IsVisible="{Binding !IsDesignerOpen}">
+                            <!-- Report Details Bar -->
+                            <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding SelectedReport.ReportName, FallbackValue='请在左侧选择报表'}" FontSize="15" FontWeight="Bold"/>
+                                            <controls:StatusTag Text="{Binding SelectedReport.Category, FallbackValue='综合'}" Kind="{Binding SelectedReport.CategoryBadgeKind, FallbackValue='Primary'}"/>
+                                            <TextBlock Text="{Binding SelectedReport.ReportCode}" FontFamily="Consolas,Menlo,Monospace" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding SelectedReport.Description, FallbackValue='暂无说明'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding IsAdmin}">
+                                        <Button Content="⚙️ 编辑定义" Command="{Binding OpenEditReportDesignerCommand}" Height="28" Padding="10,0"/>
+                                        <Button Content="🗑️ 删除" Command="{Binding DeleteReportDefinitionCommand}" Classes="Danger" Height="28" Padding="10,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Dynamic Parameters Form & Actions -->
+                            <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="动态条件输入 (写入 SQL WHERE 条件占位符)" FontSize="13" FontWeight="Bold"/>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                            <Button Content="🔄 重置参数" Command="{Binding ResetParametersCommand}" Height="28" Padding="10,0"/>
+                                            <Button Content="🚀 执行报表查询" Command="{Binding ExecuteReportCommand}" Classes="Primary" Height="28" Padding="14,0" IsEnabled="{Binding !IsExecuting}"/>
+                                            <Button Content="📥 导出为 CSV" Command="{Binding ExportCurrentResultCsvCommand}" Height="28" Padding="10,0" IsEnabled="{Binding HasResults}"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Parameters List -->
+                                    <ItemsControl ItemsSource="{Binding DynamicParameters}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="local:AnalyticsStationViewModel+ReportParameterInputModel">
+                                                <Border Width="260" Margin="0,0,12,8" Padding="8" Background="{DynamicResource SemiColorBackground1}" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                    <StackPanel Spacing="3">
+                                                        <TextBlock Text="{Binding Label}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
+                                                        <TextBox Text="{Binding Value, Mode=TwoWay}" Height="28" FontSize="12"/>
+                                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- Status / Error Bar -->
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding ExecutionStatusText}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding TotalResultRows, StringFormat='共 {0} 条数据'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Results Table Viewport -->
+                            <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="8" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="ResultsContainer" Spacing="0"/>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                        </Panel>
+                    </Border>
+                </Grid>
             </Grid>
-        </Border>
-
-        <!-- KPI Summary Cards Row -->
-        <Border DockPanel.Dock="Top" Margin="0,0,0,12" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
-            <Grid ColumnDefinitions="*,*,*,*,*,*" ColumnSpacing="12">
-                <!-- Card 1: 门诊 -->
-                <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="今日在诊/就诊" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                        <TextBlock Text="{Binding ActiveOutpatientVisits, StringFormat='{}{0} 人'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                        <TextBlock Text="{Binding TotalRegisteredPatients, StringFormat='累计建档 {0} 人'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- Card 2: 住院 -->
-                <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="在院患者 / 额定床位" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                        <TextBlock Text="{Binding OccupiedBeds, StringFormat='{}{0} 床'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
-                        <TextBlock Text="{Binding TotalBeds, StringFormat='总床位 {0} 张'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- Card 3: 床位使用率 -->
-                <Border Grid.Column="2" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="床位使用率" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                        <TextBlock Text="{Binding BedOccupancyRate, StringFormat='{}{0:F1}%'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
-                        <TextBlock Text="考核基线 &gt; 85%" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- Card 4: 今日营收 -->
-                <Border Grid.Column="3" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="全院结算收入" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                        <TextBlock Text="{Binding TotalRevenue, StringFormat='¥{0:F2}'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
-                        <TextBlock Text="门急诊+住院预交" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- Card 5: 药占比 -->
-                <Border Grid.Column="4" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="药费占比 (公立医院考核)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                        <TextBlock Text="{Binding PharmacyRatio, StringFormat='{}{0:F1}%'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
-                        <TextBlock Text="{Binding PharmacyRevenue, StringFormat='药费 ¥{0:F2}'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- Card 6: 质控与安全 -->
-                <Border Grid.Column="5" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="危急值待闭环" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                        <TextBlock Text="{Binding PendingCriticalValues, StringFormat='{}{0} 例'}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
-                        <TextBlock Text="{Binding UnresolvedSecurityAlerts, StringFormat='等保待处置告警: {0}'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
-                    </StackPanel>
-                </Border>
-            </Grid>
-        </Border>
-
-        <!-- Detailed Domain Panels -->
-        <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Spacing="16">
-                    <!-- Domain 1: 门诊运营 -->
-                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                        <StackPanel Spacing="8">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Grid.Column="0" Text="门急诊诊疗与挂号指标" FontSize="14" FontWeight="Bold"/>
-                                <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="outpatient" Height="26" Padding="8,0"/>
-                            </Grid>
-                            <TextBlock Text="{Binding OutpatientSummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Domain 2: 住院运营 -->
-                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                        <StackPanel Spacing="8">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Grid.Column="0" Text="住院病区周转与医嘱负荷" FontSize="14" FontWeight="Bold"/>
-                                <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="inpatient" Height="26" Padding="8,0"/>
-                            </Grid>
-                            <TextBlock Text="{Binding InpatientSummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Domain 3: 药事与进销存 -->
-                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                        <StackPanel Spacing="8">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Grid.Column="0" Text="药事进销存、效期与库存货值" FontSize="14" FontWeight="Bold"/>
-                                <Button Grid.Column="1" Content="导出明细 (CSV)" Command="{Binding ExportCsvCommand}" CommandParameter="pharmacy" Height="26" Padding="8,0"/>
-                            </Grid>
-                            <TextBlock Text="{Binding PharmacySummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Domain 4: 医疗质控与等保安全 -->
-                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="医疗安全、病案归档与等保合规态势" FontSize="14" FontWeight="Bold"/>
-                            <TextBlock Text="{Binding QualitySummary}" FontSize="12" Foreground="{DynamicResource SemiColorText1}"/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
-        </Border>
-    </DockPanel>
+        </TabItem>
+    </TabControl>
 </UserControl>

@@ -12,7 +12,7 @@ namespace HIS.Modules.Outpatient.Controllers;
 
 [ApiController]
 [Route("api/v4/opd")]
-public class OutpatientController : ControllerBase
+public partial class OutpatientController : ControllerBase
 {
     private static readonly JsonSerializerOptions ExtJsonOptions = new()
     {
@@ -36,6 +36,8 @@ public class OutpatientController : ControllerBase
     private readonly IUserSession? _userSession;
     private readonly IPharmacyInventoryContract? _inventoryContract;
     private readonly IPrescriptionReviewEngine _reviewEngine;
+    private readonly IClinicalProcessSignatureContract? _signatureContract;
+    private readonly IClinicalAlertPublisher? _alertPublisher;
 
     public OutpatientController(
         IRepository<OpdScheduleSlot> slotRepo,
@@ -53,7 +55,9 @@ public class OutpatientController : ControllerBase
         IRepository<OpdScheduleTemplate>? templateRepo = null,
         IPharmacyInventoryContract? inventoryContract = null,
         IRepository<OpdInfectiousReportCard>? infectiousRepo = null,
-        IPrescriptionReviewEngine? reviewEngine = null)
+        IPrescriptionReviewEngine? reviewEngine = null,
+        IClinicalProcessSignatureContract? signatureContract = null,
+        IClinicalAlertPublisher? alertPublisher = null)
     {
         _slotRepo = slotRepo;
         _appointRepo = appointRepo;
@@ -71,6 +75,8 @@ public class OutpatientController : ControllerBase
         _templateRepo = templateRepo ?? new DapperRepository<OpdScheduleTemplate>(_connFactory, "opd_schedule_templates");
         _infectiousRepo = infectiousRepo ?? new DapperRepository<OpdInfectiousReportCard>(_connFactory, "opd_infectious_report_cards");
         _reviewEngine = reviewEngine ?? new PrescriptionReviewEngine(_patientContract, _connFactory);
+        _signatureContract = signatureContract;
+        _alertPublisher = alertPublisher;
     }
 
     public sealed record SaveScheduleTemplateRequestDto(
@@ -1559,21 +1565,132 @@ VALUES
         if (safetyError != null)
             return ApiResponse<OpdPrescription>.Fail(409, safetyError);
 
-        rx.Status = 6;
-        rx.ReviewRemark = null;
-        rx.UpdatedBy = _userSession!.UserId;
-        await _rxRepo.UpdateAsync(rx);
+        var reviewResult = await _reviewEngine.ReviewAsync(
+            rx.PatientId,
+            _userSession?.PrescribeLevel ?? 3,
+            IsAdmin(),
+            activeItems,
+            drugs,
+            null);
 
-        if (_auditTrail != null)
-            await _auditTrail.RecordAuditAsync(
-                "OPD_PRESCRIPTION_SUBMIT",
-                nameof(OpdPrescription),
-                rx.Id,
-                $"医生提交处方 {rx.PrescriptionNo} 待药师审方，金额 ¥{rx.TotalAmount:0.00}",
-                _userSession.UserId,
-                _userSession.DisplayName,
-                rx.OpdDeptId);
-        return ApiResponse<OpdPrescription>.Success(rx, "处方已提交，等待药师审方");
+        bool needsSkinTest = activeItems.Any(item => item.SkinTestFlag is 1 or 2);
+        bool canAutoPass = !needsSkinTest &&
+                           reviewResult.OverallStatus == "PASS" &&
+                           !reviewResult.Issues.Any(i => i.Severity is "BLOCK" or "WARN");
+
+        if (_signatureContract != null && _userSession != null)
+        {
+            try
+            {
+                await _signatureContract.SignClinicalRecordAsync(
+                    "OPD_PRESCRIPTION",
+                    rx.Id,
+                    "DOCTOR_SUBMIT",
+                    new { rx.Id, rx.PrescriptionNo, rx.PatientId, rx.VisitId, rx.DoctorId, Items = activeItems },
+                    _userSession);
+            }
+            catch { }
+        }
+
+        // Auto-sync prescription & diagnosis to EMR
+        try
+        {
+            using var syncConn = _connFactory.CreateConnection();
+            var visitDiag = await syncConn.QuerySingleOrDefaultAsync<string>(
+                "SELECT primary_diagnosis FROM opd_visits WHERE id = @Vid", new { Vid = rx.VisitId }) ?? "门诊诊断";
+            var existingDoc = await syncConn.QuerySingleOrDefaultAsync<dynamic>(
+                "SELECT id, plain_text_summary FROM emr_documents WHERE visit_or_encounter_id = @Vid AND emr_scene = 'OPD' LIMIT 1",
+                new { Vid = rx.VisitId });
+
+            var rxSummary = string.Join("; ", activeItems.Select(i => $"{i.DrugNameSnapshot} {i.DoseOnce}{i.DoseUnit} {i.FrequencyCode} {i.RouteCode}"));
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            if (existingDoc != null)
+            {
+                string oldSummary = (string)existingDoc.plain_text_summary ?? "";
+                string newSummary = oldSummary.Contains("【处方明细】")
+                    ? oldSummary
+                    : oldSummary + $"\n【处方明细】{rxSummary}";
+                await syncConn.ExecuteAsync(@"
+                    UPDATE emr_documents
+                    SET plain_text_summary = @Summary, updated_at_ms = @Now, updated_by = @User
+                    WHERE id = @Id",
+                    new { Summary = newSummary, Now = nowMs, User = _userSession?.UserId ?? rx.DoctorId, Id = (string)existingDoc.id });
+            }
+            else
+            {
+                var docId = Guid.NewGuid().ToString();
+                var docNo = "EMR-OPD-" + rx.PrescriptionNo;
+                var initialSummary = $"【初步诊断】{visitDiag}\n【处方明细】{rxSummary}";
+                await syncConn.ExecuteAsync(@"
+                    INSERT INTO emr_documents (id, doc_no, campus_id, emr_scene, visit_or_encounter_id, patient_id, dept_id, template_id, template_version, doc_type_code, doc_title, clinical_time_ms, plain_text_summary, status, author_id, schema_version, created_at_ms, updated_at_ms, version_no)
+                    VALUES (@Id, @No, 'CAMPUS-01', 'OPD', @Vid, @PatId, @DeptId, 'TPL-OPD-REC', 1, 'OPD_RECORD', '门诊病历记录', @Now, @Summary, 0, @Author, 1, @Now, @Now, 1)",
+                    new
+                    {
+                        Id = docId,
+                        No = docNo,
+                        Vid = rx.VisitId,
+                        PatId = rx.PatientId,
+                        DeptId = rx.OpdDeptId,
+                        Now = nowMs,
+                        Summary = initialSummary,
+                        Author = rx.DoctorId
+                    });
+            }
+        }
+        catch { }
+
+        if (canAutoPass)
+        {
+            rx.Status = 1; // AuditedPassed -> directly to cashier
+            rx.ReviewerPharmacistId = "SYS-REVIEW-ENGINE";
+            rx.ReviewRemark = "合理用药规则引擎前置审方自动通过";
+            rx.UpdatedBy = _userSession!.UserId;
+            await _rxRepo.UpdateAsync(rx);
+
+            if (_auditTrail != null)
+                await _auditTrail.RecordAuditAsync(
+                    "OPD_PRESCRIPTION_AUTO_AUDIT",
+                    nameof(OpdPrescription),
+                    rx.Id,
+                    $"智能审方引擎自动放行处方 {rx.PrescriptionNo}，金额 ¥{rx.TotalAmount:0.00}",
+                    _userSession.UserId,
+                    _userSession.DisplayName,
+                    rx.OpdDeptId);
+
+            return ApiResponse<OpdPrescription>.Success(rx, "处方已提交并通过前置审方，患者可直接前往收费处缴费");
+        }
+        else
+        {
+            rx.Status = 6; // PendingPreAudit
+            rx.ReviewRemark = needsSkinTest ? "待皮试结果录入与人工审方" : "待药师人工前置审方";
+            rx.UpdatedBy = _userSession!.UserId;
+            await _rxRepo.UpdateAsync(rx);
+
+            if (_auditTrail != null)
+                await _auditTrail.RecordAuditAsync(
+                    "OPD_PRESCRIPTION_SUBMIT",
+                    nameof(OpdPrescription),
+                    rx.Id,
+                    $"医生提交处方 {rx.PrescriptionNo} 待药师审方，金额 ¥{rx.TotalAmount:0.00}",
+                    _userSession.UserId,
+                    _userSession.DisplayName,
+                    rx.OpdDeptId);
+
+            return ApiResponse<OpdPrescription>.Success(rx, "处方已提交，等待药师审方");
+        }
+    }
+
+    [HttpGet("prescriptions/pending-audit")]
+    public async Task<ApiResponse<List<OpdPrescription>>> GetPendingAuditPrescriptions([FromQuery] string? pharmacyId = null)
+    {
+        string sql = @"
+SELECT * FROM opd_prescriptions 
+WHERE status = 6 
+  AND (@PharmacyId IS NULL OR target_pharmacy_id = @PharmacyId)
+ORDER BY created_at_ms ASC";
+        var list = (await _rxRepo.QueryAsync(sql, new { PharmacyId = string.IsNullOrWhiteSpace(pharmacyId) ? null : pharmacyId.Trim() })).ToList();
+        return ApiResponse<List<OpdPrescription>>.Success(list);
     }
 
     [HttpGet("prescriptions/{rxId}/items")]

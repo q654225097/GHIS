@@ -68,6 +68,23 @@ public class PatientController : ControllerBase
             return ApiResponse<PatPatient>.Fail(400, "年龄小于 14 周岁患者强制要求录入法定监护人信息");
         }
 
+        if (string.IsNullOrWhiteSpace(req.IdCardNo) || req.IdCardNo.Trim().Length != 18)
+        {
+            return ApiResponse<PatPatient>.Fail(400, "身份证号码必须为 18 位");
+        }
+
+        var cleanId = req.IdCardNo.Trim();
+        for (int i = 0; i < 17; i++)
+        {
+            if (cleanId[i] < '0' || cleanId[i] > '9')
+                return ApiResponse<PatPatient>.Fail(400, "居民身份证前17位必须为纯数字");
+        }
+        var birthStr = cleanId.Substring(6, 8);
+        if (!DateTime.TryParseExact(birthStr, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _))
+        {
+            return ApiResponse<PatPatient>.Fail(400, "居民身份证包含无效出生日期");
+        }
+
         var idCardHash = CryptoHelper.ComputeBlindIndex(req.IdCardNo);
         // Check duplicate
         var existing = await _patientRepo.QueryAsync(
@@ -86,9 +103,9 @@ public class PatientController : ControllerBase
             GenderCode = req.GenderCode,
             BirthDateInt = req.BirthDateInt,
             IdCardType = "RESIDENT_ID",
-            IdCardCipher = CryptoHelper.EncryptAesGcm(req.IdCardNo),
+            IdCardCipher = CryptoHelper.EncryptSm4Gcm(req.IdCardNo),
             IdCardHash = idCardHash,
-            PhoneCipher = CryptoHelper.EncryptAesGcm(req.Phone),
+            PhoneCipher = CryptoHelper.EncryptSm4Gcm(req.Phone),
             PhoneMasked = CryptoHelper.MaskPhone(req.Phone),
             GuardianName = req.GuardianName,
             GuardianIdHash = req.GuardianIdCardNo != null ? CryptoHelper.ComputeBlindIndex(req.GuardianIdCardNo) : null,
@@ -354,6 +371,7 @@ LIMIT @Limit", new
 
     public sealed record DecryptPiiRequestDto(string FieldName, string Reason);
 
+    [RequireRole(RoleCode.Admin, RoleCode.DoctorOpd, RoleCode.DoctorIpd, RoleCode.NurseIpd, RoleCode.Cashier)]
     [HttpPost("{id}/decrypt-pii")]
     public async Task<ApiResponse<string>> DecryptPii(string id, [FromBody] DecryptPiiRequestDto req)
     {
@@ -407,11 +425,18 @@ LIMIT @Limit", new
             return string.Empty;
         try
         {
-            return CryptoHelper.DecryptAesGcm(cipher);
+            return CryptoHelper.DecryptSm4Gcm(cipher);
         }
         catch
         {
-            return CryptoHelper.DecryptSm4Gcm(cipher);
+            try
+            {
+                return CryptoHelper.DecryptAesGcm(cipher);
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 

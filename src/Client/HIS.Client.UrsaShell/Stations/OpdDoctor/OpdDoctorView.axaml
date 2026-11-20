@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:u="https://irihi.tech/ursa"
              xmlns:opd="using:HIS.Client.UrsaShell.Stations.OpdDoctor"
@@ -115,170 +115,408 @@
 
             <!-- OPD Sub-Steps Tabs -->
             <TabControl Grid.Row="1" Margin="8,4,8,8" SelectedIndex="{Binding Workbench.SelectedOpdTabIndex, Mode=TwoWay}">
-                <!-- Step 2: 门诊病历书写 -->
-                <TabItem Header="① 门诊病历">
-                    <Grid ColumnDefinitions="*,320" Margin="10">
+                <!-- Step 1: 门诊诊断录入 (合规准入与医保前置) -->
+                <TabItem Header="① 诊断录入">
+                    <Grid ColumnDefinitions="*,340" Margin="10">
+                        <!-- Left Main Diagnosis Area -->
                         <Border Grid.Column="0" Margin="0,0,10,0" Padding="16" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
                             <ScrollViewer>
-                                <StackPanel Spacing="12">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                                            <TextBlock Text="门诊结构化病历" FontSize="16" FontWeight="Bold"/>
-                                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Workbench.EmrWorkspace.DocNo, StringFormat='{}文档编号: {0}'}" Foreground="{DynamicResource SemiColorText2}" FontSize="11"/>
+                                <StackPanel Spacing="14">
+                                    <!-- Patient Summary Header Strip -->
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                                <TextBlock Text="当前接诊患者:" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Workbench.SelectedPatient.PatientName, FallbackValue='未选择患者'}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Workbench.SelectedPatient.Gender, FallbackValue='-'}" FontSize="12" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Workbench.SelectedPatient.Age, StringFormat='{}{0}岁', FallbackValue=''}" FontSize="12" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Workbench.SelectedPatient.VisitNo, StringFormat='就诊号: {0}', FallbackValue=''}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                <controls:StatusTag Text="{Binding Workbench.SelectedPatient.OpdDeptName, FallbackValue='普通门诊'}" Kind="Primary"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="2" IsVisible="{Binding Workbench.HasSelectedPatientAllergy}" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="8,4">
+                                                <TextBlock Text="{Binding Workbench.SelectedPatientAllergyText, StringFormat='⚠ 过敏警示: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold"/>
                                             </Border>
-                                        </StackPanel>
-                                        <Button Grid.Column="1"
-                                                Content="保存并提交审签 (Ctrl+S)"
-                                                Classes="Primary"
-                                                Height="34"
-                                                Padding="14,0"
-                                                Command="{Binding SignEmrCommand}"
-                                                ToolTip.Tip="{Binding SignEmrBlockedReason}"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Diagnosis Form -->
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                        <TextBlock Grid.Column="0" Text="门诊初步诊断录入与 ICD-10 编码" FontSize="15" FontWeight="Bold"/>
+                                        <controls:StatusTag Grid.Column="1" Text="医保处方准入前提" Kind="Success" IsVisible="{Binding Workbench.HasDiagnosis}"/>
+                                        <controls:StatusTag Grid.Column="1" Text="待录入确立" Kind="Warning" IsVisible="{Binding !Workbench.HasDiagnosis}"/>
                                     </Grid>
 
                                     <u:Form LabelPosition="Top">
-                                        <u:FormItem Label="主诉 (Chief Complaint):" IsRequired="True">
-                                            <TextBox Text="{Binding Workbench.EmrWorkspace.ChiefComplaint}" Height="36" PlaceholderText="录入主要症状及持续时间..."/>
-                                        </u:FormItem>
-                                        <u:FormItem Label="现病史 (Present Illness):" IsRequired="True">
-                                            <TextBox Text="{Binding Workbench.EmrWorkspace.PresentIllness}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="88" PlaceholderText="描述发病经过、诱因及诊治情况..."/>
-                                        </u:FormItem>
-                                        <u:FormItem Label="初步诊断 (ICD-10):" IsRequired="True">
-                                            <TextBox Text="{Binding Workbench.EmrWorkspace.Diagnosis}" Height="36" PlaceholderText="录入初步临床诊断..."/>
-                                        </u:FormItem>
-
-                                        <u:Divider Content="专科检查（按患者性别匹配）"/>
-
-                                        <Grid ColumnDefinitions="*,*">
-                                            <u:FormItem Grid.Column="0" Label="前列腺触诊 (男性):" Margin="0,0,8,0">
-                                                <TextBox Text="{Binding Workbench.EmrWorkspace.ProstateExam}" Height="36"/>
+                                        <Grid ColumnDefinitions="2*,*">
+                                            <u:FormItem Grid.Column="0" Label="初步临床诊断名称 (Diagnosis Name):" IsRequired="True" Margin="0,0,8,0">
+                                                <TextBox Text="{Binding Workbench.DiagnosisName, Mode=TwoWay}"
+                                                         Height="36"
+                                                         PlaceholderText="输入或从下方高频库选择临床诊断（如：原发性高血压、急性支气管炎）..."/>
                                             </u:FormItem>
-                                            <u:FormItem Grid.Column="1" Label="孕产次数 (女性):" Margin="8,0,0,0">
-                                                <u:NumericIntUpDown Value="{Binding Workbench.EmrWorkspace.PregnancyCount}" Minimum="0" Maximum="20" Height="36"/>
+                                            <u:FormItem Grid.Column="1" Label="ICD-10 疾病编码 (ICD Code):" Margin="8,0,0,0">
+                                                <TextBox Text="{Binding Workbench.DiagnosisCode, Mode=TwoWay}"
+                                                         Height="36"
+                                                         PlaceholderText="如：I10.x00、J20.900..."/>
                                             </u:FormItem>
                                         </Grid>
+
+                                        <u:FormItem Label="发病诱因 / 诊断补充说明:">
+                                            <TextBox Text="{Binding Workbench.EmrWorkspace.PresentIllness, Mode=TwoWay}"
+                                                     Height="36"
+                                                     PlaceholderText="发病诱因、病程阶段或分型备注..."/>
+                                        </u:FormItem>
                                     </u:Form>
+
+                                    <!-- Quick Diagnosis Catalog -->
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="8" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="10">
+                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                    <TextBlock Text="全院门诊常用高频诊断库" FontWeight="Bold" FontSize="13"/>
+                                                    <TextBlock Text="（点击一键确立并填充 ICD-10）" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <!-- Category Filter Chips -->
+                                                <ItemsControl Grid.Column="2" ItemsSource="{Binding DiagnosisCategories}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Orientation="Horizontal" Spacing="4"/>
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="x:String">
+                                                            <Button Content="{Binding}"
+                                                                    Height="24"
+                                                                    Padding="8,0"
+                                                                    FontSize="11"
+                                                                    Classes="Tertiary"
+                                                                    Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).FilterDiagnosisCategoryCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Grid>
+
+                                            <!-- Diagnosis Chips -->
+                                            <ItemsControl ItemsSource="{Binding FilteredQuickDiagnoses}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="opd:QuickDiagnosisItem">
+                                                        <Button Classes="Secondary"
+                                                                Margin="0,4,8,4"
+                                                                Padding="10,6"
+                                                                Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).SelectQuickDiagnosisCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="3" Padding="4,1">
+                                                                    <TextBlock Text="{Binding Code}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                                </Border>
+                                                                <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Bottom Action Bar -->
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="*,Auto,Auto">
+                                            <TextBlock Grid.Column="0" Text="快捷提示：确立诊断后点击右侧按钮进入处方开立，或按快捷键 / 直接唤起药品检索" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1"
+                                                    Content="保存初步诊断"
+                                                    Classes="Secondary"
+                                                    Height="36"
+                                                    Padding="14,0"
+                                                    Margin="0,0,10,0"
+                                                    Command="{Binding SaveDiagnosisCommand}"/>
+                                            <Button Grid.Column="2"
+                                                    Content="确立诊断并进入处方开立 (下一步) ➔"
+                                                    Classes="Primary"
+                                                    Height="36"
+                                                    Padding="16,0"
+                                                    FontWeight="Bold"
+                                                    Command="{Binding SaveDiagnosisAndNextCommand}"/>
+                                        </Grid>
+                                    </Border>
                                 </StackPanel>
                             </ScrollViewer>
                         </Border>
 
-                        <!-- Right Summary: Quality & Gender Rule -->
+                        <!-- Right Summary & Clinical Guideline Panel -->
                         <Border Grid.Column="1" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="病历质控与审签状态" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                            <ScrollViewer>
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="临床路径与准入校验" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
 
-                                <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="6" Padding="10">
-                                    <StackPanel Spacing="4">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Grid.Column="0" Text="实时质控检查" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
-                                            <controls:StatusTag Grid.Column="1" Text="甲级病历" Kind="Success"/>
-                                        </Grid>
-                                        <TextBlock Text="✓ 主诉 / 现病史 / 初步诊断校验就绪" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
-                                        <TextBlock Text="{Binding Workbench.SelectedPatientGenderGateText}" FontSize="11" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                </Border>
+                                    <!-- Established Diagnosis Card -->
+                                    <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="6" Padding="12" IsVisible="{Binding Workbench.HasDiagnosis}">
+                                        <StackPanel Spacing="6">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="✓ 门诊初步诊断已确立" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                                <controls:StatusTag Grid.Column="1" Text="准入生效" Kind="Success"/>
+                                            </Grid>
+                                            <TextBlock Text="{Binding Workbench.DiagnosisName, StringFormat='诊断：{0}'}" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                                            <TextBlock Text="{Binding Workbench.DiagnosisCode, StringFormat='ICD-10：{0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                            <TextBlock Text="✓ 已自动同步至门诊病历，符合医保处方开立前置合规条件。" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" TextWrapping="Wrap"/>
+                                            <Button Content="立即进入处方开立 (按 2) ➔"
+                                                    Classes="Primary"
+                                                    Height="30"
+                                                    Margin="0,4,0,0"
+                                                    Command="{Binding GoToPrescriptionCommand}"/>
+                                        </StackPanel>
+                                    </Border>
 
-                                <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="10">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Text="{Binding Workbench.EmrWorkspace.OfdStatus, StringFormat='{}审签状态: {0}'}" FontSize="12" FontWeight="SemiBold"/>
-                                        <TextBlock Text="归档及 OFD 导出验签请使用左侧“病历归档”工作站" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                </Border>
+                                    <!-- Pending Diagnosis Card -->
+                                    <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="6" Padding="12" IsVisible="{Binding !Workbench.HasDiagnosis}">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="⏳ 待确立门诊初步诊断" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}"/>
+                                            <TextBlock Text="国家医保与临床质控要求：必须先确立初步诊断后方可开立处方药品。请在左侧常用库点击或手动录入诊断。" FontSize="11" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
 
-                                <Button Content="保存并提交审签 (Ctrl+S)"
-                                        Classes="Primary"
-                                        HorizontalAlignment="Stretch"
-                                        Height="36"
-                                        Command="{Binding SignEmrCommand}"/>
-                                <TextBlock Text="{Binding SignEmrBlockedReason}"
-                                           IsVisible="{Binding SignEmrBlockedReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource SemiColorWarning}"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
+                                    <!-- Allergy Safety Alert -->
+                                    <Border Background="{DynamicResource SemiColorDangerLight}" CornerRadius="6" Padding="12" IsVisible="{Binding Workbench.HasSelectedPatientAllergy}">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="⚠ 患者既往用药过敏警示" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                            <TextBlock Text="{Binding Workbench.SelectedPatientAllergyText, StringFormat='过敏药物: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="开立处方时系统将自动实时校验药物成分与过敏原，并提供一键安全替代推荐。" FontSize="11" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Clinical Flow Guide -->
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="门诊标准化就诊流程" FontSize="12" FontWeight="Bold"/>
+                                            <StackPanel Spacing="6">
+                                                <TextBlock Text="① 诊断录入：确立临床诊断与 ICD-10 (当前)" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="② 处方开立：加药、自动前置审方与审方推送" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="③ 检查检验：医技开单与已确费锁单保障" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="④ 门诊病历：书写主诉现病史、甲级质控与审签" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="⑤ 完成诊疗：就诊核对完毕闭环归档" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Border>
                     </Grid>
                 </TabItem>
 
-                <!-- Step 3: 键盘流处方开立（无全屏弹窗、无管理员配置入口） -->
-                <TabItem Header="② 处方开立">
-                    <Grid RowDefinitions="Auto,*,Auto" Margin="10" RowSpacing="10">
-                        <!-- Top Inline Drug Search & Workflow Action Strip -->
+                <!-- Step 2: 门诊医嘱开立 (处方与综合医嘱) -->
+                <TabItem Header="② 医嘱开立">
+                    <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="10" RowSpacing="10">
+                        <!-- Top Order Entry & Diagnostic Guideline Panel -->
                         <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="12">
-                            <StackPanel Spacing="8">
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                                    <!-- Keyboard-first Inline Drug Picker (/) -->
-                                    <Grid Grid.Column="0">
-                                        <TextBox x:Name="DrugSearchBox"
-                                                 Text="{Binding DrugSearchQuery, Mode=TwoWay}"
-                                                 PlaceholderText="输入药品名称 / 编码 / 规格快速加药 (按 / 聚焦，↑↓ 选择，Enter 加药编辑)..."
-                                                 Height="34"
-                                                 FontSize="12"
-                                                 GotFocus="DrugSearchBox_GotFocus"
-                                                 KeyDown="DrugSearchBox_KeyDown"/>
-                                        <Popup PlacementTarget="{Binding #DrugSearchBox}"
-                                               Placement="BottomEdgeAlignedLeft"
-                                               IsOpen="{Binding IsDrugDropdownOpen, Mode=TwoWay}"
-                                               IsLightDismissEnabled="True">
-                                            <Border Width="620"
-                                                    MaxHeight="300"
-                                                    Background="{DynamicResource SemiColorBackground0}"
-                                                    BorderBrush="{DynamicResource SemiColorPrimary}"
-                                                    BorderThickness="1.5"
-                                                    CornerRadius="8"
-                                                    Padding="6"
-                                                    BoxShadow="0 6 20 0 #26000000">
-                                                <ScrollViewer MaxHeight="280">
-                                                    <ItemsControl ItemsSource="{Binding FilteredDrugCatalog}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate x:DataType="vm:DrugCatalogItemModel">
-                                                                <Button Classes="Tertiary"
-                                                                        HorizontalAlignment="Stretch"
-                                                                        HorizontalContentAlignment="Stretch"
-                                                                        Padding="8,6"
-                                                                        Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).AddDrugCatalogItemCommand}"
-                                                                        CommandParameter="{Binding}">
-                                                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
-                                                                        <StackPanel Grid.Column="0" Spacing="1">
-                                                                            <TextBlock Text="{Binding DrugName}" FontWeight="Bold" FontSize="12"/>
-                                                                            <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                                                        </StackPanel>
-                                                                        <controls:StatusTag Grid.Column="1" Text="需皮试" Kind="Danger" IsVisible="{Binding IsSkinTestRequired}"/>
-                                                                        <TextBlock Grid.Column="2" Text="{Binding UnitPrice}" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
-                                                                        <TextBlock Grid.Column="3" Text="{Binding StockQuantity, StringFormat='{}库存: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" VerticalAlignment="Center"/>
-                                                                    </Grid>
-                                                                </Button>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </ScrollViewer>
-                                            </Border>
-                                        </Popup>
+                            <StackPanel Spacing="10">
+                                <!-- Diagnostic Reference Banner -->
+                                <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="10,6">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="🩺 医嘱开立依据 (已确立诊断):" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" FontSize="12"/>
+                                            <TextBlock Text="{Binding Workbench.DiagnosisCode, StringFormat='[{0}]'}" IsVisible="{Binding Workbench.DiagnosisCode, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" FontSize="12"/>
+                                            <TextBlock Text="{Binding Workbench.DiagnosisName}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" FontSize="12"/>
+                                            <TextBlock Text="(尚未确立初步诊断，请先返回第一步录入诊断)" IsVisible="{Binding !Workbench.HasDiagnosis}" Foreground="{DynamicResource SemiColorDanger}" FontSize="12" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="✓ 医保合规准入已生效" IsVisible="{Binding Workbench.HasDiagnosis}" Foreground="{DynamicResource SemiColorSuccess}" FontSize="11" Margin="12,0" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                                            <Button Content="修改诊断 ↵" Classes="Tertiary" Height="26" Padding="8,0" FontSize="11" Command="{Binding GoToDiagnosisCommand}"/>
+                                            <Button Content="前往检查检验 ➔" Classes="Secondary" Height="26" Padding="10,0" FontSize="11" Command="{Binding GoToMedTechCommand}"/>
+                                        </StackPanel>
                                     </Grid>
+                                </Border>
 
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                        <Button Content="前置自动审方"
-                                                Classes="Secondary"
-                                                Height="34"
-                                                Padding="12,0"
-                                                Command="{Binding PreCheckPrescriptionCommand}"/>
-                                        <Button Content="提交药师审方 (Ctrl+Enter)"
-                                                Classes="Primary"
-                                                Height="34"
-                                                Padding="14,0"
-                                                Command="{Binding SubmitPrescriptionCommand}"/>
+                                <!-- Quick Clinical Order Input Box (严格对照门诊医嘱开立截图1) -->
+                                <Border Background="#DCF8E6" BorderBrush="#A7D8B5" BorderThickness="1" CornerRadius="4" Padding="8,6">
+                                    <StackPanel Spacing="5">
+                                        <!-- Row 1: [全部 v] [简拼] 名称: [亮黄输入框] 数量 [ ^v] [ 单位 v] [亮黄规格/金额] [+ 录入 (Enter)] -->
+                                        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6" VerticalAlignment="Center">
+                                            <ComboBox Grid.Column="0"
+                                                      ItemsSource="{Binding OrderTypeOptions}"
+                                                      SelectedItem="{Binding SelectedOrderType, Mode=TwoWay}"
+                                                      Width="80" Height="28" FontSize="12"/>
+                                            <TextBox Grid.Column="1"
+                                                     Text="{Binding QuickSearchCode, Mode=TwoWay}"
+                                                     PlaceholderText="简拼"
+                                                     Width="70" Height="28" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="名称:" FontSize="12" VerticalAlignment="Center" Margin="2,0"/>
+                                            <Grid Grid.Column="3">
+                                                <TextBox x:Name="DrugSearchBox"
+                                                         Text="{Binding DrugSearchQuery, Mode=TwoWay}"
+                                                         PlaceholderText="输入药品/诊疗项目名称快速检索 (按 / 或 F2 聚焦)..."
+                                                         Background="#FFFF55"
+                                                         Foreground="#000000"
+                                                         FontWeight="Bold"
+                                                         Height="28"
+                                                         FontSize="12"
+                                                         GotFocus="DrugSearchBox_GotFocus"
+                                                         KeyDown="DrugSearchBox_KeyDown"/>
+                                                <Popup PlacementTarget="{Binding #DrugSearchBox}"
+                                                       Placement="BottomEdgeAlignedLeft"
+                                                       IsOpen="{Binding IsDrugDropdownOpen, Mode=TwoWay}"
+                                                       IsLightDismissEnabled="True">
+                                                    <Border Width="650"
+                                                            MaxHeight="300"
+                                                            Background="{DynamicResource SemiColorBackground0}"
+                                                            BorderBrush="{DynamicResource SemiColorPrimary}"
+                                                            BorderThickness="1.5"
+                                                            CornerRadius="8"
+                                                            Padding="6"
+                                                            BoxShadow="0 6 20 0 #26000000">
+                                                        <ScrollViewer MaxHeight="280">
+                                                            <ItemsControl ItemsSource="{Binding FilteredDrugCatalog}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate x:DataType="vm:DrugCatalogItemModel">
+                                                                        <Button Classes="Tertiary"
+                                                                                HorizontalAlignment="Stretch"
+                                                                                HorizontalContentAlignment="Stretch"
+                                                                                Padding="8,6"
+                                                                                Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).AddDrugCatalogItemCommand}"
+                                                                                CommandParameter="{Binding}">
+                                                                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                                                                                <StackPanel Grid.Column="0" Spacing="1">
+                                                                                    <TextBlock Text="{Binding DrugName}" FontWeight="Bold" FontSize="12"/>
+                                                                                    <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                                                </StackPanel>
+                                                                                <controls:StatusTag Grid.Column="1" Text="需皮试" Kind="Danger" IsVisible="{Binding IsSkinTestRequired}"/>
+                                                                                <TextBlock Grid.Column="2" Text="{Binding UnitPrice}" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
+                                                                                <TextBlock Grid.Column="3" Text="{Binding StockQuantity, StringFormat='{}库存: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" VerticalAlignment="Center"/>
+                                                                            </Grid>
+                                                                        </Button>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </ScrollViewer>
+                                                    </Border>
+                                                </Popup>
+                                            </Grid>
+                                            <TextBlock Grid.Column="4" Text="数量" FontSize="12" VerticalAlignment="Center" Margin="2,0"/>
+                                            <u:NumericIntUpDown Grid.Column="5"
+                                                                Value="{Binding OrderQuantityInput, Mode=TwoWay}"
+                                                                Minimum="1" Maximum="999"
+                                                                Width="60" Height="28" FontSize="12"/>
+                                            <ComboBox Grid.Column="6"
+                                                      ItemsSource="{Binding TotalUnitOptions}"
+                                                      SelectedItem="{Binding SelectedTotalUnit, Mode=TwoWay}"
+                                                      Width="60" Height="28" FontSize="12"/>
+                                            <TextBox Grid.Column="7"
+                                                     Text="{Binding OrderQuantityInput, StringFormat='{}{0}.000'}"
+                                                     IsReadOnly="True"
+                                                     Background="#FFFF55"
+                                                     Foreground="#000000"
+                                                     FontWeight="Bold"
+                                                     Width="90"
+                                                     Height="28"
+                                                     FontSize="12"
+                                                     VerticalContentAlignment="Center"
+                                                     HorizontalContentAlignment="Center"/>
+                                            <Button Grid.Column="8"
+                                                    Content="+ 录入 (Enter)"
+                                                    Classes="Primary"
+                                                    Height="28"
+                                                    Padding="12,0"
+                                                    FontWeight="Bold"
+                                                    Command="{Binding AddQuickOrderCommand}"/>
+                                        </Grid>
+
+                                        <!-- Row 2: 加急 / 每次用量: [ 1 ] [片] = [ 0.000 ] [g] / 用法 / 频次 / 天数 / 付数 / 备注 / 耗材扣库科室 -->
+                                        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <CheckBox IsChecked="{Binding IsUrgentInput, Mode=TwoWay}"
+                                                      Content="加急"
+                                                      Foreground="#DC2626"
+                                                      FontWeight="Bold"
+                                                      FontSize="12"
+                                                      Margin="0,0,10,0"
+                                                      VerticalAlignment="Center"/>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Text="每次用量:" FontSize="12" VerticalAlignment="Center"/>
+                                                <u:NumericDoubleUpDown Value="{Binding SingleDoseInput, Mode=TwoWay}"
+                                                                       Minimum="0.01" Maximum="9999" Step="1"
+                                                                       Width="55" Height="26" FontSize="12"/>
+                                                <ComboBox ItemsSource="{Binding DoseUnitOptions}"
+                                                          SelectedItem="{Binding SelectedDoseUnit, Mode=TwoWay}"
+                                                          Width="55" Height="26" FontSize="12"/>
+                                                <TextBlock Text="=" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" Margin="3,0"/>
+                                                <u:NumericDoubleUpDown Value="{Binding PackageRatioAmount, Mode=TwoWay}"
+                                                                       Minimum="0.001" Maximum="999" Step="0.05"
+                                                                       Width="65" Height="26" FontSize="12"/>
+                                                <TextBox Text="{Binding PackageRatioUnit, Mode=TwoWay}"
+                                                         Width="45" Height="26" FontSize="12" Padding="4,0"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Text="用法:" FontSize="12" VerticalAlignment="Center"/>
+                                                <ComboBox ItemsSource="{Binding RouteOptions}"
+                                                          SelectedItem="{Binding SelectedRoute, Mode=TwoWay}"
+                                                          Width="105" Height="26" FontSize="12"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Text="频次:" FontSize="12" VerticalAlignment="Center"/>
+                                                <ComboBox ItemsSource="{Binding FrequencyOptions}"
+                                                          SelectedItem="{Binding SelectedFrequency, Mode=TwoWay}"
+                                                          Width="100" Height="26" FontSize="12"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Text="天数:" FontSize="12" VerticalAlignment="Center"/>
+                                                <u:NumericIntUpDown Value="{Binding DaysInput, Mode=TwoWay}"
+                                                                    Minimum="1" Maximum="90"
+                                                                    Width="55" Height="26" FontSize="12"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Text="付数:" FontSize="12" VerticalAlignment="Center"/>
+                                                <u:NumericIntUpDown Value="{Binding PaymentCountInput, Mode=TwoWay}"
+                                                                    Minimum="1" Maximum="30"
+                                                                    Width="50" Height="26" FontSize="12"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Text="备注:" FontSize="12" VerticalAlignment="Center"/>
+                                                <TextBox Text="{Binding RemarkInput, Mode=TwoWay}"
+                                                         PlaceholderText="说明/特别医嘱"
+                                                         Width="90" Height="26" FontSize="12"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock Text="耗材扣库科室:" FontSize="12" VerticalAlignment="Center"/>
+                                                <ComboBox ItemsSource="{Binding DeductDeptOptions}"
+                                                          SelectedItem="{Binding SelectedDeductDept, Mode=TwoWay}"
+                                                          Foreground="#1D4ED8"
+                                                          FontWeight="Bold"
+                                                          Width="115" Height="26" FontSize="12"/>
+                                            </StackPanel>
+                                        </WrapPanel>
                                     </StackPanel>
-                                </Grid>
+                                </Border>
 
-                                <!-- Filter & Inline Blocked Reason Bar -->
+                                <!-- Order Actions & Defense Strip -->
                                 <Grid ColumnDefinitions="Auto,*,Auto">
                                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
-                                        <TextBox Width="170" Height="28" Text="{Binding Workbench.PrescriptionSearchQuery, Mode=TwoWay}" PlaceholderText="过滤处方明细..." FontSize="11"/>
-                                        <Button Content="全部" Height="28" Padding="8,0" Classes.Primary="{Binding IsFilterAll}" Command="{Binding FilterPrescriptionsCommand}" CommandParameter="ALL"/>
-                                        <Button Content="正常可用" Height="28" Padding="8,0" Classes.Primary="{Binding IsFilterNormal}" Command="{Binding FilterPrescriptionsCommand}" CommandParameter="NORMAL"/>
-                                        <Button Content="皮试/阻断" Height="28" Padding="8,0" Classes.Primary="{Binding IsFilterAlert}" Command="{Binding FilterPrescriptionsCommand}" CommandParameter="ALERT"/>
+                                        <Button Content="成组 ┓┃┛" Classes="Secondary" Height="28" Padding="10,0" FontSize="11" FontWeight="Bold"
+                                                Command="{Binding GroupSelectedOrdersCommand}"
+                                                ToolTip.Tip="将列表中已勾选的多条医嘱合并为同一输液组"/>
+                                        <Button Content="解组" Classes="Tertiary" Height="28" Padding="8,0" FontSize="11"
+                                                Command="{Binding UngroupSelectedOrdersCommand}"
+                                                ToolTip.Tip="解除选中医嘱的成组标记"/>
+                                        <Button Content="需皮试" Classes="Warning" Height="28" Padding="8,0" FontSize="11"
+                                                Command="{Binding QuickSetSkinTestCommand}" CommandParameter="需皮试"/>
+                                        <Button Content="皮试阴性 (-)" Classes="Success" Height="28" Padding="8,0" FontSize="11"
+                                                Command="{Binding QuickSetSkinTestCommand}" CommandParameter="阴性 (-)"/>
+                                        <Button Content="皮试阳性 (+)" Classes="Danger" Height="28" Padding="8,0" FontSize="11"
+                                                Command="{Binding QuickSetSkinTestCommand}" CommandParameter="阳性 (+)"/>
+                                        <Button Content="免试" Classes="Tertiary" Height="28" Padding="8,0" FontSize="11"
+                                                Command="{Binding QuickSetSkinTestCommand}" CommandParameter="免试"/>
+                                        <Button Content="切换加急" Classes="Secondary" Height="28" Padding="8,0" FontSize="11"
+                                                Command="{Binding ToggleUrgentCommand}"/>
                                     </StackPanel>
+
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding PrescriptionEditBlockedReason}"
                                                IsVisible="{Binding PrescriptionEditBlockedReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -286,137 +524,190 @@
                                                Foreground="{DynamicResource SemiColorWarning}"
                                                VerticalAlignment="Center"
                                                Margin="12,0"/>
-                                    <controls:StatusTag Grid.Column="2" Text="{Binding Workbench.PrescriptionWorkflowStatusText}" Kind="Info"/>
+
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                                        <Button Content="🛡 6维度前置审方"
+                                                Classes="Secondary"
+                                                Height="28"
+                                                Padding="12,0"
+                                                FontSize="11"
+                                                Command="{Binding PreCheckPrescriptionCommand}"/>
+                                        <Button Content="提交药师审方 (Ctrl+Enter)"
+                                                Classes="Primary"
+                                                Height="28"
+                                                Padding="14,0"
+                                                FontSize="11"
+                                                FontWeight="Bold"
+                                                Command="{Binding SubmitPrescriptionCommand}"/>
+                                        <controls:StatusTag Text="{Binding Workbench.PrescriptionWorkflowStatusText}" Kind="Info"/>
+                                    </StackPanel>
                                 </Grid>
                             </StackPanel>
                         </Border>
 
-                        <!-- Prescription Table with Inline Editing -->
-                        <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="12">
+                        <!-- Comprehensive Clinical Order Grid (25 Columns from Screenshot) -->
+                        <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="10">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                                 <StackPanel HorizontalAlignment="Left">
+                                    <!-- Table Header Strip strictly matching screenshot -->
                                     <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="0,7" Margin="0,0,0,4">
                                         <StackPanel Orientation="Horizontal">
-                                            <Border Width="36" Padding="10,0">
-                                                <TextBlock Text="#" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <ItemsControl ItemsSource="{Binding Workbench.PrescriptionColumns}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <StackPanel Orientation="Horizontal"/>
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:DataType="vm:PrescriptionColumnModel">
-                                                        <Border Width="{Binding Width}" Padding="8,0">
-                                                            <TextBlock Text="{Binding FieldLabel}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                            <Border Width="116" Padding="6,0">
-                                                <TextBlock Text="操作" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                            </Border>
+                                            <Border Width="36" Padding="8,0"><CheckBox Command="{Binding SelectAllOrdersCommand}" CommandParameter="True"/></Border>
+                                            <Border Width="30" Padding="4,0"><TextBlock Text="!" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
+                                            <Border Width="80" Padding="6,0"><TextBlock Text="医嘱类型" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="200" Padding="6,0"><TextBlock Text="医嘱名称" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="60" Padding="6,0"><TextBlock Text="组" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="85" Padding="6,0"><TextBlock Text="皮试" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="55" Padding="6,0"><TextBlock Text="总量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="55" Padding="6,0"><TextBlock Text="总单位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="70" Padding="6,0"><TextBlock Text="每次用量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="50" Padding="6,0"><TextBlock Text="单位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="50" Padding="6,0"><TextBlock Text="付数" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="75" Padding="6,0"><TextBlock Text="频次编码" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="85" Padding="6,0"><TextBlock Text="用法名称" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="70" Padding="6,0"><TextBlock Text="院注次数" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="75" Padding="6,0"><TextBlock Text="开立医生" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="95" Padding="6,0"><TextBlock Text="执行科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="55" Padding="6,0"><TextBlock Text="加急" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="85" Padding="6,0"><TextBlock Text="检查部位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="75" Padding="6,0"><TextBlock Text="样本类型" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="95" Padding="6,0"><TextBlock Text="扣库科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="110" Padding="6,0"><TextBlock Text="备注" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="75" Padding="6,0"><TextBlock Text="录入人" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="85" Padding="6,0"><TextBlock Text="开立科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="120" Padding="6,0"><TextBlock Text="开立时间" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="80" Padding="6,0"><TextBlock Text="停止时间" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="70" Padding="6,0"><TextBlock Text="停止人" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <Border Width="95" Padding="6,0"><TextBlock Text="操作" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
                                         </StackPanel>
                                     </Border>
 
                                     <ItemsControl ItemsSource="{Binding Workbench.FilteredPrescriptions}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:PrescriptionItemModel">
-                                                <Border IsVisible="{Binding IsVisible}" Margin="0,2" CornerRadius="6"
+                                                <Border IsVisible="{Binding IsVisible}" Margin="0,2" CornerRadius="4"
                                                         Background="{DynamicResource SemiColorBackground0}"
                                                         BorderBrush="{DynamicResource SemiColorBorder}"
                                                         BorderThickness="1">
-                                                    <StackPanel Orientation="Horizontal" MinHeight="46">
-                                                        <Border Width="36" Padding="10,0">
-                                                            <TextBlock Text="{Binding Seq}" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    <StackPanel Orientation="Horizontal" MinHeight="38">
+                                                        <!-- 1. 复选框 -->
+                                                        <Border Width="36" Padding="8,0" VerticalAlignment="Center">
+                                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Center"/>
                                                         </Border>
-
-                                                        <ItemsControl ItemsSource="{Binding Cells}">
-                                                            <ItemsControl.ItemsPanel>
-                                                                <ItemsPanelTemplate>
-                                                                    <StackPanel Orientation="Horizontal"/>
-                                                                </ItemsPanelTemplate>
-                                                            </ItemsControl.ItemsPanel>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate x:DataType="vm:PrescriptionCellModel">
-                                                                    <Border Width="{Binding Width}" MinHeight="44" Padding="8,5"
-                                                                            Background="{Binding ValueBackgroundBrush}"
-                                                                            BorderBrush="{Binding CellBorderBrush}"
-                                                                            BorderThickness="{Binding CellBorderThickness}"
-                                                                            CornerRadius="4">
-                                                                        <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
-                                                                            <TextBlock Grid.Column="0"
-                                                                                       Text="{Binding DisplayValue}"
-                                                                                       IsVisible="{Binding ShowText}"
-                                                                                       Foreground="{Binding ValueForegroundBrush}"
-                                                                                       FontWeight="{Binding ValueFontWeightTyped}"
-                                                                                       FontSize="12"
-                                                                                       TextTrimming="CharacterEllipsis"
-                                                                                       VerticalAlignment="Center"/>
-                                                                            <Border Grid.Column="1"
-                                                                                    IsVisible="{Binding ShowBlockedBadge}"
-                                                                                    Background="{DynamicResource SemiColorDanger}"
-                                                                                    CornerRadius="3"
-                                                                                    Padding="4,1"
-                                                                                    Margin="4,0,0,0"
-                                                                                    VerticalAlignment="Center">
-                                                                                <TextBlock Text="已阻断" Foreground="White" FontSize="11" FontWeight="Bold"/>
-                                                                            </Border>
-                                                                            <TextBox Grid.ColumnSpan="2"
-                                                                                     Text="{Binding Value, Mode=TwoWay}"
-                                                                                     IsVisible="{Binding ShowTextEditor}"
-                                                                                     AcceptsReturn="{Binding AcceptsReturn}"
-                                                                                     PlaceholderText="{Binding Placeholder}"
-                                                                                     Height="30"
-                                                                                     MinWidth="0"
-                                                                                     Padding="6,0"
-                                                                                     FontSize="12"
-                                                                                     VerticalContentAlignment="Center"/>
-                                                                            <u:NumericIntUpDown Grid.ColumnSpan="2"
-                                                                                                Value="{Binding IntegerValue, Mode=TwoWay}"
-                                                                                                Minimum="{Binding Minimum}"
-                                                                                                Maximum="{Binding Maximum}"
-                                                                                                IsVisible="{Binding ShowIntegerEditor}"
-                                                                                                Height="30" MinWidth="0" HorizontalAlignment="Stretch" FontSize="12"/>
-                                                                            <u:NumericDoubleUpDown Grid.ColumnSpan="2"
-                                                                                                   Value="{Binding DecimalValue, Mode=TwoWay}"
-                                                                                                   Minimum="{Binding Minimum}"
-                                                                                                   Maximum="{Binding Maximum}"
-                                                                                                   Step="{Binding Step}"
-                                                                                                   IsVisible="{Binding ShowDecimalEditor}"
-                                                                                                   Height="30" MinWidth="0" HorizontalAlignment="Stretch" FontSize="12"/>
-                                                                            <ComboBox Grid.ColumnSpan="2"
-                                                                                      ItemsSource="{Binding Options}"
-                                                                                      SelectedItem="{Binding EnumValue, Mode=TwoWay}"
-                                                                                      IsVisible="{Binding ShowEnumEditor}"
-                                                                                      Height="30" MinWidth="0" HorizontalAlignment="Stretch" FontSize="12"/>
-                                                                        </Grid>
-                                                                    </Border>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-
-                                                        <StackPanel Width="116" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="6,0">
-                                                            <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsReadOnly}">
-                                                                <Button Content="编辑" Height="27" Padding="7,0" FontSize="11"
-                                                                        IsEnabled="{Binding CanEdit}"
-                                                                        Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).BeginEditItemCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                                <Button Content="删除" Height="27" Padding="7,0" FontSize="11" Classes="Danger"
-                                                                        IsEnabled="{Binding CanEdit}"
-                                                                        Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).DeleteItemWithUndoCommand}"
-                                                                        CommandParameter="{Binding}"/>
+                                                        <!-- 2. ! 警示 -->
+                                                        <Border Width="30" Padding="4,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding StatusAlertIcon}" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <!-- 3. 医嘱类型 -->
+                                                        <Border Width="80" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding OrderType}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 4. 医嘱名称 -->
+                                                        <Border Width="200" Padding="6,0" VerticalAlignment="Center">
+                                                            <StackPanel Spacing="1">
+                                                                <TextBlock Text="{Binding DrugName}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                                <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" IsVisible="{Binding Spec, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                                             </StackPanel>
-                                                            <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsEditing}">
-                                                                <Button Content="保存" Height="27" Padding="7,0" FontSize="11" Classes="Primary"
-                                                                        Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).SaveEditItemCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                                <Button Content="取消" Height="27" Padding="7,0" FontSize="11"
-                                                                        Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).CancelEditItemCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                            </StackPanel>
-                                                        </StackPanel>
+                                                        </Border>
+                                                        <!-- 5. 组 -->
+                                                        <Border Width="60" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding GroupNoDisplay}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <!-- 6. 皮试 -->
+                                                        <Border Width="85" Padding="6,0" VerticalAlignment="Center">
+                                                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="3" Padding="4,1" HorizontalAlignment="Left">
+                                                                <TextBlock Text="{Binding SkinTest}" FontSize="11" FontWeight="SemiBold"/>
+                                                            </Border>
+                                                        </Border>
+                                                        <!-- 7. 总量 -->
+                                                        <Border Width="55" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding TotalQuantity}" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <!-- 8. 总单位 -->
+                                                        <Border Width="55" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding TotalUnit}" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <!-- 9. 每次用量 -->
+                                                        <Border Width="70" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding SingleDose}" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <!-- 10. 单位 -->
+                                                        <Border Width="50" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding DoseUnit}" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <!-- 11. 付数 -->
+                                                        <Border Width="50" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding PaymentCount}" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <!-- 12. 频次编码 -->
+                                                        <Border Width="75" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding FrequencyCode}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 13. 用法名称 -->
+                                                        <Border Width="85" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding RouteName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 14. 院注次数 -->
+                                                        <Border Width="70" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding HospitalInjectionCount}" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <!-- 15. 开立医生 -->
+                                                        <Border Width="75" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding DoctorName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 16. 执行科室 -->
+                                                        <Border Width="95" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding ExecDeptName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 17. 加急 -->
+                                                        <Border Width="55" Padding="6,0" VerticalAlignment="Center">
+                                                            <Panel HorizontalAlignment="Center">
+                                                                <TextBlock Text="{Binding IsUrgentText}" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" IsVisible="{Binding IsUrgent}"/>
+                                                                <TextBlock Text="常规" Foreground="{DynamicResource SemiColorText2}" IsVisible="{Binding !IsUrgent}"/>
+                                                            </Panel>
+                                                        </Border>
+                                                        <!-- 18. 检查部位 -->
+                                                        <Border Width="85" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding ExamBodyPart}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 19. 样本类型 -->
+                                                        <Border Width="75" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding SpecimenType}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 20. 扣库科室 -->
+                                                        <Border Width="95" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding DeductStockDept}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 21. 备注 -->
+                                                        <Border Width="110" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding MedicationNote}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding MedicationNote}"/>
+                                                        </Border>
+                                                        <!-- 22. 录入人 -->
+                                                        <Border Width="75" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding OperatorName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 23. 开立科室 -->
+                                                        <Border Width="85" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding DeptName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 24. 开立时间 -->
+                                                        <Border Width="120" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding CreatedAtText}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 25. 停止时间 -->
+                                                        <Border Width="80" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding StopTimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 26. 停止人 -->
+                                                        <Border Width="70" Padding="6,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding StopDoctor}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <!-- 27. 操作 -->
+                                                        <Border Width="95" Padding="6,0" VerticalAlignment="Center">
+                                                            <Button Content="删除" Height="26" Padding="8,0" FontSize="11" Classes="Danger"
+                                                                    Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).DeleteItemWithUndoCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </Border>
                                                     </StackPanel>
                                                 </Border>
                                             </DataTemplate>
@@ -451,17 +742,34 @@
                                 <Button Grid.Column="2" Content="安全替换为阿奇霉素" Classes="Danger" Command="{Binding AutoReplaceBlockedDrugCommand}"/>
                             </Grid>
                         </Border>
+
+                        <!-- Advance to Step 3 MedTech Strip -->
+                        <Border Grid.Row="3" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="12,10">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="处方开立完成提示：" FontWeight="Bold" FontSize="12"/>
+                                    <TextBlock Text="药品添加完毕并完成药师审方提交后，请前往第 3 步开立检查检验或第 4 步书写门诊病历。" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Content="前往下一步：检查检验 (按 3) ➔"
+                                        Classes="Primary"
+                                        Height="34"
+                                        Padding="16,0"
+                                        FontWeight="Bold"
+                                        Command="{Binding GoToMedTechCommand}"/>
+                            </Grid>
+                        </Border>
                     </Grid>
                 </TabItem>
 
-                <!-- Step 3b: 检查检验申请 -->
+                <!-- Step 3: 检查检验申请 -->
                 <TabItem Header="③ 检查检验">
-                    <Grid RowDefinitions="*,Auto" Margin="10">
+                    <Grid RowDefinitions="*,Auto,Auto" Margin="10">
                         <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
                             <ScrollViewer>
                                 <StackPanel Spacing="10">
                                     <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock Grid.Column="0" Text="医技项目开单与执行路由" FontSize="15" FontWeight="Bold"/>
+                                        <TextBlock Grid.Column="0" Text="医技项目开单与执行路由 (步骤 3)" FontSize="15" FontWeight="Bold"/>
                                         <Button Grid.Column="1" Content="+ 新增医技申请" Classes="Primary" Height="30" Command="{Binding AddMedTechOrderCommand}"/>
                                     </Grid>
 
@@ -494,6 +802,261 @@
                                 <TextBlock Grid.Column="1" Text="{Binding Workbench.FeeLockedMedTechOrderText}" Foreground="{DynamicResource SemiColorWarning}" Margin="10,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                 <Button Grid.Column="2" Content="查看医技冲正退费证明" Classes="Warning" Command="{Binding OpenRefundProofDrawerCommand}"/>
                             </Grid>
+                        </Border>
+
+                        <!-- Advance to Step 4 EMR Strip -->
+                        <Border Grid.Row="2" Margin="0,10,0,0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="12,10">
+                            <Grid ColumnDefinitions="*,Auto,Auto">
+                                <TextBlock Grid.Column="0" Text="医技申请开单完毕后，请前往第 4 步书写门诊病历并完成甲级质控审签。" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1"
+                                        Content="返回处方开立 ↵"
+                                        Classes="Tertiary"
+                                        Height="34"
+                                        Padding="12,0"
+                                        Margin="0,0,8,0"
+                                        Command="{Binding GoToPrescriptionCommand}"/>
+                                <Button Grid.Column="2"
+                                        Content="前往下一步：书写门诊病历 (按 4) ➔"
+                                        Classes="Primary"
+                                        Height="34"
+                                        Padding="16,0"
+                                        FontWeight="Bold"
+                                        Command="{Binding GoToEmrCommand}"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+                <!-- Step 4: 门诊病历书写 -->
+                <TabItem Header="④ 门诊病历">
+                    <Grid ColumnDefinitions="*,320" Margin="10">
+                        <Border Grid.Column="0" Margin="0,0,10,0" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+                            <Grid RowDefinitions="Auto,*">
+                                <!-- Top Toolbar: Template Info & Actions -->
+                                <Border Grid.Row="0" Margin="0,0,0,12" Padding="12,10" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <TextBlock Text="📄" FontSize="18" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding SelectedEmrTemplateName}"
+                                                       FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                            <controls:StatusTag Text="文书设计器" Kind="Info" VerticalAlignment="Center"/>
+                                            <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" IsVisible="{Binding HasSelectedEmrTemplate}">
+                                                <TextBlock Text="{Binding Workbench.SelectedOpdEmrTemplate.DeptCategory, FallbackValue='门诊文书'}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            </Border>
+                                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Workbench.EmrWorkspace.DocNo, StringFormat='{}单号: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <Button Content="📚 模板库 (主模板/常用语)"
+                                                    Classes="Warning"
+                                                    Height="30"
+                                                    Padding="10,0"
+                                                    FontWeight="Bold"
+                                                    FontSize="12"
+                                                    Command="{Binding OpenEmrTemplatePickerCommand}"
+                                                    ToolTip.Tip="打开门诊模板库：选取文书设计器主模板或科室/个人常用语模板"/>
+                                            <Button Content="⭐ 存为常用模板"
+                                                    Classes="Secondary"
+                                                    Height="30"
+                                                    Padding="10,0"
+                                                    FontSize="12"
+                                                    Command="{Binding OpenSaveAsUserTemplateCommand}"
+                                                    ToolTip.Tip="将当前就诊已录入的病历内容保存为科室或个人常用模板，以便日后一键调入预定义常用语"/>
+                                            <Button Content="+ 新建病历"
+                                                    Classes="Secondary"
+                                                    Height="30"
+                                                    Padding="10,0"
+                                                    FontSize="12"
+                                                    Command="{Binding NewEmrDocumentCommand}"
+                                                    ToolTip.Tip="基于所选模板重新新建一份空白门诊病历"/>
+                                            <Button Content="保存草稿"
+                                                    Classes="Tertiary"
+                                                    Height="30"
+                                                    Padding="10,0"
+                                                    FontSize="12"
+                                                    Command="{Binding SaveEmrDraftCommand}"/>
+                                            <Button Content="保存并提交审签 (Ctrl+S)"
+                                                    Classes="Primary"
+                                                    Height="30"
+                                                    Padding="12,0"
+                                                    FontWeight="Bold"
+                                                    FontSize="12"
+                                                    Command="{Binding SignEmrCommand}"
+                                                    ToolTip.Tip="{Binding SignEmrBlockedReason}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Middle Content: Dynamic EMR Form vs Empty Template Guide -->
+                                <Grid Grid.Row="1">
+                                    <!-- Empty Template Guide -->
+                                    <Border IsVisible="{Binding !HasSelectedEmrTemplate}"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="40"
+                                            VerticalAlignment="Stretch"
+                                            HorizontalAlignment="Stretch">
+                                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+                                            <TextBlock Text="📋" FontSize="52" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="尚未选取门诊病历模板" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="门诊病历由【文书设计器】统一定义结构与标准控件。医生可从模板库中选取系统主模板，或直接调入科室与个人预设的常用语模板（如心血管初诊、高血压慢病随访等），一键填充病历内容快速接诊。"
+                                                       FontSize="13"
+                                                       Foreground="{DynamicResource SemiColorText2}"
+                                                       MaxWidth="500"
+                                                       TextAlignment="Center"
+                                                       TextWrapping="Wrap"/>
+                                            <Button Content="📚 从模板库选取门诊文书 / 常用模板"
+                                                    Classes="Primary"
+                                                    Height="40"
+                                                    Padding="24,0"
+                                                    FontSize="14"
+                                                    FontWeight="Bold"
+                                                    HorizontalAlignment="Center"
+                                                    Command="{Binding OpenEmrTemplatePickerCommand}"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Dynamic Structured EMR Form -->
+                                    <ScrollViewer IsVisible="{Binding HasSelectedEmrTemplate}">
+                                        <ItemsControl ItemsSource="{Binding Workbench.EmrWorkspace.Sections}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="opd:OpdEmrSectionModel">
+                                                    <Border Margin="0,0,0,12" Padding="14" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" IsVisible="{Binding IsVisible}">
+                                                        <StackPanel Spacing="10">
+                                                            <Grid ColumnDefinitions="*,Auto">
+                                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                    <Border Width="4" Height="16" Background="{DynamicResource SemiColorPrimary}" CornerRadius="2" VerticalAlignment="Center"/>
+                                                                    <TextBlock Text="{Binding DisplayTitle}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                                <TextBlock Grid.Column="1" Text="{Binding RenderMode}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <u:Divider Margin="0,2,0,6"/>
+
+                                                            <ItemsControl ItemsSource="{Binding Fields}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate x:DataType="opd:OpdEmrFieldModel">
+                                                                        <StackPanel Margin="0,4" Spacing="4" IsVisible="{Binding IsVisible}">
+                                                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                                                                                <TextBlock Grid.Column="2" Text="{Binding ErrorMessage}" Foreground="{DynamicResource SemiColorDanger}" FontSize="11" IsVisible="{Binding HasError}" VerticalAlignment="Center"/>
+                                                                            </Grid>
+
+                                                                            <!-- Multiline Text (Chief Complaint, Present Illness, History, Plan, etc.) -->
+                                                                            <TextBox IsVisible="{Binding ShowMultilineEditor}"
+                                                                                     Text="{Binding Value, Mode=TwoWay}"
+                                                                                     AcceptsReturn="True"
+                                                                                     TextWrapping="Wrap"
+                                                                                     MinHeight="68"
+                                                                                     PlaceholderText="{Binding Placeholder}"
+                                                                                     FontSize="12"/>
+
+                                                                            <!-- Single Line Text -->
+                                                                            <TextBox IsVisible="{Binding ShowTextEditor}"
+                                                                                     Text="{Binding Value, Mode=TwoWay}"
+                                                                                     Height="32"
+                                                                                     PlaceholderText="{Binding Placeholder}"
+                                                                                     FontSize="12"/>
+
+                                                                            <!-- Integer UpDown -->
+                                                                            <u:NumericIntUpDown IsVisible="{Binding ShowIntegerEditor}"
+                                                                                                Value="{Binding IntegerValue, Mode=TwoWay}"
+                                                                                                Minimum="{Binding Minimum}"
+                                                                                                Maximum="{Binding Maximum}"
+                                                                                                Height="32"
+                                                                                                FontSize="12"/>
+
+                                                                            <!-- Decimal UpDown -->
+                                                                            <u:NumericDoubleUpDown IsVisible="{Binding ShowDecimalEditor}"
+                                                                                                   Value="{Binding DecimalValue, Mode=TwoWay}"
+                                                                                                   Minimum="{Binding Minimum}"
+                                                                                                   Maximum="{Binding Maximum}"
+                                                                                                   Step="{Binding Step}"
+                                                                                                   Height="32"
+                                                                                                   FontSize="12"/>
+
+                                                                            <!-- Enum ComboBox -->
+                                                                            <ComboBox IsVisible="{Binding ShowEnumEditor}"
+                                                                                      ItemsSource="{Binding Options}"
+                                                                                      SelectedItem="{Binding EnumValue, Mode=TwoWay}"
+                                                                                      Height="32"
+                                                                                      HorizontalAlignment="Stretch"
+                                                                                      FontSize="12"/>
+
+                                                                            <!-- Boolean CheckBox -->
+                                                                            <CheckBox IsVisible="{Binding ShowBooleanEditor}"
+                                                                                      IsChecked="{Binding BooleanValue, Mode=TwoWay}"
+                                                                                      Content="{Binding ElementName}"/>
+
+                                                                            <!-- DatePicker -->
+                                                                            <DatePicker IsVisible="{Binding ShowDateEditor}"
+                                                                                        SelectedDate="{Binding DateValue, Mode=TwoWay}"
+                                                                                        Height="32"/>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Grid>
+                        </Border>
+
+                        <!-- Right Summary: Quality & Gender Rule -->
+                        <Border Grid.Column="1" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="病历质控与审签状态" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+
+                                <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="6" Padding="10">
+                                    <StackPanel Spacing="4">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="实时质控检查" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                            <controls:StatusTag Grid.Column="1" Text="甲级病历" Kind="Success"/>
+                                        </Grid>
+                                        <TextBlock Text="✓ 门诊文书设计器规范质控就绪" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                        <TextBlock Text="{Binding Workbench.OpdEmrValidationSummary}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding Workbench.SelectedPatientGenderGateText}" FontSize="11" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="6" Padding="10">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding Workbench.EmrWorkspace.OfdStatus, StringFormat='{}审签状态: {0}'}" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Workbench.EmrWorkspace.RequiredSignLevelsText}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <TextBlock Text="归档及 OFD 导出验签请使用左侧“病历归档”工作站" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Button Content="保存并提交审签 (Ctrl+S)"
+                                        Classes="Primary"
+                                        HorizontalAlignment="Stretch"
+                                        Height="36"
+                                        Command="{Binding SignEmrCommand}"/>
+                                <TextBlock Text="{Binding SignEmrBlockedReason}"
+                                           IsVisible="{Binding SignEmrBlockedReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SemiColorWarning}"
+                                           TextWrapping="Wrap"/>
+
+                                <Button Content="返回检查检验 (步骤 3) ↵"
+                                        Classes="Secondary"
+                                        HorizontalAlignment="Stretch"
+                                        Height="32"
+                                        Command="{Binding GoToMedTechCommand}"/>
+                                <Button Content="就诊核对完毕，完成诊疗 (步骤 5) ➔"
+                                        Classes="Primary"
+                                        HorizontalAlignment="Stretch"
+                                        Height="34"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding RequestFinishVisitCommand}"/>
+                            </StackPanel>
                         </Border>
                     </Grid>
                 </TabItem>

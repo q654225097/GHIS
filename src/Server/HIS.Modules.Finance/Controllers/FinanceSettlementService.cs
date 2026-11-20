@@ -29,8 +29,16 @@ internal static class FinanceSettlementService
             ORDER BY created_at_ms
             """,
             new { VisitId = visitId }, transaction, cancellationToken: ct))).ToList();
-        if (rows.Count == 0)
-            return (0m, "没有已通过药师前置审方的处方，禁止收费。请先完成审方");
+
+        var medTechRows = (await conn.QueryAsync<decimal>(new CommandDefinition(
+            """
+            SELECT fee_amount FROM mtc_service_requests
+            WHERE source_visit_id = @VisitId AND source_type = 'OPD' AND is_fee_confirmed = 0 AND status = 0
+            """,
+            new { VisitId = visitId }, transaction, cancellationToken: ct))).ToList();
+
+        if (rows.Count == 0 && medTechRows.Count == 0)
+            return (0m, "没有已通过药师前置审方的处方或待缴费医技项目，禁止收费。请先完成审方");
 
         decimal total = 0;
         foreach (var rx in rows)
@@ -58,6 +66,7 @@ internal static class FinanceSettlementService
                 return (0m, $"处方 {rx.PrescriptionNo} 明细金额与处方总额不一致，禁止收费");
             total += itemTotal;
         }
+        total += medTechRows.Sum();
         return (total, null);
     }
 

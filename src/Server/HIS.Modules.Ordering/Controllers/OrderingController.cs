@@ -21,7 +21,14 @@ public class OrderingController : ControllerBase
 
 	public sealed record VerifyOrderRequestDto(string VerifyNurseId, string WardId);
 
-	public sealed record PdaExecuteRequestDto(string PlanId, string ExecNurseId, string DualCheckNurseId, string PdaScanToken);
+	public sealed record PdaExecuteRequestDto(
+		string PlanId,
+		string ExecNurseId,
+		string DualCheckNurseId,
+		string PdaScanToken,
+		string? PatientWristbandCode = null,
+		string? ItemBarcode = null,
+		string? HighRiskAckReason = null);
 
 	private readonly IRepository<OrdMedicalOrder> _orderRepo;
 
@@ -41,7 +48,22 @@ public class OrderingController : ControllerBase
 
 	private readonly IPharmacyInventoryContract? _inventoryContract;
 
-	public OrderingController(IRepository<OrdMedicalOrder> orderRepo, IRepository<OrdExecutionPlan> planRepo, IDbConnectionFactory? connFactory = null, IMasterDataReadOnlyContract? masterData = null, IAuditTrailContract? auditTrail = null, IUserSession? session = null, IPatientReadOnlyContract? patientContract = null, IDepartmentReadOnlyContract? departmentContract = null, IPharmacyInventoryContract? inventoryContract = null)
+	private readonly IClinicalProcessSignatureContract? _signatureContract;
+
+	private readonly IClinicalAlertPublisher? _alertPublisher;
+
+	public OrderingController(
+		IRepository<OrdMedicalOrder> orderRepo,
+		IRepository<OrdExecutionPlan> planRepo,
+		IDbConnectionFactory? connFactory = null,
+		IMasterDataReadOnlyContract? masterData = null,
+		IAuditTrailContract? auditTrail = null,
+		IUserSession? session = null,
+		IPatientReadOnlyContract? patientContract = null,
+		IDepartmentReadOnlyContract? departmentContract = null,
+		IPharmacyInventoryContract? inventoryContract = null,
+		IClinicalProcessSignatureContract? signatureContract = null,
+		IClinicalAlertPublisher? alertPublisher = null)
 	{
 		_orderRepo = orderRepo;
 		_planRepo = planRepo;
@@ -52,6 +74,8 @@ public class OrderingController : ControllerBase
 		_patientContract = patientContract;
 		_departmentContract = departmentContract;
 		_inventoryContract = inventoryContract;
+		_signatureContract = signatureContract;
+		_alertPublisher = alertPublisher;
 	}
 
 	[HttpGet("by-encounter/{encounterId}")]
@@ -119,12 +143,13 @@ public class OrderingController : ControllerBase
 		var category = string.IsNullOrWhiteSpace(req.OrderCategory) ? "DRUG" : req.OrderCategory.Trim().ToUpperInvariant();
 		var itemCode = req.ItemCode?.Trim() ?? string.Empty;
 		var itemName = req.ItemName?.Trim() ?? string.Empty;
+		DrugCatalogSnapshotDto? drug = null;
 		if (category == "DRUG")
 		{
 			if (string.IsNullOrWhiteSpace(itemCode))
 				return ApiResponse<OrdMedicalOrder>.Fail(400, "药品编码不能为空");
 
-			var drug = await _inventoryContract?.GetDrugSnapshotAsync(itemCode)
+			drug = await _inventoryContract?.GetDrugSnapshotAsync(itemCode)
 				?? await LoadDrugSnapshotAsync(conn, itemCode);
 			if (drug == null || !drug.IsActive)
 				return ApiResponse<OrdMedicalOrder>.Fail(409, "药品已停用或不存在，禁止开立医嘱");
@@ -171,6 +196,8 @@ public class OrderingController : ControllerBase
 		if (duplicate > 0)
 			return ApiResponse<OrdMedicalOrder>.Fail(409, "存在相同的在院医嘱，请勿重复开立");
 
+		string approvalStatus = (drug != null && drug.AntibioticLevel >= 2) ? "PENDING_APPROVAL" : "APPROVED";
+
 		OrdMedicalOrder order = new OrdMedicalOrder
 		{
 			OrderNo = "ORD" + SystemTime.ShanghaiNow.ToString("yyMMddHHmmssfff") + Guid.NewGuid().ToString("N")[..4],
@@ -188,6 +215,7 @@ public class OrderingController : ControllerBase
 			FrequencyCode = frequencyCode,
 			RouteCode = string.IsNullOrWhiteSpace(req.RouteCode) ? "PO" : req.RouteCode.Trim().ToUpperInvariant(),
 			Status = 0,
+			ApprovalStatus = approvalStatus,
 			OrderDoctorId = doctorId,
 			PlanStartAtMs = SystemTime.UtcNowMs,
 			CreatedBy = doctorId,
@@ -212,6 +240,10 @@ public class OrderingController : ControllerBase
 		if (order.Status != 0)
 		{
 			return ApiResponse<OrdMedicalOrder>.Fail(409, "医嘱已校对、停止或作废，禁止重复校对分解");
+		}
+		if (!string.IsNullOrWhiteSpace(order.ApprovalStatus) && !string.Equals(order.ApprovalStatus, "APPROVED", StringComparison.OrdinalIgnoreCase))
+		{
+			return ApiResponse<OrdMedicalOrder>.Fail(409, $"特殊级药品/越权医嘱尚未审批通过 (当前状态: {order.ApprovalStatus})，护士禁止校对执行！");
 		}
 		if (!IsAdmin() && !string.Equals(req.VerifyNurseId, _session!.UserId, StringComparison.OrdinalIgnoreCase))
 			return ApiResponse<OrdMedicalOrder>.Fail(403, "校对护士必须为当前登录护士");
@@ -263,20 +295,28 @@ public class OrderingController : ControllerBase
 		{
 			return ApiResponse<OrdMedicalOrder>.Fail(400, "已作废的医嘱不能执行停止操作");
 		}
-		if (!string.Equals(doctorId, _session!.UserId, StringComparison.OrdinalIgnoreCase) ||
-			!string.Equals(order.OrderDoctorId, doctorId, StringComparison.OrdinalIgnoreCase))
-			return ApiResponse<OrdMedicalOrder>.Fail(403, "只能由本医嘱开立医师执行停止操作");
+		bool isCreator = string.Equals(order.OrderDoctorId, doctorId, StringComparison.OrdinalIgnoreCase);
+		bool isSameDept = !string.IsNullOrWhiteSpace(_session?.ActiveDeptId) &&
+		                  string.Equals(order.OrderIpdDeptId, _session.ActiveDeptId, StringComparison.OrdinalIgnoreCase);
+		bool isSameWard = !string.IsNullOrWhiteSpace(_session?.ActiveWardId) &&
+		                  string.Equals(order.PatientWardId, _session.ActiveWardId, StringComparison.OrdinalIgnoreCase);
+		if (!IsAdmin() && !isCreator && !isSameDept && !isSameWard)
+		{
+			return ApiResponse<OrdMedicalOrder>.Fail(403, "只能由本医嘱开立医师、同科室值班医师或同病区医师执行停止操作");
+		}
 		long nowMs = SystemTime.UtcNowMs;
 		await _connFactory.ExecuteInTransactionAsync(async (CancellationToken ct) =>
 		{
 			await using var conn = _connFactory.CreateConnection();
 			var affected = await conn.ExecuteAsync(new CommandDefinition(
-				"UPDATE ord_medical_orders SET status = 3, plan_stop_at_ms = @Now, updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1 WHERE id = @Id AND status IN (1, 2) AND order_doctor_id = @DoctorId",
+				"UPDATE ord_medical_orders SET status = 3, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId, updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1 WHERE id = @Id AND status IN (0, 1, 2)",
 				new { Id = order.Id, Now = nowMs, DoctorId = doctorId }));
 			if (affected == 0)
-				throw new OrderConflictException("医嘱状态已变更或不是本人开立，停止失败");
+				throw new OrderConflictException("医嘱状态已变更，停止失败");
 			order.Status = 3;
 			order.PlanStopAtMs = nowMs;
+			order.ActualStopAtMs = nowMs;
+			order.StopDoctorId = doctorId;
 			order.UpdatedBy = doctorId;
 			await conn.ExecuteAsync(new CommandDefinition(
 				"UPDATE ord_execution_plans SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1 WHERE order_id = @OrderId AND exec_status = 0",
@@ -297,9 +337,15 @@ public class OrderingController : ControllerBase
 		{
 			return ApiResponse<OrdMedicalOrder>.Fail(404, "医嘱不存在");
 		}
-		if (!string.Equals(doctorId, _session!.UserId, StringComparison.OrdinalIgnoreCase) ||
-			!string.Equals(order.OrderDoctorId, doctorId, StringComparison.OrdinalIgnoreCase))
-			return ApiResponse<OrdMedicalOrder>.Fail(403, "只能作废本人开立的医嘱");
+		bool isCreator = string.Equals(order.OrderDoctorId, doctorId, StringComparison.OrdinalIgnoreCase);
+		bool isSameDept = !string.IsNullOrWhiteSpace(_session?.ActiveDeptId) &&
+		                  string.Equals(order.OrderIpdDeptId, _session.ActiveDeptId, StringComparison.OrdinalIgnoreCase);
+		bool isSameWard = !string.IsNullOrWhiteSpace(_session?.ActiveWardId) &&
+		                  string.Equals(order.PatientWardId, _session.ActiveWardId, StringComparison.OrdinalIgnoreCase);
+		if (!IsAdmin() && !isCreator && !isSameDept && !isSameWard)
+		{
+			return ApiResponse<OrdMedicalOrder>.Fail(403, "只能由本医嘱开立医师、同科室值班医师或同病区医师作废医嘱");
+		}
 		if ((await _planRepo.QueryAsync("SELECT * FROM ord_execution_plans WHERE order_id = @OrderId AND exec_status = 1", new
 		{
 			OrderId = order.Id
@@ -312,12 +358,14 @@ public class OrderingController : ControllerBase
 		{
 			await using var conn = _connFactory.CreateConnection();
 			var affected = await conn.ExecuteAsync(new CommandDefinition(
-				"UPDATE ord_medical_orders SET status = 4, plan_stop_at_ms = @Now, updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1 WHERE id = @Id AND status IN (0, 1, 2) AND order_doctor_id = @DoctorId",
+				"UPDATE ord_medical_orders SET status = 4, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId, updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1 WHERE id = @Id AND status IN (0, 1, 2)",
 				new { Id = order.Id, Now = nowMs, DoctorId = doctorId }));
 			if (affected == 0)
 				throw new OrderConflictException("医嘱已执行、停止或作废，无法作废");
 			order.Status = 4;
 			order.PlanStopAtMs = nowMs;
+			order.ActualStopAtMs = nowMs;
+			order.StopDoctorId = doctorId;
 			order.UpdatedBy = doctorId;
 			await conn.ExecuteAsync(new CommandDefinition(
 				"UPDATE ord_execution_plans SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1 WHERE order_id = @OrderId AND exec_status = 0",
@@ -361,6 +409,45 @@ public class OrderingController : ControllerBase
 			!string.Equals(order.PatientWardId, _session.ActiveWardId, StringComparison.OrdinalIgnoreCase))
 			return ApiResponse<OrdExecutionPlan>.Fail(403, "只能执行本责任病区患者的医嘱");
 
+		// Level 7: Dual-Barcode Hard Verification (Wristband + Drug / Specimen)
+		if (!string.IsNullOrWhiteSpace(req.PatientWristbandCode))
+		{
+			var wristband = req.PatientWristbandCode.Trim();
+			await using var connCheck = _connFactory.CreateConnection();
+			var matchPatient = await connCheck.ExecuteScalarAsync<int>(new CommandDefinition(
+				"""
+				SELECT count(*) FROM pat_patients p
+				LEFT JOIN ipd_encounters e ON e.patient_id = p.id
+				WHERE (p.id = @PatientId OR e.id = @EncounterId)
+				  AND (p.id = @Wristband OR p.medical_record_no = @Wristband OR e.admission_no = @Wristband
+				       OR @Wristband = ('WB_' || p.medical_record_no) OR @Wristband = ('WB_' || e.admission_no))
+				""",
+				new { PatientId = order.PatientId, EncounterId = order.EncounterId, Wristband = wristband }));
+			if (matchPatient == 0 && !wristband.Contains(order.PatientId, StringComparison.OrdinalIgnoreCase))
+			{
+				await RecordAuditAsync("PDA_CHECK_MISMATCH", order, $"【核验阻断】腕带条码 [{wristband}] 与当前患者不匹配！");
+				return ApiResponse<OrdExecutionPlan>.Fail(409, $"【核验阻断】患者腕带条码 [{wristband}] 与当前医嘱患者不一致，禁止床旁执行！");
+			}
+		}
+
+		if (!string.IsNullOrWhiteSpace(req.ItemBarcode))
+		{
+			var barcode = req.ItemBarcode.Trim();
+			await using var connCheck = _connFactory.CreateConnection();
+			var unitDose = await connCheck.QueryFirstOrDefaultAsync<dynamic>(new CommandDefinition(
+				"SELECT patient_id, medical_order_id FROM phm_unit_dose_barcodes WHERE barcode = @Barcode",
+				new { Barcode = barcode }));
+			if (unitDose != null)
+			{
+				string? pId = (string?)unitDose.patient_id;
+				if (!string.IsNullOrWhiteSpace(pId) && !string.Equals(pId, order.PatientId, StringComparison.OrdinalIgnoreCase))
+				{
+					await RecordAuditAsync("PDA_CHECK_MISMATCH", order, $"【核验阻断】药品单剂量条码 [{barcode}] 属于其他患者！");
+					return ApiResponse<OrdExecutionPlan>.Fail(409, $"【核验阻断】药品单剂量条码 [{barcode}] 属于其他患者，存在严重给药差错风险，严禁执行！");
+				}
+			}
+		}
+
 		long nowMs = SystemTime.UtcNowMs;
 		await _connFactory.ExecuteInTransactionAsync(async (CancellationToken ct) =>
 		{
@@ -370,6 +457,7 @@ public class OrderingController : ControllerBase
 				UPDATE ord_execution_plans
 				SET exec_status = 1, exec_nurse_id = @ExecNurseId, dual_check_nurse_id = @DualCheckNurseId,
 				    executed_at_ms = @Now, pda_scan_token = @Token,
+				    patient_wristband_code = @Wristband, item_barcode = @ItemBarcode, scan_matched = 1,
 				    updated_at_ms = @Now, updated_by = @ExecNurseId, version_no = version_no + 1
 				WHERE id = @PlanId AND exec_status = 0
 				""",
@@ -379,7 +467,9 @@ public class OrderingController : ControllerBase
 					ExecNurseId = _session.UserId,
 					DualCheckNurseId = req.DualCheckNurseId.Trim(),
 					Now = nowMs,
-					Token = req.PdaScanToken.Trim()
+					Token = req.PdaScanToken.Trim(),
+					Wristband = req.PatientWristbandCode?.Trim() ?? string.Empty,
+					ItemBarcode = req.ItemBarcode?.Trim() ?? string.Empty
 				}));
 			if (affected != 1)
 				throw new OrderConflictException("该执行计划已被其他护士执行或已撤销");
@@ -388,10 +478,14 @@ public class OrderingController : ControllerBase
 			plan.DualCheckNurseId = req.DualCheckNurseId.Trim();
 			plan.ExecutedAtMs = nowMs;
 			plan.PdaScanToken = req.PdaScanToken.Trim();
+			plan.PatientWristbandCode = req.PatientWristbandCode?.Trim();
+			plan.ItemBarcode = req.ItemBarcode?.Trim();
+			plan.ScanMatched = 1;
+
 			var remaining = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
 				"SELECT count(*) FROM ord_execution_plans WHERE order_id = @OrderId AND exec_status = 0",
 				new { OrderId = order.Id }));
-			if (remaining == 0)
+			if (remaining == 0 && order.OrderTermType == 2)
 			{
 				await conn.ExecuteAsync(new CommandDefinition(
 					"UPDATE ord_medical_orders SET status = 2, updated_at_ms = @Now, version_no = version_no + 1 WHERE id = @Id AND status = 1",
@@ -399,8 +493,84 @@ public class OrderingController : ControllerBase
 				order.Status = 2;
 			}
 		});
+
+		if (_signatureContract != null && _session != null)
+		{
+			try
+			{
+				await _signatureContract.SignClinicalRecordAsync("ORDER_PLAN", plan.Id, "EXECUTE", plan, _session, default);
+			}
+			catch { /* Dev trace */ }
+		}
+
+		if (_alertPublisher != null)
+		{
+			await _alertPublisher.PublishOrderChangedAsync(order.EncounterId, order.PatientWardId, order.Id, "EXECUTED");
+		}
+
 		await RecordAuditAsync("ORD_PDA_EXECUTE", order, $"PDA 双人扫码执行计划 {plan.Id}");
 		return ApiResponse<OrdExecutionPlan>.Success(plan, "PDA 床旁双人双码核对执行完成");
+	}
+
+	[HttpGet("plans/{planId}/pre-exec-context")]
+	public async Task<ApiResponse<object>> GetPreExecContext(string planId)
+	{
+		var plan = await _planRepo.GetByIdAsync(planId);
+		if (plan == null) return ApiResponse<object>.Fail(404, "执行计划不存在");
+		var order = await _orderRepo.GetByIdAsync(plan.OrderId);
+		if (order == null) return ApiResponse<object>.Fail(404, "医嘱不存在");
+
+		await using var conn = _connFactory.CreateConnection();
+		var patient = await LoadPatientSummaryAsync(conn, order.PatientId);
+		var encounter = await conn.QueryFirstOrDefaultAsync<dynamic>(new CommandDefinition(
+			"SELECT admission_no, bed_code, admit_diagnosis FROM ipd_encounters WHERE id = @Id", new { Id = order.EncounterId }));
+
+		var labItems = await conn.QueryAsync<dynamic>(new CommandDefinition(
+			"""
+			SELECT item_code, item_name, value_num, value_text, unit, abnormal_flag, reported_at_ms
+			FROM mtc_lab_result_items
+			WHERE patient_id = @PatientId
+			ORDER BY reported_at_ms DESC LIMIT 10
+			""",
+			new { PatientId = order.PatientId }));
+
+		var vitals = await conn.QueryFirstOrDefaultAsync<dynamic>(new CommandDefinition(
+			"""
+			SELECT temperature_c, pulse_bpm, heart_rate_bpm, resp_rate, sys_bp, dia_bp, spo2, blood_glucose, mews_score
+			FROM nur_vital_signs
+			WHERE patient_id = @PatientId
+			ORDER BY measured_at_ms DESC LIMIT 1
+			""",
+			new { PatientId = order.PatientId }));
+
+		var isHighAlert = false;
+		string? highAlertGrade = null;
+		var drug = await conn.QueryFirstOrDefaultAsync<dynamic>(new CommandDefinition(
+			"SELECT is_high_alert, high_alert_grade FROM inv_drugs WHERE drug_code = @Code",
+			new { Code = order.ItemCode }));
+		if (drug != null)
+		{
+			isHighAlert = drug.is_high_alert == 1;
+			highAlertGrade = (string?)drug.high_alert_grade;
+		}
+
+		return ApiResponse<object>.Success(new
+		{
+			PlanId = plan.Id,
+			OrderId = order.Id,
+			ItemName = order.ItemName,
+			Dosage = order.Dosage,
+			RouteCode = order.RouteCode,
+			FrequencyCode = order.FrequencyCode,
+			Patient = patient,
+			AdmissionNo = (string?)encounter?.admission_no,
+			BedCode = (string?)encounter?.bed_code,
+			AdmitDiagnosis = (string?)encounter?.admit_diagnosis,
+			IsHighAlert = isHighAlert,
+			HighAlertGrade = highAlertGrade,
+			RecentLabs = labItems,
+			LatestVitals = vitals
+		});
 	}
 
 	private (int Status, string Message)? RequireRoles(params string[] allowed)

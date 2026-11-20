@@ -7,6 +7,7 @@ using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
+using HIS.BuildingBlocks.Security;
 using HIS.Modules.Patient.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +15,7 @@ namespace HIS.Modules.Patient.Controllers;
 
 [ApiController]
 [Route("api/v4/service")]
+[RequireRole(RoleCode.Admin, RoleCode.DoctorOpd, RoleCode.DoctorIpd, RoleCode.NurseIpd, RoleCode.Cashier, "CUSTOMER_SERVICE", "PATIENT_SERVICE")]
 public class PatientServiceController : ControllerBase
 {
     private readonly IRepository<SrvSatisfactionSurvey> _surveyRepo;

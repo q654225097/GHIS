@@ -96,6 +96,24 @@ public class EmrVisualSectionModel : ClientModelBase
 
 	public ObservableCollection<EmrVisualFieldItemModel> Fields { get; } = new ObservableCollection<EmrVisualFieldItemModel>();
 
+	private decimal _estimatedHeightMm = 0;
+	public decimal EstimatedHeightMm
+	{
+		get
+		{
+			if (_estimatedHeightMm > 0) return _estimatedHeightMm;
+			if (Fields.Count == 0) return 16.0m;
+			var rowGroups = Fields.GroupBy(f => f.Row);
+			decimal total = 0;
+			foreach (var rg in rowGroups)
+			{
+				total += rg.Max(f => f.PrintHeightMm > 0 ? f.PrintHeightMm : 8.0m);
+			}
+			return Math.Max(total, 16.0m);
+		}
+		set => SetField(ref _estimatedHeightMm, value);
+	}
+
 	public bool IsTableGridMode => RenderMode == "TABLE_GRID";
 
 	public bool IsParagraphMode => RenderMode == "INLINE_PARAGRAPH";

@@ -10,7 +10,7 @@ using HIS.BuildingBlocks.Security;
 
 namespace HIS.Server.Host;
 
-public static class DbSeedData
+public static partial class DbSeedData
 {
 	private const string DemoPassword = "123";
 
@@ -95,11 +95,24 @@ public static class DbSeedData
 		{
 			Now = nowMs
 		});
-		await conn.ExecuteAsync("INSERT OR IGNORE INTO emr_doc_templates\n    (id, template_code, template_version, template_name, emr_scene, doc_type_code, dept_category, target_dept_id, disease_icd_prefix, time_limit_hours, required_sign_levels, ofd_layout_id, is_published, schema_version, created_at_ms, updated_at_ms, version_no)\nVALUES\n    ('TMPL-OPD-FIRST', 'OPD_FIRST_VISIT', 1, '门诊初诊结构化病历', 'OPD', 'OPD_FIRST_VISIT', 'OPD', 'DEPT-OPD-01', 'I25', 2, 1, 'LAYOUT-OPD-B5', 1, 1, @Now, @Now, 1),\n    ('TMPL-OPD-FOLLOWUP', 'OPD_FOLLOWUP', 1, '门诊复诊与慢病随访病历', 'OPD', 'OPD_FOLLOWUP', 'OPD', 'DEPT-OPD-01', 'I10', 2, 1, 'LAYOUT-OPD-B5', 1, 1, @Now, @Now, 1),\n    ('TMPL-IPD-ADMISSION', 'IPD_ADMISSION_24H', 1, '住院24小时入院记录', 'IPD', 'IPD_ADMISSION', 'IPD', 'DEPT-IPD-01', 'I25', 24, 3, 'LAYOUT-IPD-A4', 1, 1, @Now, @Now, 1),\n    ('TMPL-IPD-PROGRESS', 'IPD_DAILY_PROGRESS', 1, '住院首次/日常病程记录', 'IPD', 'IPD_PROGRESS', 'IPD', 'DEPT-IPD-01', 'I25', 8, 2, 'LAYOUT-IPD-A4', 1, 1, @Now, @Now, 1),\n    ('TMPL-IPD-DISCHARGE', 'IPD_DISCHARGE_SUMMARY', 1, '住院出院记录与小结', 'IPD', 'IPD_DISCHARGE', 'IPD', 'DEPT-IPD-01', 'I25', 24, 3, 'LAYOUT-IPD-A4', 1, 1, @Now, @Now, 1),\n    ('TMPL-WARD-ADMISSION', 'WARD_ADMISSION_ASSESS', 1, '住院患者入院护理评估单 (含三评量表)', 'WARD', 'NURSING_ADMISSION', 'WARD', 'DEPT-WARD-01', NULL, 4, 2, 'LAYOUT-WARD-A4', 1, 1, @Now, @Now, 1),\n    ('TMPL-WARD-CRITICAL', 'WARD_CRITICAL_CARE', 1, '危重患者特级护理观察记录单', 'WARD', 'NURSING_CRITICAL', 'WARD', 'DEPT-WARD-01', NULL, 2, 2, 'LAYOUT-WARD-A4', 1, 1, @Now, @Now, 1)", new
+		await conn.ExecuteAsync("INSERT OR IGNORE INTO emr_doc_templates\n    (id, template_code, template_version, template_name, emr_scene, doc_type_code, dept_category, target_dept_id, disease_icd_prefix, time_limit_hours, required_sign_levels, ofd_layout_id, is_published, schema_version, created_at_ms, updated_at_ms, version_no)\nVALUES\n    ('TMPL-OPD-FIRST', 'OPD_FIRST_VISIT', 1, '门诊初诊结构化病历', 'OPD', 'OPD_FIRST_VISIT', '全科门诊', 'DEPT-OPD-01', 'I25', 2, 1, 'LAYOUT-OPD-B5', 1, 1, @Now, @Now, 1),\n    ('TMPL-OPD-FOLLOWUP', 'OPD_FOLLOWUP', 1, '门诊复诊与慢病随访病历', 'OPD', 'OPD_FOLLOWUP', '慢病科', 'DEPT-OPD-01', 'I10', 2, 1, 'LAYOUT-OPD-B5', 1, 1, @Now, @Now, 1),\n    ('TMPL-OPD-CARDIO', 'OPD_CARDIO_SPECIAL', 1, '心血管内科门诊专科病历', 'OPD', 'OPD_CARDIO', '心血管科', 'DEPT-OPD-01', 'I25', 2, 1, 'LAYOUT-OPD-B5', 1, 1, @Now, @Now, 1),\n    ('TMPL-OPD-PEDIATRIC', 'OPD_PEDIATRIC', 1, '儿科门诊初诊病历', 'OPD', 'OPD_PEDIATRIC', '儿科', 'DEPT-OPD-02', 'J06', 2, 1, 'LAYOUT-OPD-B5', 1, 1, @Now, @Now, 1),\n    ('TMPL-IPD-ADMISSION', 'IPD_ADMISSION_24H', 1, '住院24小时入院记录', 'IPD', 'IPD_ADMISSION', 'IPD', 'DEPT-IPD-01', 'I25', 24, 3, 'LAYOUT-IPD-A4', 1, 1, @Now, @Now, 1),\n    ('TMPL-IPD-PROGRESS', 'IPD_DAILY_PROGRESS', 1, '住院首次/日常病程记录', 'IPD', 'IPD_PROGRESS', 'IPD', 'DEPT-IPD-01', 'I25', 8, 2, 'LAYOUT-IPD-A4', 1, 1, @Now, @Now, 1),\n    ('TMPL-IPD-DISCHARGE', 'IPD_DISCHARGE_SUMMARY', 1, '住院出院记录与小结', 'IPD', 'IPD_DISCHARGE', 'IPD', 'DEPT-IPD-01', 'I25', 24, 3, 'LAYOUT-IPD-A4', 1, 1, @Now, @Now, 1),\n    ('TMPL-WARD-ADMISSION', 'WARD_ADMISSION_ASSESS', 1, '住院患者入院护理评估单 (含三评量表)', 'WARD', 'NURSING_ADMISSION', 'WARD', 'DEPT-WARD-01', NULL, 4, 2, 'LAYOUT-WARD-A4', 1, 1, @Now, @Now, 1),\n    ('TMPL-WARD-CRITICAL', 'WARD_CRITICAL_CARE', 1, '危重患者特级护理观察记录单', 'WARD', 'NURSING_CRITICAL', 'WARD', 'DEPT-WARD-01', NULL, 2, 2, 'LAYOUT-WARD-A4', 1, 1, @Now, @Now, 1)", new
 		{
 			Now = nowMs
 		});
-		await conn.ExecuteAsync("INSERT OR IGNORE INTO emr_section_schemas\n    (id, template_id, section_code, section_title, render_mode, content_template_json, section_control_key, is_required, visibility_expr, sort_order, schema_version, created_at_ms, updated_at_ms, version_no)\nVALUES\n    ('SEC-OPD1-01', 'TMPL-OPD-FIRST', 'SEC_CHIEF', '主诉与现病史', 'GRID_FORM', '{\"elements\":[\"CHIEF_COMPLAINT\",\"PRESENT_ILLNESS\"]}', 'EMR.Opd.ChiefSection', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-OPD1-02', 'TMPL-OPD-FIRST', 'SEC_HISTORY', '既往史与过敏史', 'GRID_FORM', '{\"elements\":[\"PAST_HISTORY\",\"ALLERGY_HISTORY\"]}', 'EMR.Opd.HistorySection', 1, 'ALL', 2, 1, @Now, @Now, 1),\n    ('SEC-OPD1-03', 'TMPL-OPD-FIRST', 'SEC_EXAM', '体格检查与专科排他检查 (GATE-03)', 'GRID_FORM', '{\"elements\":[\"PHYSICAL_EXAM\",\"DE_PROSTATE_EXAM\",\"DE_GRAVIDITY\",\"DE_PARITY\",\"DE_MENSTRUAL_HISTORY\"]}', 'EMR.Opd.ExamSection', 1, 'ALL', 3, 1, @Now, @Now, 1),\n    ('SEC-OPD1-04', 'TMPL-OPD-FIRST', 'SEC_DIAG_PLAN', '初步诊断与诊疗处置计划', 'INLINE_PARAGRAPH', '{\"elements\":[\"PRIMARY_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Opd.DiagPlanSection', 1, 'ALL', 4, 1, @Now, @Now, 1),\n\n    ('SEC-OPD2-01', 'TMPL-OPD-FOLLOWUP', 'SEC_FOLLOWUP_MAIN', '复诊主诉与慢病控制评估', 'GRID_FORM', '{\"elements\":[\"CHIEF_COMPLAINT\",\"PRESENT_ILLNESS\",\"AUX_EXAM\"]}', 'EMR.Opd.FollowupMain', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-OPD2-02', 'TMPL-OPD-FOLLOWUP', 'SEC_FOLLOWUP_PLAN', '复诊诊断与续方调整方案', 'INLINE_PARAGRAPH', '{\"elements\":[\"PRIMARY_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Opd.FollowupPlan', 1, 'ALL', 2, 1, @Now, @Now, 1),\n\n    ('SEC-IPD1-01', 'TMPL-IPD-ADMISSION', 'SEC_IPD_HISTORY', '入院主诉、现病史与既往过敏史', 'INLINE_PARAGRAPH', '{\"elements\":[\"CHIEF_COMPLAINT\",\"PRESENT_ILLNESS\",\"PAST_HISTORY\",\"ALLERGY_HISTORY\"]}', 'EMR.Ipd.History', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-IPD1-02', 'TMPL-IPD-ADMISSION', 'SEC_IPD_PHYSICAL', '系统体格检查与专科情况', 'GRID_FORM', '{\"elements\":[\"PHYSICAL_EXAM\",\"DE_PROSTATE_EXAM\",\"DE_GRAVIDITY\",\"DE_PARITY\",\"AUX_EXAM\"]}', 'EMR.Ipd.Physical', 1, 'ALL', 2, 1, @Now, @Now, 1),\n    ('SEC-IPD1-03', 'TMPL-IPD-ADMISSION', 'SEC_IPD_DIAG', '入院诊断与三级医师诊疗计划', 'INLINE_PARAGRAPH', '{\"elements\":[\"ADMISSION_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Ipd.Diagnosis', 1, 'ALL', 3, 1, @Now, @Now, 1),\n\n    ('SEC-IPD2-01', 'TMPL-IPD-PROGRESS', 'SEC_PROG_WARDROUND', '三级医师查房记录与病情评估', 'INLINE_PARAGRAPH', '{\"elements\":[\"PROGRESS_CONTENT\",\"AUX_EXAM\"]}', 'EMR.Ipd.Progress', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-IPD2-02', 'TMPL-IPD-PROGRESS', 'SEC_PROG_ORDERPLAN', '医嘱调整与后续观察重点', 'INLINE_PARAGRAPH', '{\"elements\":[\"ADMISSION_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Ipd.ProgressPlan', 1, 'ALL', 2, 1, @Now, @Now, 1),\n\n    ('SEC-IPD3-01', 'TMPL-IPD-DISCHARGE', 'SEC_DIS_SUMMARY', '入院情况与住院诊疗经过', 'INLINE_PARAGRAPH', '{\"elements\":[\"ADMISSION_DIAGNOSIS\",\"DISCHARGE_COURSE\"]}', 'EMR.Ipd.DischargeCourse', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-IPD3-02', 'TMPL-IPD-DISCHARGE', 'SEC_DIS_ADVICE', '出院诊断、带药指导与随访计划', 'INLINE_PARAGRAPH', '{\"elements\":[\"PRIMARY_DIAGNOSIS\",\"DISCHARGE_ADVICE\"]}', 'EMR.Ipd.DischargeAdvice', 1, 'ALL', 2, 1, @Now, @Now, 1),\n\n    ('SEC-WARD1-01', 'TMPL-WARD-ADMISSION', 'SEC_NUR_GENERAL', '入科一般资料与生命体征基线', 'GRID_FORM', '{\"elements\":[\"NURSING_CONSCIOUSNESS\",\"ALLERGY_HISTORY\",\"PHYSICAL_EXAM\"]}', 'EMR.Ward.General', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-WARD1-02', 'TMPL-WARD-ADMISSION', 'SEC_NUR_SCALES', '护理三评量表 (压疮Braden / 自理Barthel / 跌倒Morse)', 'TABLE_GRID', '{\"elements\":[\"NURSING_BRADEN_SCORE\",\"NURSING_BARTHEL_SCORE\",\"NURSING_FALL_SCORE\"]}', 'EMR.Ward.Scales', 1, 'ALL', 2, 1, @Now, @Now, 1),\n    ('SEC-WARD1-03', 'TMPL-WARD-ADMISSION', 'SEC_NUR_PLAN', '专科护理措施与健康宣教记录', 'INLINE_PARAGRAPH', '{\"elements\":[\"NURSING_INTERVENTION\"]}', 'EMR.Ward.Plan', 1, 'ALL', 3, 1, @Now, @Now, 1),\n\n    ('SEC-WARD2-01', 'TMPL-WARD-CRITICAL', 'SEC_CRIT_VITALS', '危重患者严密生命体征与神志监测', 'TABLE_GRID', '{\"elements\":[\"NURSING_CONSCIOUSNESS\",\"PHYSICAL_EXAM\",\"NURSING_BRADEN_SCORE\",\"NURSING_FALL_SCORE\"]}', 'EMR.Ward.CritVitals', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-WARD2-02', 'TMPL-WARD-CRITICAL', 'SEC_CRIT_ACTION', '特级护理管路维护与抢救护理记录', 'INLINE_PARAGRAPH', '{\"elements\":[\"NURSING_INTERVENTION\"]}', 'EMR.Ward.CritAction', 1, 'ALL', 2, 1, @Now, @Now, 1)", new
+		await conn.ExecuteAsync("INSERT OR IGNORE INTO emr_section_schemas\n    (id, template_id, section_code, section_title, render_mode, content_template_json, section_control_key, is_required, visibility_expr, sort_order, schema_version, created_at_ms, updated_at_ms, version_no)\nVALUES\n    ('SEC-OPD1-01', 'TMPL-OPD-FIRST', 'SEC_CHIEF', '主诉与现病史', 'GRID_FORM', '{\"elements\":[\"CHIEF_COMPLAINT\",\"PRESENT_ILLNESS\"]}', 'EMR.Opd.ChiefSection', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-OPD1-02', 'TMPL-OPD-FIRST', 'SEC_HISTORY', '既往史与过敏史', 'GRID_FORM', '{\"elements\":[\"PAST_HISTORY\",\"ALLERGY_HISTORY\"]}', 'EMR.Opd.HistorySection', 1, 'ALL', 2, 1, @Now, @Now, 1),\n    ('SEC-OPD1-03', 'TMPL-OPD-FIRST', 'SEC_EXAM', '体格检查与专科排他检查 (GATE-03)', 'GRID_FORM', '{\"elements\":[\"PHYSICAL_EXAM\",\"DE_PROSTATE_EXAM\",\"DE_GRAVIDITY\",\"DE_PARITY\",\"DE_MENSTRUAL_HISTORY\"]}', 'EMR.Opd.ExamSection', 1, 'ALL', 3, 1, @Now, @Now, 1),\n    ('SEC-OPD1-04', 'TMPL-OPD-FIRST', 'SEC_DIAG_PLAN', '初步诊断与诊疗处置计划', 'INLINE_PARAGRAPH', '{\"elements\":[\"PRIMARY_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Opd.DiagPlanSection', 1, 'ALL', 4, 1, @Now, @Now, 1),\n\n    ('SEC-OPD2-01', 'TMPL-OPD-FOLLOWUP', 'SEC_FOLLOWUP_MAIN', '复诊主诉与慢病控制评估', 'GRID_FORM', '{\"elements\":[\"CHIEF_COMPLAINT\",\"PRESENT_ILLNESS\",\"AUX_EXAM\"]}', 'EMR.Opd.FollowupMain', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-OPD2-02', 'TMPL-OPD-FOLLOWUP', 'SEC_FOLLOWUP_PLAN', '复诊诊断与续方调整方案', 'INLINE_PARAGRAPH', '{\"elements\":[\"PRIMARY_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Opd.FollowupPlan', 1, 'ALL', 2, 1, @Now, @Now, 1),\n\n    ('SEC-OPD3-01', 'TMPL-OPD-CARDIO', 'SEC_CARDIO_CHIEF', '心前区主诉与发作特征', 'GRID_FORM', '{\"elements\":[\"CHIEF_COMPLAINT\",\"PRESENT_ILLNESS\"]}', 'EMR.Opd.CardioChief', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-OPD3-02', 'TMPL-OPD-CARDIO', 'SEC_CARDIO_RISK', '心血管危险因素与既往用药', 'GRID_FORM', '{\"elements\":[\"PAST_HISTORY\",\"ALLERGY_HISTORY\"]}', 'EMR.Opd.CardioRisk', 1, 'ALL', 2, 1, @Now, @Now, 1),\n    ('SEC-OPD3-03', 'TMPL-OPD-CARDIO', 'SEC_CARDIO_EXAM', '心脏专科体征与排他查体', 'GRID_FORM', '{\"elements\":[\"PHYSICAL_EXAM\",\"DE_PROSTATE_EXAM\",\"DE_GRAVIDITY\",\"AUX_EXAM\"]}', 'EMR.Opd.CardioExam', 1, 'ALL', 3, 1, @Now, @Now, 1),\n    ('SEC-OPD3-04', 'TMPL-OPD-CARDIO', 'SEC_CARDIO_PLAN', '初步心血管诊断与诊疗方案', 'INLINE_PARAGRAPH', '{\"elements\":[\"PRIMARY_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Opd.CardioPlan', 1, 'ALL', 4, 1, @Now, @Now, 1),\n\n    ('SEC-OPD4-01', 'TMPL-OPD-PEDIATRIC', 'SEC_PED_CHIEF', '患儿主诉与起病急缓', 'GRID_FORM', '{\"elements\":[\"CHIEF_COMPLAINT\",\"PRESENT_ILLNESS\"]}', 'EMR.Opd.PedChief', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-OPD4-02', 'TMPL-OPD-PEDIATRIC', 'SEC_PED_EXAM', '儿科体格检查与生命体征', 'GRID_FORM', '{\"elements\":[\"PHYSICAL_EXAM\",\"ALLERGY_HISTORY\"]}', 'EMR.Opd.PedExam', 1, 'ALL', 2, 1, @Now, @Now, 1),\n    ('SEC-OPD4-03', 'TMPL-OPD-PEDIATRIC', 'SEC_PED_PLAN', '初步诊断与儿童用药处置', 'INLINE_PARAGRAPH', '{\"elements\":[\"PRIMARY_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Opd.PedPlan', 1, 'ALL', 3, 1, @Now, @Now, 1),\n\n    ('SEC-IPD1-01', 'TMPL-IPD-ADMISSION', 'SEC_IPD_HISTORY', '入院主诉、现病史与既往过敏史', 'INLINE_PARAGRAPH', '{\"elements\":[\"CHIEF_COMPLAINT\",\"PRESENT_ILLNESS\",\"PAST_HISTORY\",\"ALLERGY_HISTORY\"]}', 'EMR.Ipd.History', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-IPD1-02', 'TMPL-IPD-ADMISSION', 'SEC_IPD_PHYSICAL', '系统体格检查与专科情况', 'GRID_FORM', '{\"elements\":[\"PHYSICAL_EXAM\",\"DE_PROSTATE_EXAM\",\"DE_GRAVIDITY\",\"DE_PARITY\",\"AUX_EXAM\"]}', 'EMR.Ipd.Physical', 1, 'ALL', 2, 1, @Now, @Now, 1),\n    ('SEC-IPD1-03', 'TMPL-IPD-ADMISSION', 'SEC_IPD_DIAG', '入院诊断与三级医师诊疗计划', 'INLINE_PARAGRAPH', '{\"elements\":[\"ADMISSION_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Ipd.Diagnosis', 1, 'ALL', 3, 1, @Now, @Now, 1),\n\n    ('SEC-IPD2-01', 'TMPL-IPD-PROGRESS', 'SEC_PROG_WARDROUND', '三级医师查房记录与病情评估', 'INLINE_PARAGRAPH', '{\"elements\":[\"PROGRESS_CONTENT\",\"AUX_EXAM\"]}', 'EMR.Ipd.Progress', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-IPD2-02', 'TMPL-IPD-PROGRESS', 'SEC_PROG_ORDERPLAN', '医嘱调整与后续观察重点', 'INLINE_PARAGRAPH', '{\"elements\":[\"ADMISSION_DIAGNOSIS\",\"TREATMENT_PLAN\"]}', 'EMR.Ipd.ProgressPlan', 1, 'ALL', 2, 1, @Now, @Now, 1),\n\n    ('SEC-IPD3-01', 'TMPL-IPD-DISCHARGE', 'SEC_DIS_SUMMARY', '入院情况与住院诊疗经过', 'INLINE_PARAGRAPH', '{\"elements\":[\"ADMISSION_DIAGNOSIS\",\"DISCHARGE_COURSE\"]}', 'EMR.Ipd.DischargeCourse', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-IPD3-02', 'TMPL-IPD-DISCHARGE', 'SEC_DIS_ADVICE', '出院诊断、带药指导与随访计划', 'INLINE_PARAGRAPH', '{\"elements\":[\"PRIMARY_DIAGNOSIS\",\"DISCHARGE_ADVICE\"]}', 'EMR.Ipd.DischargeAdvice', 1, 'ALL', 2, 1, @Now, @Now, 1),\n\n    ('SEC-WARD1-01', 'TMPL-WARD-ADMISSION', 'SEC_NUR_GENERAL', '入科一般资料与生命体征基线', 'GRID_FORM', '{\"elements\":[\"NURSING_CONSCIOUSNESS\",\"ALLERGY_HISTORY\",\"PHYSICAL_EXAM\"]}', 'EMR.Ward.General', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-WARD1-02', 'TMPL-WARD-ADMISSION', 'SEC_NUR_SCALES', '护理三评量表 (压疮Braden / 自理Barthel / 跌倒Morse)', 'TABLE_GRID', '{\"elements\":[\"NURSING_BRADEN_SCORE\",\"NURSING_BARTHEL_SCORE\",\"NURSING_FALL_SCORE\"]}', 'EMR.Ward.Scales', 1, 'ALL', 2, 1, @Now, @Now, 1),\n    ('SEC-WARD1-03', 'TMPL-WARD-ADMISSION', 'SEC_NUR_PLAN', '专科护理措施与健康宣教记录', 'INLINE_PARAGRAPH', '{\"elements\":[\"NURSING_INTERVENTION\"]}', 'EMR.Ward.Plan', 1, 'ALL', 3, 1, @Now, @Now, 1),\n\n    ('SEC-WARD2-01', 'TMPL-WARD-CRITICAL', 'SEC_CRIT_VITALS', '危重患者严密生命体征与神志监测', 'TABLE_GRID', '{\"elements\":[\"NURSING_CONSCIOUSNESS\",\"PHYSICAL_EXAM\",\"NURSING_BRADEN_SCORE\",\"NURSING_FALL_SCORE\"]}', 'EMR.Ward.CritVitals', 1, 'ALL', 1, 1, @Now, @Now, 1),\n    ('SEC-WARD2-02', 'TMPL-WARD-CRITICAL', 'SEC_CRIT_ACTION', '特级护理管路维护与抢救护理记录', 'INLINE_PARAGRAPH', '{\"elements\":[\"NURSING_INTERVENTION\"]}', 'EMR.Ward.CritAction', 1, 'ALL', 2, 1, @Now, @Now, 1)", new
+		{
+			Now = nowMs
+		});
+				await conn.ExecuteAsync(@"INSERT OR IGNORE INTO emr_user_templates
+    (id, user_id, user_name, dept_id, dept_name, base_template_id, template_code, template_name, emr_scene, doc_type_code, default_content_json, is_shared_dept, sort_order, is_active, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('UTMPL-IPD-CORONARY', 'USER-DOC-ATTENDING', '李主治', 'DEPT-IPD-01', '心血管内科一病区', 'TMPL-IPD-PROGRESS', 'UTMPL_CORONARY_ROUND', '心血管内科-冠心病初次查房常用模板', 'IPD', 'IPD_PROGRESS', '{""PROGRESS_CONTENT"":""今日查房：患者诉胸闷偶发，无夜间端坐呼吸，双下肢无浮肿。查体心率72次/分，律齐，未闻及明显杂音。心电图复查ST段回升，肌钙蛋白趋势下降。处置：继续强化抗血小板、调脂稳定斑块治疗，密切监测血压心率变化。"",""AUX_EXAM"":""TNT: 0.08 ng/mL, BNP: 145 pg/mL, 心电图窦性心律""}', 1, 1, 1, 1, @Now, 'USER-DOC-ATTENDING', @Now, 'USER-DOC-ATTENDING', 1),
+    ('UTMPL-IPD-HEARTFAIL', 'USER-DOC-ATTENDING', '李主治', 'DEPT-IPD-01', '心血管内科一病区', 'TMPL-IPD-ADMISSION', 'UTMPL_HF_ADMISSION', '心力衰竭入院记录常用模板 (NYHA III级)', 'IPD', 'IPD_ADMISSION', '{""CHIEF_COMPLAINT"":""活动后气促伴双下肢水肿1周，加重2天"",""PRESENT_ILLNESS"":""患者1周前劳累后出现气促、胸闷，夜间需高枕卧位，近2天双下肢水肿明显加重。既往有高血压病史10年。"",""PAST_HISTORY"":""高血压病病史10年，规律服用降压药；否认糖尿病、肝肾疾病史。"",""ALLERGY_HISTORY"":""否认明确药物及食物过敏史"",""PHYSICAL_EXAM"":""T 36.6℃, P 88次/分, R 20次/分, BP 142/88mmHg。双下肺可闻及细湿啰音，心界向左下扩大，双下肢中度可凹性水肿。"",""ADMISSION_DIAGNOSIS"":""1. 慢性充血性心力衰竭 (NYHA III级)\n2. 原发性高血压 3级 (很高危)"",""TREATMENT_PLAN"":""1. 心内科特级护理，低盐低脂饮食\n2. 利尿减轻心脏负荷，改善心室重构\n3. 监测每日出入量与电解质""}', 0, 2, 1, 1, @Now, 'USER-DOC-ATTENDING', @Now, 'USER-DOC-ATTENDING', 1),
+    ('UTMPL-WARD-POSTOP', 'USER-NURSE-W2', '陈护士', 'DEPT-WARD-01', '心血管内科病区', 'TMPL-WARD-CRITICAL', 'UTMPL_CRIT_POSTOP', '危重症特级护理-术后观察常用模板', 'WARD', 'NURSING_CRITICAL', '{""NURSING_CONSCIOUSNESS"":""神志清楚，精神可，自主体位，对答切题"",""PHYSICAL_EXAM"":""心电监护示窦性心律，心率75次/分，律齐，SpO2 98%，穿刺点敷料干燥无渗血渗液"",""NURSING_BRADEN_SCORE"":""15"",""NURSING_FALL_SCORE"":""35"",""NURSING_INTERVENTION"":""1. 予以心电、无创血压、脉搏血氧饱和度持续监护；\n2. 保持呼吸道通畅，低流量吸氧2L/min；\n3. 密切观察穿刺侧肢体皮温、足背动脉搏动及局部血肿情况；\n4. 落实防跌倒、防压疮护理措施，严格交接班。""}', 1, 1, 1, 1, @Now, 'USER-NURSE-W2', @Now, 'USER-NURSE-W2', 1),
+    ('UTMPL-WARD-ELDERLY', 'USER-NURSE-W2', '陈护士', 'DEPT-WARD-01', '心血管内科病区', 'TMPL-WARD-ADMISSION', 'UTMPL_NUR_ELDERLY', '高龄患者入院三评与护理评估模板', 'WARD', 'NURSING_ADMISSION', '{""NURSING_CONSCIOUSNESS"":""神清，慢性病容，步态不稳需家属搀扶"",""ALLERGY_HISTORY"":""青霉素过敏"",""PHYSICAL_EXAM"":""T 36.5℃, P 76次/分, R 18次/分, BP 130/80mmHg，皮肤弹性稍差，无破损"",""NURSING_BRADEN_SCORE"":""13"",""NURSING_BARTHEL_SCORE"":""55"",""NURSING_FALL_SCORE"":""50"",""NURSING_INTERVENTION"":""1. 入院宣教并挂黄色跌倒高危警示牌，床栏双侧拉起；\n2. 指导家属24小时专人陪护，下床时执行3个半分钟原则；\n3. 评估骶尾部受压处皮肤，每2小时翻身拍背1次；\n4. 告知呼叫器使用方法置于手边方便处。""}', 0, 2, 1, 1, @Now, 'USER-NURSE-W2', @Now, 'USER-NURSE-W2', 1),
+    ('UTMPL-OPD-CAD', 'USER-DOC-OPD', '张建国', 'DEPT-OPD-01', '心血管内科门诊', 'TMPL-OPD-FIRST', 'UTMPL_CAD_FIRST', '心血管内科-冠心病劳力性心绞痛门诊初诊模板', 'OPD', 'OPD_FIRST', '{""CHIEF_COMPLAINT"":""反复发作性心前区闷痛2周，加重2天"",""PRESENT_ILLNESS"":""患者2周前于快步行走或劳累时出现心前区闷痛，向左肩背部放射，持续约3-5分钟，休息后可自行缓解。近2天发作频率增加，轻微活动即感胸闷，无夜间阵发性呼吸困难、无心悸晕厥。"",""PAST_HISTORY"":""有高血压病史5年，规律服用降压药物，血压控制尚可；否认糖尿病、肝肾疾病史。"",""ALLERGY_HISTORY"":""否认明确食物及药物过敏史"",""PHYSICAL_EXAM"":""BP 138/84mmHg, HR 76次/分, 律齐, 各瓣膜听诊区未闻及病理性杂音, 双下肢无水肿。"",""PRIMARY_DIAGNOSIS"":""1. 冠状动脉粥样硬化性心脏病 (劳力性心绞痛 CCS II级)\n2. 原发性高血压 2级 (很高危)"",""TREATMENT_PLAN"":""1. 完善静息心电图、心肌钙蛋白I及心脏彩超检查\n2. 予以阿司匹林肠溶片抗血小板、阿托伐他汀钙片调脂稳定斑块\n3. 门诊心内科随访，若胸痛持续加重需立即急诊就诊""}', 1, 1, 1, 1, @Now, 'USER-DOC-OPD', @Now, 'USER-DOC-OPD', 1),
+    ('UTMPL-OPD-HTN', 'USER-DOC-OPD', '张建国', 'DEPT-OPD-01', '心血管内科门诊', 'TMPL-OPD-FOLLOWUP', 'UTMPL_HTN_FOLLOWUP', '心血管内科-高血压慢病规范随访模板', 'OPD', 'OPD_FOLLOWUP', '{""CHIEF_COMPLAINT"":""确诊原发性高血压3年，门诊常规复诊与配药"",""PRESENT_ILLNESS"":""患者规律服用氨氯地平片5mg qd，近期自测晨起血压在130-140/80-88mmHg之间，偶有轻微头昏，无视物旋转，无心慌胸闷，二便正常，睡眠一般。"",""AUX_EXAM"":""今日门诊复测血压 135/82mmHg，心率 72次/分，心律规整。近期生化示肝肾功能及血脂基本正常。"",""PRIMARY_DIAGNOSIS"":""原发性高血压 2级 (高危)"",""TREATMENT_PLAN"":""1. 继续维持当前降压药物治疗方案，坚持低盐低脂饮食\n2. 每日早晚规律监测血压并做日记记录\n3. 4周后门诊慢病专科复诊，必要时联合降压药物""}', 1, 2, 1, 1, @Now, 'USER-DOC-OPD', @Now, 'USER-DOC-OPD', 1),
+    ('UTMPL-OPD-GASTRO', 'USER-DOC-OPD', '张建国', 'DEPT-OPD-01', '心血管内科门诊', 'TMPL-OPD-FIRST', 'UTMPL_GASTRO_FIRST', '张医师-急性胃肠炎门诊初诊个人模板', 'OPD', 'OPD_FIRST', '{""CHIEF_COMPLAINT"":""腹痛伴腹泻、恶心1天"",""PRESENT_ILLNESS"":""患者昨日进食不洁生冷食物后突发脐周阵发性隐痛，随后出现水样便4次，伴恶心、反酸，无明显发热、无里急后重及脓血便。"",""PAST_HISTORY"":""平素健康，无慢性腹泻及消化道溃疡病史。"",""ALLERGY_HISTORY"":""青霉素过敏"",""PHYSICAL_EXAM"":""腹平软，脐周轻度压痛，无反跳痛及肌紧张，肠鸣音活跃约6-7次/分。"",""PRIMARY_DIAGNOSIS"":""急性胃肠炎"",""TREATMENT_PLAN"":""1. 急查便常规+潜血、血常规及电解质\n2. 口服补液盐纠正脱水，蒙脱石散止泻收敛，抗痉挛对症支持\n3. 忌油腻生冷辛辣，半流质饮食，若出现高热脱水症状即刻复诊""}', 0, 3, 1, 1, @Now, 'USER-DOC-OPD', @Now, 'USER-DOC-OPD', 1)", new
 		{
 			Now = nowMs
 		});
@@ -505,7 +518,87 @@ INSERT OR IGNORE INTO eqp_maintenance_records
     (id, equipment_id, type, maintenance_date, cost, vendor, engineer_name, result, remark, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
 VALUES
     ('MAINT-SEED-01', 'EQP-SEED-01', 'CALIBRATION', '2026-01-10', 1500.00, '市计量科学研究院', '张工', 'QUALIFIED', '气道压力传感器精度合格，出具法定检定证书', 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
+-- Step 21: Custom SQL Reports & Parameterized Dynamic Queries
+INSERT OR IGNORE INTO ops_report_definitions
+    (id, report_code, report_name, category, description, sql_template, parameters_schema_json, display_columns_json, is_published, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    ('RPT-DEF-01', 'RPT_OPD_DEPT_SUMMARY', '门急诊科室诊疗汇总报表', '门急诊', '按就诊状态与科室名称动态统计各临床科室门诊量及患者总数',
+'SELECT 
+    COALESCE(d.dept_name, v.opd_dept_id) AS 科室名称,
+    COUNT(v.id) AS 就诊总人次,
+    COUNT(DISTINCT v.patient_id) AS 患者总数
+FROM opd_visits v
+LEFT JOIN sys_departments d ON d.id = v.opd_dept_id
+WHERE (@Status IS NULL OR v.status = @Status)
+  AND (@DeptName IS NULL OR @DeptName = '''' OR d.dept_name LIKE ''%'' || @DeptName || ''%'')
+GROUP BY d.dept_name, v.opd_dept_id
+ORDER BY 就诊总人次 DESC',
+'[
+  {"Name":"Status","Label":"就诊状态 (1=候诊, 2=已完成)","Type":"INT","DefaultValue":"2","IsRequired":false,"Description":"就诊状态代码，留空统计全部"},
+  {"Name":"DeptName","Label":"科室名称关键字","Type":"STRING","DefaultValue":"","IsRequired":false,"Description":"科室名称模糊搜索，留空查询全院"}
+]',
+'["科室名称","就诊总人次","患者总数"]', 1, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+
+    ('RPT-DEF-02', 'RPT_IPD_WARD_OCCUPANCY', '住院病区在院床位与费用负荷报表', '住院业务', '动态查询各病区当前在院患者负荷与预交金结余总额',
+'SELECT 
+    COALESCE(w.dept_name, e.admit_ward_id) AS 病区名称,
+    COUNT(e.id) AS 在院患者数,
+    COALESCE(SUM(e.prepayment_balance), 0) AS 预交金结余总额
+FROM ipd_encounters e
+LEFT JOIN sys_departments w ON w.id = e.admit_ward_id
+WHERE (@Status IS NULL OR e.status = @Status)
+  AND (@WardName IS NULL OR @WardName = '''' OR w.dept_name LIKE ''%'' || @WardName || ''%'')
+GROUP BY w.dept_name, e.admit_ward_id
+ORDER BY 在院患者数 DESC',
+'[
+  {"Name":"Status","Label":"在院状态码 (1=在院, 2=已出院)","Type":"INT","DefaultValue":"1","IsRequired":false,"Description":"1=在院患者, 2=已办理出院"},
+  {"Name":"WardName","Label":"病区名称关键字","Type":"STRING","DefaultValue":"","IsRequired":false,"Description":"病区名称模糊搜索，留空查询全院"}
+]',
+'["病区名称","在院患者数","预交金结余总额"]', 1, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+
+    ('RPT-DEF-03', 'RPT_DRUG_DISPENSE_TOP', '处方调剂药品消耗与销售排行报表', '药事进销存', '按药品名称和最低金额过滤门诊药房发药消耗与销售金额排行榜',
+'SELECT 
+    i.drug_id AS 药品编号,
+    i.drug_name_snapshot AS 药品名称,
+    COUNT(i.id) AS 调剂明细数,
+    SUM(i.total_quantity) AS 发出总数量,
+    SUM(i.total_quantity * i.unit_price) AS 预估总金额
+FROM opd_prescription_items i
+WHERE i.is_deleted = 0
+  AND (@DrugName IS NULL OR @DrugName = '''' OR i.drug_name_snapshot LIKE ''%'' || @DrugName || ''%'')
+GROUP BY i.drug_id, i.drug_name_snapshot
+HAVING (@MinAmount IS NULL OR SUM(i.total_quantity * i.unit_price) >= @MinAmount)
+ORDER BY 预估总金额 DESC',
+'[
+  {"Name":"DrugName","Label":"药品名称关键字","Type":"STRING","DefaultValue":"","IsRequired":false,"Description":"药品名称模糊检索，留空统计全部"},
+  {"Name":"MinAmount","Label":"最低累计销售金额","Type":"DECIMAL","DefaultValue":"0","IsRequired":false,"Description":"过滤大于等于该销售额的药品"}
+]',
+'["药品编号","药品名称","调剂明细数","发出总数量","预估总金额"]', 1, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1),
+
+    ('RPT-DEF-04', 'RPT_FIN_PAYMENT_CHANNEL', '财务收费与支付渠道对账汇总报表', '财务结算', '多维汇总门急诊与住院各支付渠道收款笔数与实收总额',
+'SELECT 
+    p.payment_channel AS 支付渠道,
+    p.scene AS 结算场景,
+    COUNT(p.id) AS 结算笔数,
+    SUM(p.total_amount) AS 结算总额,
+    SUM(p.self_pay_amount) AS 实收自付总额
+FROM fin_payment_orders p
+WHERE p.status = 1
+  AND (@Channel IS NULL OR @Channel = '''' OR p.payment_channel = @Channel)
+  AND (@Scene IS NULL OR @Scene = '''' OR p.scene = @Scene)
+GROUP BY p.payment_channel, p.scene
+ORDER BY 结算总额 DESC',
+'[
+  {"Name":"Channel","Label":"支付渠道 (WECHAT/ALIPAY/CASH/CARD)","Type":"STRING","DefaultValue":"","IsRequired":false,"Description":"支付渠道代码，留空统计全渠道"},
+  {"Name":"Scene","Label":"业务场景 (OPD/IPD)","Type":"STRING","DefaultValue":"","IsRequired":false,"Description":"业务场景代码，留空统计全部"}
+]',
+'["支付渠道","结算场景","结算笔数","结算总额","实收自付总额"]', 1, 1, @Now, 'SYSTEM', @Now, 'SYSTEM', 1);
+
 """, new { Now = nowMs });
+
+		await SeedEmrLevel7DataAsync(conn, nowMs);
+		await SeedWorkflowDataAsync(conn, nowMs);
 	}
 
 	private static async Task ResetDemoPasswordsAsync(DbConnection conn, long nowMs)

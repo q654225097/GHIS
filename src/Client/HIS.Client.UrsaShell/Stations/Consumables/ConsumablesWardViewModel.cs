@@ -27,13 +27,27 @@ public sealed class ConsumablesWardViewModel : ClientModelBase, IShortcutTarget
 
     // High value trace code form
     private string _scanTraceCode = "UDI-HC-2026110001";
-    private string _patientId = "PAT85061801";
-    private string _encounterId = "ADM20261105001";
+    private string _patientId = string.Empty;
+    private string _encounterId = string.Empty;
 
     public ConsumablesWardViewModel(WorkbenchModel workbench, ShellViewModel? shell = null)
     {
         Workbench = workbench;
         _shell = shell;
+
+        if (workbench.SelectedInpatient != null)
+        {
+            _patientId = workbench.SelectedInpatient.MedicalRecordNo;
+            _encounterId = workbench.SelectedInpatient.AdmissionNo;
+        }
+        workbench.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(WorkbenchModel.SelectedInpatient) && workbench.SelectedInpatient != null)
+            {
+                PatientId = workbench.SelectedInpatient.MedicalRecordNo;
+                EncounterId = workbench.SelectedInpatient.AdmissionNo;
+            }
+        };
 
         SubmitRequisitionCommand = new AsyncRelayCommand(SubmitRequisitionAsync);
         BindTraceCodeCommand = new AsyncRelayCommand(BindTraceCodeAsync);

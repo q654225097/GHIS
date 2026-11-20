@@ -218,6 +218,49 @@ public class EmrVisualFieldItemModel : ClientModelBase
 
 	public string RequiredBadgeText => IsRequired ? "必填" : "选填";
 
+	private int _row = 0;
+	private int _col = 0;
+	private int _colSpan = 1;
+	private int _rowSpan = 1;
+	private int _widthPx = 240;
+	private int _heightPx = 32;
+	private decimal _printHeightMm = 8.0m;
+	private string _controlType = "SINGLE_TEXT";
+	private string? _defaultValue;
+
+	public int Row { get => _row; set => SetField(ref _row, value); }
+	public int Col { get => _col; set => SetField(ref _col, value); }
+	public int ColSpan { get => _colSpan; set => SetField(ref _colSpan, value); }
+	public int RowSpan { get => _rowSpan; set => SetField(ref _rowSpan, value); }
+	public int WidthPx { get => _widthPx; set => SetField(ref _widthPx, value); }
+	public int HeightPx { get => _heightPx; set => SetField(ref _heightPx, value); }
+	public decimal PrintHeightMm { get => _printHeightMm; set => SetField(ref _printHeightMm, value); }
+	public string ControlType
+	{
+		get => _controlType;
+		set
+		{
+			if (SetField(ref _controlType, value))
+			{
+				OnPropertyChanged(nameof(ControlTypeDisplay));
+			}
+		}
+	}
+	public string? DefaultValue { get => _defaultValue; set => SetField(ref _defaultValue, value); }
+
+	public string ControlTypeDisplay => ControlType switch
+	{
+		"MULTI_TEXT" => "多行文本域 (TextArea)",
+		"INT_INPUT" => "整数数值输入 (IntNumber)",
+		"DECIMAL_INPUT" => "小数数值输入 (DecimalNumber)",
+		"SELECT" => "字典下拉单选 (ComboBox)",
+		"DATE" => "日期选择器 (DatePicker)",
+		"DATETIME" => "日期时间选择 (DateTimePicker)",
+		"CHECKBOX" => "布尔勾选框 (CheckBox)",
+		"MACRO_LABEL" => "宏数据引用 (MacroLabel)",
+		_ => "单行文本框 (TextBox)"
+	};
+
 	public string FormattedPrintValue
 	{
 		get

@@ -32,5 +32,15 @@ public class SysUser : BaseEntity
 
 	public short MustChangePassword { get; set; } = 0;
 
+	public string ProfessionalTitle { get; set; } = "RESIDENT";
+
+	public int SpecialExamLevel { get; set; } = 1;
+
+	public short IsExternalDoctor { get; set; } = 0;
+
+	public string? ExternalOrgCode { get; set; }
+
+	public string? ExternalOrgName { get; set; }
+
 	public short IsActive { get; set; } = 1;
 }

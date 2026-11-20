@@ -18,7 +18,7 @@ namespace HIS.Modules.Pharmacy.Controllers;
 
 [ApiController]
 [Route("api/v4/pharmacy")]
-public class PharmacyController : ControllerBase
+public partial class PharmacyController : ControllerBase
 {
 	public sealed record DispensePrescriptionRequestDto(string PharmacyId, string PrescriptionId, string PatientId, string PharmacistId, string? RequestKey = null);
 
@@ -721,6 +721,13 @@ public class PharmacyController : ControllerBase
 					loaded.PharmacyId, loaded.DispenseNo, pharmacistId, ct);
 				if (!restored.IsSuccess)
 					throw new InvalidOperationException(restored.Message);
+				if (!string.IsNullOrWhiteSpace(loaded.WardSummaryId))
+				{
+					await conn.ExecuteAsync(new CommandDefinition(
+						"UPDATE fin_inpatient_fee_items SET is_refunded = 1, updated_at_ms = @Now, updated_by = @PharmacistId WHERE encounter_id = @EncounterId AND is_settled = 0 AND is_refunded = 0",
+						new { EncounterId = loaded.WardSummaryId, Now = nowMs, PharmacistId = pharmacistId },
+						tx, cancellationToken: ct));
+				}
 				if (!string.IsNullOrWhiteSpace(loaded.PrescriptionId))
 				{
 					var rxUpdated = await conn.ExecuteAsync(new CommandDefinition(
@@ -913,7 +920,8 @@ public class PharmacyController : ControllerBase
 				var nowMs = SystemTime.UtcNowMs;
 				var encounter = await conn.QuerySingleOrDefaultAsync<EncounterForDispenseRow>(new CommandDefinition(
 					"SELECT e.id AS Id, e.patient_id AS PatientId, e.admission_no AS AdmissionNo, " +
-					"e.status AS Status, e.triage_status AS TriageStatus, p.full_name AS PatientName " +
+					"e.status AS Status, e.triage_status AS TriageStatus, p.full_name AS PatientName, " +
+					"COALESCE(e.admit_dept_id, 'DEPT-IPD-01') AS AdmitDeptId " +
 					"FROM ipd_encounters e LEFT JOIN pat_patients p ON p.id = e.patient_id WHERE e.id = @Id",
 					new { Id = req.EncounterId.Trim() }, tx, cancellationToken: ct));
 				if (encounter == null)
@@ -1077,6 +1085,37 @@ public class PharmacyController : ControllerBase
 						tx, cancellationToken: ct));
 					if (linked != 1)
 						throw new InvalidOperationException("住院发药单关联失败，禁止发药");
+
+					await conn.ExecuteAsync(new CommandDefinition(
+						"""
+						INSERT INTO fin_inpatient_fee_items
+						    (id, encounter_id, patient_id, fee_date_int, item_category, item_code, item_name,
+						     spec, unit_name, unit_price, quantity, total_amount, self_pay_ratio, reimburse_type,
+						     charge_dept_id, exec_dept_id, order_id, is_settled, is_refunded,
+						     created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+						VALUES
+						    (@Id, @EncounterId, @PatientId, @FeeDateInt, 'MEDICINE', @ItemCode, @ItemName,
+						     '', '盒', @UnitPrice, @Quantity, @TotalAmount, 0, 'CLASS_A',
+						     @ChargeDeptId, @ExecDeptId, @OrderId, 0, 0,
+						     @Now, @OperatorId, @Now, @OperatorId, 1)
+						""",
+						new
+						{
+							Id = Guid.NewGuid().ToString("D"),
+							EncounterId = encounter.Id,
+							PatientId = encounter.PatientId,
+							FeeDateInt = int.Parse(DateTimeOffset.UtcNow.ToString("yyyyMMdd")),
+							ItemCode = drug.DrugCode,
+							ItemName = drug.DrugName,
+							UnitPrice = drug.Price,
+							Quantity = (decimal)line.Quantity,
+							TotalAmount = drug.Price * line.Quantity,
+							ChargeDeptId = encounter.AdmitDeptId,
+							ExecDeptId = pharmacyId,
+							OrderId = line.MedicalOrderId,
+							Now = nowMs,
+							OperatorId = pharmacistId
+						}, tx, cancellationToken: ct));
 				}
 				return (dispenseOrder, (string?)null);
 			});
@@ -1136,6 +1175,7 @@ public class PharmacyController : ControllerBase
 		public string PatientId { get; set; } = string.Empty;
 		public string AdmissionNo { get; set; } = string.Empty;
 		public string PatientName { get; set; } = string.Empty;
+		public string AdmitDeptId { get; set; } = "DEPT-IPD-01";
 		public int Status { get; set; }
 		public int TriageStatus { get; set; }
 	}

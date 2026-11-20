@@ -1,0 +1,297 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
+             xmlns:shell="using:HIS.Client.UrsaShell.Shell"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             x:Class="HIS.Client.UrsaShell.Shell.MainShellView"
+             x:DataType="shell:ShellViewModel"
+             x:Name="ShellRoot"
+             Background="{DynamicResource SemiColorBackground0}">
+
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Ctrl+K" Command="{Binding FocusGlobalSearchCommand}"/>
+    </UserControl.KeyBindings>
+
+    <Grid RowDefinitions="48,*,28">
+        <!-- 1. Top Bar -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,0,0,1"
+                Padding="14,0">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <!-- Left Brand + Active Station -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Border Background="{DynamicResource SemiColorPrimary}" CornerRadius="6" Padding="8,4">
+                        <TextBlock Text="智医 HIS" FontSize="12" FontWeight="Bold" Foreground="White"/>
+                    </Border>
+                    <TextBlock Text="{Binding ActiveStationTitle}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}" VerticalAlignment="Center"/>
+                    <controls:StatusTag Text="{Binding Workbench.CurrentRoleDisplayName}" Kind="Info"/>
+                    <controls:StatusTag Text="管理员监督审计模式" Kind="Warning"
+                                        ToolTip.Tip="系统管理员拥有全院全局监督权限；所有操作将按管理员身份独立审计记录"
+                                        IsVisible="{Binding IsAdminSupervisionMode}"/>
+                </StackPanel>
+
+                <!-- Center Global Patient Search (Ctrl+K) -->
+                <Grid Grid.Column="1" HorizontalAlignment="Center" Width="380" VerticalAlignment="Center">
+                    <TextBox x:Name="GlobalSearchBox"
+                             Text="{Binding GlobalSearchQuery, Mode=TwoWay}"
+                             PlaceholderText="搜索患者姓名 / 门诊号 / 住院号 / 床号 (Ctrl+K)"
+                             Height="32"
+                             FontSize="12"
+                             GotFocus="GlobalSearchBox_GotFocus"
+                             KeyDown="GlobalSearchBox_KeyDown"/>
+                    <Popup PlacementTarget="{Binding #GlobalSearchBox}"
+                           Placement="BottomEdgeAlignedLeft"
+                           IsOpen="{Binding IsSearchDropdownOpen, Mode=TwoWay}"
+                           IsLightDismissEnabled="True">
+                        <Border Width="380"
+                                MaxHeight="340"
+                                Background="{DynamicResource SemiColorBackground0}"
+                                BorderBrush="{DynamicResource SemiColorBorder}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="8">
+                            <ScrollViewer MaxHeight="320">
+                                <ItemsControl ItemsSource="{Binding GlobalSearchResults}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="shell:GlobalPatientHit">
+                                            <Button Classes="Tertiary"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left"
+                                                    Padding="8,6"
+                                                    Command="{Binding #ShellRoot.((shell:ShellViewModel)DataContext).SelectSearchHitCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                    <controls:StatusTag Grid.Column="0" Text="{Binding ScopeLabel}" Kind="Primary"/>
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <TextBlock Text="{Binding DisplayTitle}" FontSize="12" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                    </Popup>
+                </Grid>
+
+                <!-- Right Context + SignalR Realtime Hub + Critical Alert + Logout -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <!-- SignalR Connection Status Badge -->
+                    <Border Background="#1A10B981" CornerRadius="4" Padding="6,4" VerticalAlignment="Center" IsVisible="{Binding IsAlertHubConnected}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Ellipse Width="6" Height="6" Fill="#10B981" VerticalAlignment="Center"/>
+                            <TextBlock Text="实时告警已连接" FontSize="11" Foreground="#10B981" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="#1AEF4444" CornerRadius="4" Padding="6,4" VerticalAlignment="Center" IsVisible="{Binding !IsAlertHubConnected}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Ellipse Width="6" Height="6" Fill="#EF4444" VerticalAlignment="Center"/>
+                            <TextBlock Text="实时告警离线" FontSize="11" Foreground="#EF4444" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Realtime Alerts Drawer Button -->
+                    <Button Height="30"
+                            Padding="8,0"
+                            Classes="Tertiary"
+                            FontSize="12"
+                            Command="{Binding OpenAlertHistoryDrawerCommand}"
+                            ToolTip.Tip="查看临床实时推送与预警历史">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="🔔" VerticalAlignment="Center"/>
+                            <TextBlock Text="实时告警" VerticalAlignment="Center"/>
+                            <Border Background="#EF4444" CornerRadius="8" Padding="5,1" VerticalAlignment="Center" IsVisible="{Binding HasUnreadAlerts}">
+                                <TextBlock Text="{Binding UnreadAlertCountText}" FontSize="10" Foreground="White" FontWeight="Bold"/>
+                            </Border>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Content="⚠ 危急值待签收"
+                            Classes="Danger"
+                            Height="30"
+                            Padding="10,0"
+                            FontSize="12"
+                            IsVisible="{Binding Workbench.HasActiveCriticalValue}"
+                            Command="{Binding OpenCriticalValueDrawerCommand}"/>
+                    <Button Height="30"
+                            Padding="10,0"
+                            FontSize="12"
+                            Command="{Binding OpenContextSwitchDrawerCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding Workbench.ActiveContextSummary}" VerticalAlignment="Center"/>
+                            <TextBlock Text="⇄" VerticalAlignment="Center" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Content="退出登录"
+                            Classes="Tertiary"
+                            Height="30"
+                            Padding="10,0"
+                            FontSize="12"
+                            Command="{Binding LogoutCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 2. Main Body: Left Navigation + Center Workspace -->
+        <Grid Grid.Row="1" ColumnDefinitions="208,*">
+            <!-- Left Grouped Navigation with Todo Badges -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="0,0,1,0"
+                    Padding="8,10">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding NavGroups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="shell:ShellNavGroup">
+                                <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch"
+                                          Margin="0,0,0,6">
+                                    <Expander.Header>
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="12"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource SemiColorText2}"/>
+                                    </Expander.Header>
+                                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,4,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="shell:ShellNavItem">
+                                                <Button Classes="Tertiary"
+                                                        Classes.Primary="{Binding IsSelected}"
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Stretch"
+                                                        Height="34"
+                                                        Margin="0,1"
+                                                        Padding="8,0"
+                                                        Command="{Binding #ShellRoot.((shell:ShellViewModel)DataContext).NavigateCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                                        <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="13" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                        <Border Grid.Column="2"
+                                                                IsVisible="{Binding HasBadge}"
+                                                                Background="{DynamicResource SemiColorDanger}"
+                                                                CornerRadius="9"
+                                                                Padding="6,1"
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding BadgeText}"
+                                                                       FontSize="11"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="White"/>
+                                                        </Border>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Center Workspace: PatientBanner + Station Host -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                <controls:PatientBanner Grid.Row="0"
+                                        IsVisible="{Binding IsClinicalStation}"
+                                        HasPatient="{Binding BannerHasPatient}"
+                                        EncounterBadge="{Binding BannerEncounterBadge}"
+                                        PatientName="{Binding BannerPatientName}"
+                                        GenderAndAge="{Binding BannerGenderAndAge}"
+                                        IdentifierText="{Binding BannerIdentifier}"
+                                        DiagnosisText="{Binding BannerDiagnosis}"
+                                        HasAllergy="{Binding BannerHasAllergy}"
+                                        AllergyText="{Binding BannerAllergyText}"
+                                        TimelineCommand="{Binding OpenTimelineDrawerCommand}"
+                                        SwitchPatientCommand="{Binding FocusGlobalSearchCommand}"/>
+
+                <ContentControl Grid.Row="1" Content="{Binding CurrentStationView}"/>
+            </Grid>
+        </Grid>
+
+        <!-- 3. Bottom Status Bar (Real Connection + Clickable 20-Item History) -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}"
+                BorderThickness="0,1,0,0"
+                Padding="14,0">
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                             Fill="{DynamicResource SemiColorSuccess}"
+                             IsVisible="{Binding Workbench.IsServerReachable}"/>
+                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                             Fill="{DynamicResource SemiColorWarning}"
+                             IsVisible="{Binding !Workbench.IsServerReachable}"/>
+                    <TextBlock Text="{Binding Workbench.ServerStatusText}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                </StackPanel>
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Workbench.SystemNotice}"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource SemiColorText2}"
+                           HorizontalAlignment="Right"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="16,0,8,0"/>
+
+                <Button Grid.Column="2" Content="最近消息" Classes="Tertiary" Height="22" Padding="8,0" FontSize="11" VerticalAlignment="Center">
+                    <Button.Flyout>
+                        <Flyout Placement="TopEdgeAlignedRight">
+                            <Border Width="420" MaxHeight="320" Padding="8">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="最近操作记录 (最多 20 条)" FontWeight="Bold" FontSize="12"/>
+                                    <ScrollViewer MaxHeight="260">
+                                        <ItemsControl ItemsSource="{Binding Workbench.SystemNoticeHistory}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:NoticeHistoryItem">
+                                                    <Border Padding="6,4" Margin="0,2" CornerRadius="4" Background="{DynamicResource SemiColorBackground1}">
+                                                        <Grid ColumnDefinitions="56,*">
+                                                            <TextBlock Grid.Column="0" Text="{Binding Timestamp}" FontSize="11" Foreground="{DynamicResource SemiColorText3}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="11" TextWrapping="Wrap"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </Border>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- 4. Slide-over Right Drawer -->
+        <controls:RightDrawer Grid.RowSpan="3"
+                              IsOpen="{Binding IsDrawerOpen}"
+                              Title="{Binding DrawerTitle}"
+                              Subtitle="{Binding DrawerSubtitle}"
+                              DrawerWidth="{Binding DrawerWidth}"
+                              DrawerContent="{Binding DrawerContent}"
+                              CloseCommand="{Binding CloseDrawerCommand}"/>
+
+        <!-- 5. Lightweight Confirmation Modal -->
+        <controls:ConfirmDialog Grid.RowSpan="3"
+                                IsOpen="{Binding IsConfirmOpen}"
+                                Title="{Binding ConfirmTitle}"
+                                Message="{Binding ConfirmMessage}"
+                                ConfirmText="{Binding ConfirmButtonText}"
+                                ConfirmCommand="{Binding ConfirmAcceptCommand}"
+                                CancelCommand="{Binding ConfirmCancelCommand}"/>
+
+        <!-- 6. Non-blocking Top-Right Toasts -->
+        <controls:ToastHost Grid.RowSpan="3"
+                            Items="{Binding Toasts}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,58,18,0"/>
+    </Grid>
+</UserControl>

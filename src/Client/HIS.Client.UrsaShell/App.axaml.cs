@@ -54,6 +54,10 @@ public partial class App : Application
             loginWindow.Show();
 #endif
         }
+        else if (ApplicationLifetime is ISingleViewApplicationLifetime singleView)
+        {
+            singleView.MainView = new Views.MainHostView();
+        }
 
         base.OnFrameworkInitializationCompleted();
     }

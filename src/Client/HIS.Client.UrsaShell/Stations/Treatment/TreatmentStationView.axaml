@@ -1,0 +1,234 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Treatment"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Treatment.TreatmentStationView"
+             x:DataType="local:TreatmentStationViewModel">
+    <Grid ColumnDefinitions="380,*" Margin="14">
+        <!-- Left: Treatment Requests List & Actions -->
+        <Border Grid.Column="0" Margin="0,0,10,0" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+            <Grid RowDefinitions="Auto,Auto,Auto,*">
+                <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,10">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="一般治疗中心与预约队列 (06.01)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <Button Grid.Column="1" Content="刷新" Height="28" Command="{Binding RefreshCommand}"/>
+                    </Grid>
+                    <TextBlock Text="透析 / 化疗 / 康复理疗 / 高压氧等治疗项目与参数联动" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+
+                <!-- Action Bar -->
+                <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="0,0,0,10">
+                    <Button Grid.Column="0" Content="➕ 开立新申请" Classes="Primary" Height="32" Margin="0,0,4,0" Command="{Binding ToggleNewRequestFormCommand}"/>
+                    <Button Grid.Column="1" Content="📅 预约排班" Classes="Secondary" Height="32" Margin="4,0,0,0" Command="{Binding ToggleAppointmentFormCommand}"/>
+                </Grid>
+
+                <!-- Search -->
+                <TextBox Grid.Row="2" Text="{Binding SearchQuery, Mode=TwoWay}" PlaceholderText="搜索治疗单号或患者..." Height="32" Margin="0,0,0,10"/>
+
+                <!-- Requests ScrollViewer -->
+                <ScrollViewer Grid.Row="3">
+                    <ItemsControl ItemsSource="{Binding Requests}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="local:TreatmentRequestItem">
+                                <Button Classes="Tertiary" HorizontalAlignment="Stretch" Padding="0" Margin="0,3"
+                                        Command="{Binding $parent[UserControl].((local:TreatmentStationViewModel)DataContext).SelectRequestCommand}"
+                                        CommandParameter="{Binding}">
+                                    <Border Padding="10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding TreatmentName}" FontWeight="Bold" FontSize="13"/>
+                                                <controls:StatusTag Grid.Column="1" Text="{Binding StatusText}" Kind="Primary"/>
+                                            </Grid>
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding PatientName}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                                                <controls:StatusTag Grid.Column="1" Text="高风险" Kind="Danger" IsVisible="{Binding IsHighRisk}"/>
+                                            </Grid>
+                                            <TextBlock Text="{Binding DiagnosisIcd}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding ProgressText, StringFormat='疗程进度: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding RequestNo}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- Right: Detail, Lab-Linked Suggestions & Execution Form -->
+        <Border Grid.Column="1" Padding="16" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+            <ScrollViewer>
+                <StackPanel Spacing="14">
+                    <!-- Selected Request Banner -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="{Binding SelectedRequest.TreatmentName, FallbackValue='请从左侧选择治疗申请单'}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding SelectedRequest.PatientName, FallbackValue='-'}" FontWeight="SemiBold" FontSize="13"/>
+                                    <TextBlock Text="{Binding SelectedRequest.DiagnosisIcd, StringFormat='主诊断: {0}', FallbackValue='-'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding SelectedRequest.RequestNo, StringFormat='申请单号: {0}', FallbackValue='-'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <controls:StatusTag Grid.Column="1" Text="{Binding SelectedRequest.StatusText, FallbackValue='待选择'}" Kind="Success"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- New Request Form Drawer -->
+                    <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="12" IsVisible="{Binding IsNewRequestFormVisible}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="开立新一般治疗申请单" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                            <Grid ColumnDefinitions="*,*" Margin="0,4">
+                                <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,6,0">
+                                    <TextBlock Text="选择在院患者:" FontSize="11"/>
+                                    <ComboBox ItemsSource="{Binding Inpatients}"
+                                              SelectedItem="{Binding SelectedInpatientForRequest}"
+                                              HorizontalAlignment="Stretch" Height="30">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="local:TreatmentInpatientItem">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2" Margin="6,0,0,0">
+                                    <TextBlock Text="选择治疗项目:" FontSize="11"/>
+                                    <ComboBox ItemsSource="{Binding Catalogs}"
+                                              SelectedItem="{Binding SelectedCatalogForRequest}"
+                                              HorizontalAlignment="Stretch" Height="30">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="local:TreatmentCatalogItem">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                            <Grid ColumnDefinitions="120,*,*" Margin="0,4">
+                                <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,6,0">
+                                    <TextBlock Text="处方疗程次数:" FontSize="11"/>
+                                    <NumericUpDown Value="{Binding NewRequestSessions, Mode=TwoWay}" Minimum="1" Maximum="100" Increment="1" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2" Margin="6,0">
+                                    <TextBlock Text="临床诊断 / 适应症:" FontSize="11"/>
+                                    <TextBox Text="{Binding NewRequestDiagnosis, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="2" Margin="6,0,0,0">
+                                    <TextBlock Text="备注 / 特殊要求:" FontSize="11"/>
+                                    <TextBox Text="{Binding NewRequestRemark, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                                <Button Content="取消" Height="28" Command="{Binding ToggleNewRequestFormCommand}"/>
+                                <Button Content="确认开立治疗申请" Classes="Primary" Height="28" Command="{Binding SubmitNewRequestCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Appointment Form Drawer -->
+                    <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="6" Padding="12" IsVisible="{Binding IsAppointmentFormVisible}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="治疗预约排班登记" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorWarning}"/>
+                            <Grid ColumnDefinitions="*,200" Margin="0,4">
+                                <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,6,0">
+                                    <TextBlock Text="指定治疗机房 / 舱位 / 床位:" FontSize="11"/>
+                                    <TextBox Text="{Binding AppointmentRoom, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2" Margin="6,0,0,0">
+                                    <TextBlock Text="排班状态:" FontSize="11"/>
+                                    <TextBox Text="系统自动排班 (默认当前时段后1小时)" IsReadOnly="True" Height="30"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                                <Button Content="取消" Height="28" Command="{Binding ToggleAppointmentFormCommand}"/>
+                                <Button Content="提交预约排班" Classes="Primary" Height="28" Command="{Binding SubmitAppointmentCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Lab-Linked Parameter Suggestion -->
+                    <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="12">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="🔬 检验指标联动治疗参数智能建议 (CDSS 闭环)" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" FontSize="13"/>
+                            <TextBlock Text="{Binding SuggestedParamsSummary}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource SemiColorText0}" LineHeight="20"/>
+                            <TextBlock Text="✓ 依据最新检验指标、历史病程及专家治疗指南自动推导超滤量、流速、用药剂量与风险防范措施。" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Execution Parameters & Dual-check -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="床旁治疗执行与双核对记录" FontWeight="Bold" FontSize="13"/>
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="实际执行参数与设定值 (支持微调):" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBox Text="{Binding ActualParams, Mode=TwoWay}" Height="54" AcceptsReturn="True" TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="*,*">
+                                <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,6,0">
+                                    <TextBlock Text="执行护士/技师 (当前登录会话):" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="当前登录操作员 (已自动通过国密CA数字签名)" IsReadOnly="True" Height="32"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4" Margin="6,0,0,0">
+                                    <TextBlock Text="双人复核工牌 / 护士签名:" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBox Text="{Binding DualCheckUser, Mode=TwoWay}" Height="32"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="患者治疗期间反应与生命体征:" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBox Text="{Binding PatientReaction, Mode=TwoWay}" Height="32"/>
+                            </StackPanel>
+
+                            <CheckBox IsChecked="{Binding HighRiskCheckPassed, Mode=TwoWay}" Content="已完成高风险治疗项目身份与处方参数核验 (双核查确认)"/>
+
+                            <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="8,6">
+                                <TextBlock Text="⚠ 高风险治疗合规要求：必须由双人核查患者腕带、透析/化疗参数无误后方可执行，提交后将写入可靠电子签名与费用联动流水。" FontSize="11" Foreground="{DynamicResource SemiColorWarning}" TextWrapping="Wrap"/>
+                            </Border>
+
+                            <Button Content="✓ 完成双人核对并执行治疗 (联动收费与电子签名)" Classes="Primary" Height="38" FontWeight="Bold" Command="{Binding ExecuteTreatmentCommand}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Patient Execution History -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" IsVisible="{Binding ExecutionRecords.Count}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="该患者历史治疗执行追溯记录:" FontWeight="Bold" FontSize="13"/>
+                            <!-- Table Header -->
+                            <Border Background="{DynamicResource SemiColorBackground2}" Padding="8,6" CornerRadius="4">
+                                <Grid ColumnDefinitions="140,60,*,120,100">
+                                    <TextBlock Grid.Column="0" Text="执行时间" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock Grid.Column="1" Text="批次" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock Grid.Column="2" Text="执行参数与患者反应" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock Grid.Column="3" Text="双人复核人" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock Grid.Column="4" Text="状态" FontWeight="SemiBold" FontSize="11"/>
+                                </Grid>
+                            </Border>
+                            <!-- Rows -->
+                            <ItemsControl ItemsSource="{Binding ExecutionRecords}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:TreatmentExecutionRecordItem">
+                                        <Border Padding="8,6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                                            <Grid ColumnDefinitions="140,60,*,120,100">
+                                                <TextBlock Grid.Column="0" Text="{Binding ActualTimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding SessionNo, StringFormat='第{0}次'}" FontSize="11" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding ActualParamsJson}" FontSize="11" TextWrapping="Wrap"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding DualCheckOperatorId}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                <controls:StatusTag Grid.Column="4" Text="{Binding Status}" Kind="Success"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

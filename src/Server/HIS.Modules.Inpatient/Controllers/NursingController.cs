@@ -25,6 +25,9 @@ public class NursingController : ControllerBase
     private readonly IDbConnectionFactory _connFactory;
     private readonly IUserSession? _session;
     private readonly IAuditTrailContract? _auditTrail;
+    private readonly IClinicalProcessSignatureContract? _signatureContract;
+    private readonly IClinicalAlertPublisher? _alertPublisher;
+    private readonly IFinanceSettlementContract? _financeContract;
 
     public NursingController(
         IRepository<NurCarePlan> carePlanRepo,
@@ -34,7 +37,10 @@ public class NursingController : ControllerBase
         IRepository<NurQualityIndicator> qualityRepo,
         IDbConnectionFactory connFactory,
         IUserSession? session = null,
-        IAuditTrailContract? auditTrail = null)
+        IAuditTrailContract? auditTrail = null,
+        IClinicalProcessSignatureContract? signatureContract = null,
+        IClinicalAlertPublisher? alertPublisher = null,
+        IFinanceSettlementContract? financeContract = null)
     {
         _carePlanRepo = carePlanRepo;
         _evalRepo = evalRepo;
@@ -44,6 +50,9 @@ public class NursingController : ControllerBase
         _connFactory = connFactory;
         _session = session;
         _auditTrail = auditTrail;
+        _signatureContract = signatureContract;
+        _alertPublisher = alertPublisher;
+        _financeContract = financeContract;
     }
 
     private string CurrentUserId => _session?.UserId ?? "USER-NURSE-01";
@@ -388,4 +397,313 @@ ORDER BY month_str DESC, ward_id ASC", new { WardId = wardId, MonthStr = monthSt
             await _auditTrail.RecordAuditAsync(eventType, entityName, entityId, detail,
                 CurrentUserId, _session?.DisplayName, _session?.ActiveDeptId, ct);
     }
+
+    public static int CalculateMews(int sysBp, int heartRate, int respRate, decimal tempC)
+    {
+        int score = 0;
+        if (sysBp > 0)
+        {
+            if (sysBp <= 70) score += 3;
+            else if (sysBp <= 80) score += 2;
+            else if (sysBp <= 100) score += 1;
+            else if (sysBp >= 200) score += 2;
+        }
+        if (heartRate > 0)
+        {
+            if (heartRate <= 40) score += 2;
+            else if (heartRate <= 50) score += 1;
+            else if (heartRate >= 130) score += 3;
+            else if (heartRate >= 111) score += 2;
+            else if (heartRate >= 101) score += 1;
+        }
+        if (respRate > 0)
+        {
+            if (respRate < 9) score += 2;
+            else if (respRate >= 30) score += 3;
+            else if (respRate >= 21) score += 2;
+            else if (respRate >= 15) score += 1;
+        }
+        if (tempC > 0)
+        {
+            if (tempC < 35.0m) score += 2;
+            else if (tempC >= 38.5m) score += 2;
+        }
+        return score;
+    }
+
+    [HttpPost("vitals")]
+    public async Task<ApiResponse<NurVitalSign>> RecordVitalSigns([FromBody] VitalSignInputDto req, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.PatientId))
+            return ApiResponse<NurVitalSign>.Fail(400, "就诊ID与患者ID不能为空");
+
+        int mews = CalculateMews(req.SysBp, req.HeartRateBpm > 0 ? req.HeartRateBpm : req.PulseBpm, req.RespRate, req.TemperatureC);
+        var autoMeasures = new List<string>();
+        if (req.TemperatureC >= 38.5m) autoMeasures.Add("高热护理：物理降温，监测体温q4h，温水擦浴");
+        if (req.SysBp > 0 && req.SysBp < 90) autoMeasures.Add("低血压休克风险：平卧位，报告管床医师，快速补液建立静脉双通道");
+        if (req.Spo2 > 0 && req.Spo2 < 93) autoMeasures.Add("低氧血症风险：面罩给氧，持续脉搏血氧监测");
+        if (mews >= 4) autoMeasures.Add($"MEWS 评分达到 {mews} 分高危预警：启动院内急救反应小组 (RRT)，准备床旁监护抢救");
+
+        var vital = new NurVitalSign
+        {
+            EncounterId = req.EncounterId,
+            PatientId = req.PatientId,
+            MeasuredAtMs = req.MeasuredAtMs > 0 ? req.MeasuredAtMs : SystemTime.UtcNowMs,
+            TemperatureC = req.TemperatureC,
+            PulseBpm = req.PulseBpm,
+            HeartRateBpm = req.HeartRateBpm,
+            RespRate = req.RespRate,
+            SysBp = req.SysBp,
+            DiaBp = req.DiaBp,
+            Spo2 = req.Spo2,
+            BloodGlucose = req.BloodGlucose,
+            PainScore = req.PainScore,
+            IntakeMl = req.IntakeMl,
+            OutputMl = req.OutputMl,
+            CaptureSource = string.IsNullOrWhiteSpace(req.CaptureSource) ? "MANUAL" : req.CaptureSource,
+            DeviceId = req.DeviceId,
+            MewsScore = mews,
+            AutoTriggeredMeasuresJson = JsonSerializer.Serialize(autoMeasures),
+            CreatedBy = CurrentUserId,
+            UpdatedBy = CurrentUserId
+        };
+
+        using var conn = _connFactory.CreateConnection();
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO nur_vital_signs (id, encounter_id, patient_id, measured_at_ms, temperature_c, pulse_bpm, heart_rate_bpm,
+                resp_rate, sys_bp, dia_bp, spo2, blood_glucose, pain_score, intake_ml, output_ml, capture_source, device_id,
+                mews_score, auto_triggered_measures_json, is_external, source_org_code, ext_data_json, schema_version,
+                created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+            VALUES (@Id, @EncounterId, @PatientId, @MeasuredAtMs, @TemperatureC, @PulseBpm, @HeartRateBpm,
+                @RespRate, @SysBp, @DiaBp, @Spo2, @BloodGlucose, @PainScore, @IntakeMl, @OutputMl, @CaptureSource, @DeviceId,
+                @MewsScore, @AutoTriggeredMeasuresJson, @IsExternal, @SourceOrgCode, @ExtDataJson, @SchemaVersion,
+                @CreatedAtMs, @CreatedBy, @UpdatedAtMs, @UpdatedBy, @VersionNo)
+            """, vital);
+
+        if (mews >= 4 && _alertPublisher != null)
+        {
+            await _alertPublisher.PublishCriticalValueAsync(vital.EncounterId, "住院患者", "MEWS高危体征预警", $"评分 {mews} 分，体温 {vital.TemperatureC}℃，血压 {vital.SysBp}/{vital.DiaBp}", _session?.ActiveWardId ?? "");
+        }
+
+        await RecordAuditAsync("NUR_VITAL_RECORD", nameof(NurVitalSign), vital.Id, $"记录生命体征 (T:{vital.TemperatureC}, BP:{vital.SysBp}/{vital.DiaBp}, MEWS:{mews})", ct);
+        return ApiResponse<NurVitalSign>.Success(vital, "生命体征记录成功");
+    }
+
+    [HttpPost("vitals/device-import")]
+    public async Task<ApiResponse<int>> ImportDeviceVitalSigns([FromBody] List<VitalSignInputDto> batch, CancellationToken ct = default)
+    {
+        if (batch == null || batch.Count == 0) return ApiResponse<int>.Fail(400, "批量体征数据为空");
+        int count = 0;
+        foreach (var item in batch)
+        {
+            var res = await RecordVitalSigns(item, ct);
+            if (res.Code == 200) count++;
+        }
+        return ApiResponse<int>.Success(count, $"成功导入 {count} 条设备/移动护理生命体征记录");
+    }
+
+    [HttpGet("vitals/{encounterId}")]
+    public async Task<ApiResponse<IReadOnlyList<NurVitalSign>>> GetVitalSigns(string encounterId)
+    {
+        using var conn = _connFactory.CreateConnection();
+        var list = (await conn.QueryAsync<NurVitalSign>(
+            "SELECT * FROM nur_vital_signs WHERE encounter_id = @EncounterId ORDER BY measured_at_ms ASC",
+            new { EncounterId = encounterId })).ToList();
+        return ApiResponse<IReadOnlyList<NurVitalSign>>.Success(list);
+    }
+
+    [HttpPost("records")]
+    public async Task<ApiResponse<NurNursingRecord>> SaveNursingRecord([FromBody] NursingRecordInputDto req, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.PatientId))
+            return ApiResponse<NurNursingRecord>.Fail(400, "就诊ID与患者ID不能为空");
+
+        var record = new NurNursingRecord
+        {
+            EncounterId = req.EncounterId,
+            PatientId = req.PatientId,
+            RecordType = string.IsNullOrWhiteSpace(req.RecordType) ? "GENERAL" : req.RecordType,
+            RecordedAtMs = req.RecordedAtMs > 0 ? req.RecordedAtMs : SystemTime.UtcNowMs,
+            VitalSignId = req.VitalSignId,
+            CpwStageId = req.CpwStageId,
+            ContentJson = req.ContentJson,
+            NursingActionsJson = req.NursingActionsJson,
+            GeneratedFeeItemIdsJson = req.GeneratedFeeItemIdsJson,
+            NurseId = CurrentUserId,
+            CreatedBy = CurrentUserId,
+            UpdatedBy = CurrentUserId
+        };
+
+        if (_signatureContract != null && _session != null)
+        {
+            var sig = await _signatureContract.SignClinicalRecordAsync("NURSING", record.Id, "SIGN", record, _session, ct);
+            record.CaSignatureId = sig.Id;
+        }
+
+        using var conn = _connFactory.CreateConnection();
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO nur_nursing_records (id, encounter_id, patient_id, record_type, recorded_at_ms, vital_sign_id,
+                cpw_stage_id, content_json, nursing_actions_json, generated_fee_item_ids_json, nurse_id, ca_signature_id,
+                ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+            VALUES (@Id, @EncounterId, @PatientId, @RecordType, @RecordedAtMs, @VitalSignId,
+                @CpwStageId, @ContentJson, @NursingActionsJson, @GeneratedFeeItemIdsJson, @NurseId, @CaSignatureId,
+                @ExtDataJson, @SchemaVersion, @CreatedAtMs, @CreatedBy, @UpdatedAtMs, @UpdatedBy, @VersionNo)
+            """, record);
+
+        await RecordAuditAsync("NUR_RECORD_SAVE", nameof(NurNursingRecord), record.Id, $"保存护理记录单 ({record.RecordType})", ct);
+        return ApiResponse<NurNursingRecord>.Success(record, "护理记录保存成功");
+    }
+
+    [HttpGet("records/{encounterId}")]
+    public async Task<ApiResponse<IReadOnlyList<NurNursingRecord>>> GetNursingRecords(string encounterId)
+    {
+        using var conn = _connFactory.CreateConnection();
+        var list = (await conn.QueryAsync<NurNursingRecord>(
+            "SELECT * FROM nur_nursing_records WHERE encounter_id = @EncounterId ORDER BY recorded_at_ms DESC",
+            new { EncounterId = encounterId })).ToList();
+        return ApiResponse<IReadOnlyList<NurNursingRecord>>.Success(list);
+    }
+
+    [HttpPost("activities/track")]
+    public async Task<ApiResponse<IpdPatientActivityTrack>> TrackPatientActivity([FromBody] PatientActivityInputDto req, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.PatientId))
+            return ApiResponse<IpdPatientActivityTrack>.Fail(400, "就诊ID与患者ID不能为空");
+
+        var track = new IpdPatientActivityTrack
+        {
+            EncounterId = req.EncounterId,
+            PatientId = req.PatientId,
+            ActivityType = string.IsNullOrWhiteSpace(req.ActivityType) ? "ADMIT" : req.ActivityType,
+            FromLocation = req.FromLocation ?? string.Empty,
+            ToLocation = req.ToLocation ?? string.Empty,
+            ScanBarcode = req.ScanBarcode,
+            HandoverFromUser = req.HandoverFromUser ?? CurrentUserId,
+            HandoverToUser = req.HandoverToUser,
+            OccurredAtMs = req.OccurredAtMs > 0 ? req.OccurredAtMs : SystemTime.UtcNowMs,
+            CreatedBy = CurrentUserId,
+            UpdatedBy = CurrentUserId
+        };
+
+        using var conn = _connFactory.CreateConnection();
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO ipd_patient_activity_tracks (id, encounter_id, patient_id, activity_type, from_location, to_location,
+                scan_barcode, handover_from_user, handover_to_user, occurred_at_ms, ext_data_json, schema_version,
+                created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+            VALUES (@Id, @EncounterId, @PatientId, @ActivityType, @FromLocation, @ToLocation,
+                @ScanBarcode, @HandoverFromUser, @HandoverToUser, @OccurredAtMs, @ExtDataJson, @SchemaVersion,
+                @CreatedAtMs, @CreatedBy, @UpdatedAtMs, @UpdatedBy, @VersionNo)
+            """, track);
+
+        await RecordAuditAsync("PATIENT_ACTIVITY_TRACK", nameof(IpdPatientActivityTrack), track.Id, $"患者活动追踪: {track.ActivityType} 从 {track.FromLocation} 至 {track.ToLocation}", ct);
+        return ApiResponse<IpdPatientActivityTrack>.Success(track, "患者院内活动轨迹已记录");
+    }
+
+    [HttpGet("activities/{encounterId}")]
+    public async Task<ApiResponse<IReadOnlyList<IpdPatientActivityTrack>>> GetPatientActivities(string encounterId)
+    {
+        using var conn = _connFactory.CreateConnection();
+        var list = (await conn.QueryAsync<IpdPatientActivityTrack>(
+            "SELECT * FROM ipd_patient_activity_tracks WHERE encounter_id = @EncounterId ORDER BY occurred_at_ms DESC",
+            new { EncounterId = encounterId })).ToList();
+        return ApiResponse<IReadOnlyList<IpdPatientActivityTrack>>.Success(list);
+    }
+
+    [HttpPost("admission-assessments")]
+    public async Task<ApiResponse<NurAdmissionAssessment>> SaveAdmissionAssessment([FromBody] AdmissionAssessmentInputDto req, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.PatientId))
+            return ApiResponse<NurAdmissionAssessment>.Fail(400, "就诊ID与患者ID不能为空");
+
+        var item = new NurAdmissionAssessment
+        {
+            EncounterId = req.EncounterId,
+            PatientId = req.PatientId,
+            TemplateId = req.TemplateId ?? "GENERAL_ADMISSION",
+            AssessmentJson = req.AssessmentJson,
+            AutoRiskSummaryJson = req.AutoRiskSummaryJson,
+            ReferencedHistoryIdsJson = req.ReferencedHistoryIdsJson,
+            AssessorId = CurrentUserId,
+            AssessedAtMs = req.AssessedAtMs > 0 ? req.AssessedAtMs : SystemTime.UtcNowMs,
+            CreatedBy = CurrentUserId,
+            UpdatedBy = CurrentUserId
+        };
+
+        using var conn = _connFactory.CreateConnection();
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO nur_admission_assessments (id, encounter_id, patient_id, template_id, assessment_json,
+                auto_risk_summary_json, referenced_history_ids_json, assessor_id, assessed_at_ms, ext_data_json,
+                schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+            VALUES (@Id, @EncounterId, @PatientId, @TemplateId, @AssessmentJson,
+                @AutoRiskSummaryJson, @ReferencedHistoryIdsJson, @AssessorId, @AssessedAtMs, @ExtDataJson,
+                @SchemaVersion, @CreatedAtMs, @CreatedBy, @UpdatedAtMs, @UpdatedBy, @VersionNo)
+            """, item);
+
+        await RecordAuditAsync("NUR_ADMISSION_ASSESSMENT", nameof(NurAdmissionAssessment), item.Id, "保存入院护理评估表", ct);
+        return ApiResponse<NurAdmissionAssessment>.Success(item, "入院护理评估已保存");
+    }
+
+    [HttpGet("admission-assessments/{encounterId}")]
+    public async Task<ApiResponse<IReadOnlyList<NurAdmissionAssessment>>> GetAdmissionAssessments(string encounterId)
+    {
+        using var conn = _connFactory.CreateConnection();
+        var list = (await conn.QueryAsync<NurAdmissionAssessment>(
+            "SELECT * FROM nur_admission_assessments WHERE encounter_id = @EncounterId ORDER BY assessed_at_ms DESC",
+            new { EncounterId = encounterId })).ToList();
+        return ApiResponse<IReadOnlyList<NurAdmissionAssessment>>.Success(list);
+    }
 }
+
+public sealed record VitalSignInputDto(
+    string EncounterId,
+    string PatientId,
+    decimal TemperatureC,
+    int PulseBpm,
+    int HeartRateBpm,
+    int RespRate,
+    int SysBp,
+    int DiaBp,
+    decimal Spo2,
+    decimal BloodGlucose,
+    int PainScore,
+    decimal IntakeMl,
+    decimal OutputMl,
+    string? CaptureSource = "MANUAL",
+    string? DeviceId = null,
+    long MeasuredAtMs = 0);
+
+public sealed record NursingRecordInputDto(
+    string EncounterId,
+    string PatientId,
+    string? RecordType,
+    long RecordedAtMs,
+    string? VitalSignId,
+    string? CpwStageId,
+    string? ContentJson,
+    string? NursingActionsJson,
+    string? GeneratedFeeItemIdsJson);
+
+public sealed record PatientActivityInputDto(
+    string EncounterId,
+    string PatientId,
+    string? ActivityType,
+    string? FromLocation,
+    string? ToLocation,
+    string? ScanBarcode,
+    string? HandoverFromUser,
+    string? HandoverToUser,
+    long OccurredAtMs);
+
+public sealed record AdmissionAssessmentInputDto(
+    string EncounterId,
+    string PatientId,
+    string? TemplateId,
+    string? AssessmentJson,
+    string? AutoRiskSummaryJson,
+    string? ReferencedHistoryIdsJson,
+    long AssessedAtMs);
+

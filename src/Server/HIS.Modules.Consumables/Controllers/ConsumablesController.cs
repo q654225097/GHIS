@@ -20,15 +20,18 @@ public class ConsumablesController : ControllerBase
     private readonly ConsumableSupplyService _service;
     private readonly IDbConnectionFactory _connFactory;
     private readonly IUserSession? _userSession;
+    private readonly IWorkflowEngineContract? _workflowEngine;
 
     public ConsumablesController(
         ConsumableSupplyService service,
         IDbConnectionFactory connFactory,
-        IUserSession? userSession = null)
+        IUserSession? userSession = null,
+        IWorkflowEngineContract? workflowEngine = null)
     {
         _service = service;
         _connFactory = connFactory;
         _userSession = userSession;
+        _workflowEngine = workflowEngine;
     }
 
     [HttpGet("consumables")]
@@ -247,6 +250,40 @@ WHERE 1=1";
         }
 
         var result = await _service.CreateRequisitionAsync(req, CurrentUserId(), _userSession?.DisplayName, ct);
+
+        if (_workflowEngine != null)
+        {
+            decimal totalAmount = req.Items.Sum(i => i.Quantity * 10m);
+            var startRes = await _workflowEngine.StartWorkflowAsync("CSM_REQUISITION", result.Id, CurrentUserId(), result.WardId, new Dictionary<string, object?>
+            {
+                ["requisitionNo"] = result.RequisitionNo,
+                ["deptId"] = result.WardId,
+                ["totalAmount"] = totalAmount,
+                ["urgency"] = "NORMAL"
+            }, ct);
+
+            using var conn = _connFactory.CreateConnection();
+            if (startRes.IsWorkflowTriggered)
+            {
+                await conn.ExecuteAsync(@"
+                    UPDATE csm_requisitions 
+                    SET approval_status = 'PENDING_APPROVAL', workflow_instance_id = @InstId, submitted_at_ms = @Now 
+                    WHERE id = @Id",
+                    new { InstId = startRes.InstanceId, Now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Id = result.Id });
+                result.ApprovalStatus = "PENDING_APPROVAL";
+                result.WorkflowInstanceId = startRes.InstanceId;
+            }
+            else
+            {
+                await conn.ExecuteAsync(@"
+                    UPDATE csm_requisitions 
+                    SET approval_status = 'APPROVED', approved_at_ms = @Now, approved_by = 'SYSTEM' 
+                    WHERE id = @Id",
+                    new { Now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Id = result.Id });
+                result.ApprovalStatus = "APPROVED";
+            }
+        }
+
         return ApiResponse<CsmRequisition>.Success(result, "请领单已提交");
     }
 
@@ -284,6 +321,15 @@ WHERE 1=1";
         try
         {
             var result = await _service.ApproveRequisitionAsync(id, CurrentUserId(), _userSession?.DisplayName, ct);
+            using (var conn = _connFactory.CreateConnection())
+            {
+                await conn.ExecuteAsync(@"
+                    UPDATE csm_requisitions 
+                    SET approval_status = 'APPROVED', approved_at_ms = @Now, approved_by = @User 
+                    WHERE id = @Id",
+                    new { Now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), User = CurrentUserId(), Id = id });
+            }
+            result.ApprovalStatus = "APPROVED";
             return ApiResponse<CsmRequisition>.Success(result, "请领单已审批");
         }
         catch (Exception ex)
@@ -299,6 +345,16 @@ WHERE 1=1";
         {
             return ApiResponse<CsmRequisition>.Fail(403, "仅库房管理员可以发放耗材");
         }
+
+        using (var checkConn = _connFactory.CreateConnection())
+        {
+            var currentReq = await checkConn.QueryFirstOrDefaultAsync<CsmRequisition>("SELECT * FROM csm_requisitions WHERE id = @Id", new { Id = id });
+            if (currentReq != null && !string.IsNullOrWhiteSpace(currentReq.ApprovalStatus) && !string.Equals(currentReq.ApprovalStatus, "APPROVED", StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiResponse<CsmRequisition>.Fail(409, $"耗材请领单 [{currentReq.RequisitionNo}] 审批状态为 [{currentReq.ApprovalStatus}]，未审批通过禁止出库发放！");
+            }
+        }
+
         string actualWarehouseId = string.IsNullOrWhiteSpace(warehouseId) || warehouseId == "WH-CSM-01" ? "DEPT-WH-CSM" : warehouseId;
         try
         {
@@ -372,6 +428,32 @@ WHERE 1=1";
         }
         var pkg = await _service.CreateSterilePackageAsync(req, CurrentUserId(), _userSession?.DisplayName, ct);
         return ApiResponse<CsmSterilePackage>.Success(pkg, "灭菌包已创建");
+    }
+
+    public sealed record CssdSterilizeRequestDto(
+        string PackageId,
+        string BatchNo,
+        string Method = "HIGH_PRESSURE_STEAM",
+        long ValidDays = 180
+    );
+
+    public sealed record CssdDispatchRequestDto(
+        string PackageId,
+        string ToLocation,
+        string MovementType = "ISSUE",
+        string? Remark = null
+    );
+
+    [HttpPost("cssd/sterilize")]
+    public async Task<ApiResponse<CsmSterilePackage>> CssdSterilize([FromBody] CssdSterilizeRequestDto req, CancellationToken ct = default)
+    {
+        return await SterilizePackage(req.PackageId, new SterilizePackageRequestDto(req.BatchNo, req.Method, req.ValidDays), ct);
+    }
+
+    [HttpPost("cssd/dispatch")]
+    public async Task<ApiResponse<CsmSterilePackage>> CssdDispatch([FromBody] CssdDispatchRequestDto req, CancellationToken ct = default)
+    {
+        return await IssueSterilePackage(req.PackageId, new IssueSterilePackageRequestDto(req.ToLocation, req.Remark), ct);
     }
 
     [HttpPost("sterile-packages/{id}/sterilize")]

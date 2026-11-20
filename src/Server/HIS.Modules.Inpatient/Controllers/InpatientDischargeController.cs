@@ -483,6 +483,14 @@ VALUES
                 freshEncounter.UpdatedBy = userId;
                 await _encounterRepo.UpdateAsync(freshEncounter, ct);
 
+                using (DbConnection feeConn = _connFactory.CreateConnection())
+                {
+                    await feeConn.ExecuteAsync(new CommandDefinition(
+                        "UPDATE fin_inpatient_fee_items SET is_settled = 1, settle_payment_id = @PaymentId, updated_at_ms = @Now, updated_by = @UserId WHERE encounter_id = @EncId AND is_settled = 0",
+                        new { PaymentId = paymentId, Now = SystemTime.UtcNowMs, UserId = userId, EncId = freshEncounter.Id },
+                        _connFactory.CurrentTransaction, cancellationToken: ct));
+                }
+
                 if (!string.IsNullOrWhiteSpace(freshEncounter.BedCode))
                 {
                     IReadOnlyList<IpdBed> beds = await _bedRepo.QueryAsync(
@@ -600,6 +608,11 @@ VALUES
                 IpdEncounter? encounter = await _encounterRepo.GetByIdAsync(request.EncounterId, ct);
                 if (encounter != null)
                 {
+                    decimal restoredPrepay = (request.PrepaymentDeduct) + (request.RefundAmount);
+                    if (restoredPrepay > 0)
+                    {
+                        encounter.PrepaymentBalance = restoredPrepay;
+                    }
                     encounter.Status = 1;
                     encounter.UpdatedBy = userId;
                     await _encounterRepo.UpdateAsync(encounter, ct);
@@ -608,10 +621,16 @@ VALUES
                     {
                         using DbConnection conn = _connFactory.CreateConnection();
                         await conn.ExecuteAsync(new CommandDefinition(
-                            "UPDATE ipd_beds SET bed_status = 1, current_encounter_id = @EncId, updated_by = @UserId WHERE id = @BedId OR bed_code = @BedId",
+                            "UPDATE ipd_beds SET bed_status = 1, current_encounter_id = @EncId, updated_by = @UserId WHERE (id = @BedId OR bed_code = @BedId) AND bed_status = 0",
                             new { EncId = encounter.Id, UserId = userId, BedId = encounter.ActiveBedToken },
                             _connFactory.CurrentTransaction, cancellationToken: ct));
                     }
+
+                    using DbConnection feeConn = _connFactory.CreateConnection();
+                    await feeConn.ExecuteAsync(new CommandDefinition(
+                        "UPDATE fin_inpatient_fee_items SET is_settled = 0, settle_payment_id = NULL, updated_at_ms = @Now, updated_by = @UserId WHERE encounter_id = @EncId AND (settle_payment_id = @PaymentId OR is_settled = 1)",
+                        new { Now = SystemTime.UtcNowMs, UserId = userId, EncId = encounter.Id, PaymentId = request.SettlementPaymentId },
+                        _connFactory.CurrentTransaction, cancellationToken: ct));
                 }
                 return true;
             });
@@ -645,6 +664,27 @@ ORDER BY item_name", new { EncounterId = encounter.Id }))
                 UnitPrice = x.UnitPrice,
                 TotalAmount = x.TotalAmount
             }).ToList();
+
+        List<IpdSettlementChargeRow> feeItemCharges = (await conn.QueryAsync<IpdSettlementChargeRow>(new CommandDefinition(@"
+SELECT item_code AS ItemCode, item_name AS ItemName, SUM(quantity) AS Quantity, MAX(unit_price) AS UnitPrice,
+       SUM(total_amount) AS TotalAmount
+FROM fin_inpatient_fee_items
+WHERE encounter_id = @EncounterId AND is_settled = 0 AND is_refunded = 0
+GROUP BY item_code, item_name
+ORDER BY item_name",
+            new { EncounterId = encounter.Id }, _connFactory.CurrentTransaction, null, null,
+            CommandFlags.Buffered, CancellationToken.None))).ToList();
+        foreach (IpdSettlementChargeRow row in feeItemCharges)
+        {
+            charges.Add(new IpdSettlementChargeView
+            {
+                ItemCode = row.ItemCode,
+                ItemName = row.ItemName,
+                Quantity = row.Quantity,
+                UnitPrice = row.UnitPrice,
+                TotalAmount = row.TotalAmount
+            });
+        }
 
         List<IpdSettlementChargeRow> medTechCharges = (await conn.QueryAsync<IpdSettlementChargeRow>(new CommandDefinition(@"
 SELECT service_item_code AS item_code, service_item_code AS item_name, 1 AS quantity,

@@ -132,8 +132,10 @@ public partial class WorkbenchModel
 			{
 				return OpdActionOutcome.Failure(envelope?.Message ?? "诊断保存失败：服务端未返回结果");
 			}
+			DiagnosisName = diagnosisName.Trim();
 			EmrWorkspace.Diagnosis = diagnosisName.Trim();
 			SystemNotice = "门诊初步诊断已保存";
+			NotifyOpdWorkflowStateChanged();
 			return OpdActionOutcome.Success("初步诊断已保存");
 		}
 		catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
@@ -182,41 +184,24 @@ public partial class WorkbenchModel
 			}
 
 			using HttpClient http = CreateConfigHttpClient();
-			foreach (int requestedLevel in new[] { 1, 2, 3 })
+			EmrDocumentDto? current = await ReadOpdEmrDocumentAsync(http, patient.VisitId);
+			if (current == null)
 			{
-				EmrDocumentDto? current = await ReadOpdEmrDocumentAsync(http, patient.VisitId);
-				if (current == null)
-				{
-					return OpdActionOutcome.Failure("病历已保存，但重新读取服务端文档失败");
-				}
-				if (current.Status is 3 or 4)
-				{
-					break;
-				}
-				int status = current.Status == 5 ? 0 : current.Status;
-				int nextLevel = status + 1;
-				if (nextLevel > 3)
-				{
-					break;
-				}
-				if (SessionContext.Current.EmrSignLevel < nextLevel)
-				{
-					EmrWorkspace.OfdStatus = $"草稿已保存；需要 {nextLevel} 级审签权限才能继续";
-					return OpdActionOutcome.Failure(
-						$"病历草稿已保存，当前账号审签级别为 {SessionContext.Current.EmrSignLevel}，不能执行 {nextLevel} 级审签");
-				}
-
+				return OpdActionOutcome.Failure("病历已保存，但重新读取服务端文档失败");
+			}
+			if (current.Status < 1 || current.Status == 5 || string.IsNullOrWhiteSpace(current.LatestOfdArchiveId ?? current.OfdArchiveId))
+			{
 				using HttpResponseMessage signResponse = await http.PostAsJsonAsync(
 					"/api/v4/emr/documents/" + Uri.EscapeDataString(current.Id) + "/sign-and-generate-ofd",
-					new { SignerId = CurrentOperatorId, SignerName = CurrentOperatorName, SignLevel = nextLevel },
+					new { SignerId = CurrentOperatorId, SignerName = CurrentOperatorName, SignLevel = 1 },
 					JsonOptions);
 				ClientApiEnvelope<OfdArchiveDto>? signEnvelope =
 					await signResponse.Content.ReadFromJsonAsync<ClientApiEnvelope<OfdArchiveDto>>(JsonOptions);
 				if (signEnvelope is not { Code: 200, Data: not null })
 				{
-					EmrWorkspace.OfdStatus = $"草稿已保存；{nextLevel} 级审签未完成";
+					EmrWorkspace.OfdStatus = "草稿已保存；审签未完成";
 					return OpdActionOutcome.Failure(
-						$"{nextLevel} 级审签失败：" + (signEnvelope?.Message ?? "服务端未返回归档结果"));
+						"病历审签失败：" + (signEnvelope?.Message ?? "服务端未返回归档结果"));
 				}
 				_currentOfdArchiveId = signEnvelope.Data.Id;
 			}
@@ -228,15 +213,15 @@ public partial class WorkbenchModel
 			}
 			ApplyOpdDocument(verified);
 			QueueOpdPrintPreview();
-			bool signed = verified.Status is 3 or 4;
+			bool signed = verified.Status >= 1 && !string.IsNullOrWhiteSpace(verified.LatestOfdArchiveId ?? verified.OfdArchiveId);
 			patient.SetEmrSigned(signed);
 			NotifyOpdWorkflowStateChanged();
 			SystemNotice = signed
-				? $"门诊病历已终审，归档号 {EmrWorkspace.OfdNo ?? _currentOfdArchiveId}"
+				? $"门诊病历已完成签署归档，归档号 {EmrWorkspace.OfdNo ?? _currentOfdArchiveId}"
 				: $"门诊病历已保存，当前审签状态 {GetOpdEmrStatusText(verified.Status)}";
 			return signed
-				? OpdActionOutcome.Success($"病历已终审归档，编号 {EmrWorkspace.OfdNo ?? _currentOfdArchiveId}")
-				: OpdActionOutcome.Failure($"病历已保存，但尚未完成终审：{GetOpdEmrStatusText(verified.Status)}");
+				? OpdActionOutcome.Success($"病历已签署归档，编号 {EmrWorkspace.OfdNo ?? _currentOfdArchiveId}")
+				: OpdActionOutcome.Failure($"病历已保存，但尚未完成签署：{GetOpdEmrStatusText(verified.Status)}");
 		}
 		catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
 		{
@@ -391,9 +376,9 @@ public partial class WorkbenchModel
 		{
 			using HttpClient http = CreateConfigHttpClient();
 			EmrDocumentDto? verified = await ReadOpdEmrDocumentAsync(http, patient.VisitId);
-			if (verified == null || verified.Status is not (3 or 4))
+			if (verified == null || verified.Status < 1)
 			{
-				return OpdActionOutcome.Failure("病历尚未完成终审，不能完成本次诊疗");
+				return OpdActionOutcome.Failure("病历尚未完成签署，不能完成本次诊疗");
 			}
 			string archiveId = string.IsNullOrWhiteSpace(verified.LatestOfdArchiveId)
 				? verified.OfdArchiveId ?? string.Empty

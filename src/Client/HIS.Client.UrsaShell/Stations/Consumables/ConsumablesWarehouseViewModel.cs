@@ -57,6 +57,22 @@ public sealed class ConsumableRequisitionItemModel : ClientModelBase
     public string? ApprovedBy { get; set; }
     public string? IssuedBy { get; set; }
     public string? Remark { get; set; }
+    public string ApprovalStatus { get; set; } = "APPROVED";
+    public string WorkflowInstanceId { get; set; } = string.Empty;
+    public string ApprovalStatusBadge => ApprovalStatus switch
+    {
+        "PENDING_APPROVAL" => "审批流转中",
+        "APPROVED" => "已审批核准",
+        "REJECTED" => "审批已否决",
+        _ => ApprovalStatus
+    };
+    public string ApprovalStatusBrush => ApprovalStatus switch
+    {
+        "PENDING_APPROVAL" => "#D97706",
+        "APPROVED" => "#059669",
+        "REJECTED" => "#DC2626",
+        _ => "#64748B"
+    };
     public long CreatedAtMs { get; set; }
     public string CreatedAtText => DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
     public string StatusLabel => Status switch

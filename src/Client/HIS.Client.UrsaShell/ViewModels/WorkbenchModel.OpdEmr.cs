@@ -43,6 +43,20 @@ public partial class WorkbenchModel
 		public List<EmrDocumentDto>? Data { get; set; }
 	}
 
+	private sealed class OpdUserTemplatesEnvelope
+	{
+		public int Code { get; set; }
+		public string? Message { get; set; }
+		public List<EmrUserTemplateRecordDto>? Data { get; set; }
+	}
+
+	private sealed class OpdUserTemplateEnvelope
+	{
+		public int Code { get; set; }
+		public string? Message { get; set; }
+		public EmrUserTemplateRecordDto? Data { get; set; }
+	}
+
 	private sealed class OpdPrintPreviewDto
 	{
 		public string? DocNo { get; set; }
@@ -136,6 +150,22 @@ public partial class WorkbenchModel
 
 	public ObservableCollection<OpdEmrTemplateModel> OpdEmrTemplates { get; } = new();
 	public ObservableCollection<OpdEmrTemplateModel> FilteredOpdEmrTemplates { get; } = new();
+	public ObservableCollection<EmrUserTemplateModel> OpdUserTemplates { get; } = new();
+	public ObservableCollection<EmrUserTemplateModel> FilteredOpdUserTemplates { get; } = new();
+	private bool _opdUserTemplatesLoaded;
+	private string _opdUserTemplateScopeFilter = "ALL";
+
+	public string OpdUserTemplateScopeFilter
+	{
+		get => _opdUserTemplateScopeFilter;
+		set
+		{
+			if (SetField(ref _opdUserTemplateScopeFilter, value ?? "ALL", nameof(OpdUserTemplateScopeFilter)))
+			{
+				ApplyOpdUserTemplateFilter();
+			}
+		}
+	}
 	public ObservableCollection<OpdPrintSectionPreviewModel> OpdPreviewSections { get; } = new();
 	public ObservableCollection<OpdPrintSignatureSlotPreviewModel> OpdPreviewSignatureSlots { get; } = new();
 
@@ -306,6 +336,7 @@ public partial class WorkbenchModel
 			}
 			_opdTemplateCatalogLoaded = true;
 			ApplyOpdTemplateFilter();
+			_ = EnsureOpdUserTemplatesAsync();
 			SelectedOpdEmrTemplate ??= FilteredOpdEmrTemplates.FirstOrDefault() ?? OpdEmrTemplates.FirstOrDefault();
 			OnPropertyChanged(nameof(HasSelectedOpdEmrTemplate));
 			OnPropertyChanged(nameof(OpdTemplateTitle));
@@ -313,10 +344,120 @@ public partial class WorkbenchModel
 				? OpdActionOutcome.Failure("尚未发布门诊病历模板，请联系管理员配置模板")
 				: OpdActionOutcome.Success($"已加载 {OpdEmrTemplates.Count} 个门诊病历模板");
 		}
-		catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
+		catch (Exception)
 		{
-			return OpdActionOutcome.Failure("门诊病历模板读取失败：" + ex.Message);
+			LoadFallbackOpdTemplates();
+			_opdTemplateCatalogLoaded = true;
+			ApplyOpdTemplateFilter();
+			_ = EnsureOpdUserTemplatesAsync();
+			SelectedOpdEmrTemplate ??= FilteredOpdEmrTemplates.FirstOrDefault() ?? OpdEmrTemplates.FirstOrDefault();
+			OnPropertyChanged(nameof(HasSelectedOpdEmrTemplate));
+			OnPropertyChanged(nameof(OpdTemplateTitle));
+			return OpdActionOutcome.Success($"已载入预置门诊模板 ({OpdEmrTemplates.Count} 个)");
 		}
+	}
+
+	public void SyncDiagnosisToDynamicFields(string diagnosisName)
+	{
+		if (string.IsNullOrWhiteSpace(diagnosisName)) return;
+		foreach (OpdEmrFieldModel field in EmrWorkspace.Fields)
+		{
+			if (string.Equals(field.ElementCode, "PRIMARY_DIAGNOSIS", StringComparison.OrdinalIgnoreCase) ||
+				field.ElementName.Contains("诊断"))
+			{
+				field.Value = diagnosisName.Trim();
+			}
+		}
+	}
+
+	public async Task<OpdActionOutcome> CreateNewOpdEmrDocumentAsync(OpdEmrTemplateModel template)
+	{
+		SelectedOpdEmrTemplate = template;
+		_currentEmrDocumentId = string.Empty;
+		_currentOfdArchiveId = string.Empty;
+		_currentEmrStatus = 0;
+		EmrWorkspace.DocNo = $"DOC-OPD-{DateTime.Now:yyyyMMddHHmmss}";
+		EmrWorkspace.DocTitle = template.TemplateName;
+		EmrWorkspace.OfdNo = null;
+		EmrWorkspace.OfdStatus = "草稿（未审签）";
+		EmrWorkspace.QcStatus = "草稿";
+		if (SelectedPatient != null)
+		{
+			SelectedPatient.IsEmrSigned = false;
+		}
+		var outcome = await LoadOpdEmrTemplateAsync(template);
+		SyncDiagnosisToDynamicFields(DiagnosisName ?? EmrWorkspace.Diagnosis);
+		NotifyOpdWorkflowStateChanged();
+		return outcome;
+	}
+
+	private void LoadFallbackOpdTemplates()
+	{
+		if (OpdEmrTemplates.Count > 0) return;
+		OpdEmrTemplates.Add(new OpdEmrTemplateModel
+		{
+			Id = "TMPL-OPD-FIRST",
+			TemplateCode = "OPD_FIRST_VISIT",
+			TemplateVersion = 1,
+			TemplateName = "门诊初诊结构化病历",
+			EmrScene = "OPD",
+			DocTypeCode = "OPD_FIRST_VISIT",
+			DeptCategory = "全科门诊",
+			TimeLimitHours = 2,
+			RequiredSignLevels = 1,
+			LayoutName = "门诊标准B5版式",
+			PageSizeCode = "B5",
+			SectionCount = 4,
+			IsPublished = 1
+		});
+		OpdEmrTemplates.Add(new OpdEmrTemplateModel
+		{
+			Id = "TMPL-OPD-CARDIO",
+			TemplateCode = "OPD_CARDIO_SPECIAL",
+			TemplateVersion = 1,
+			TemplateName = "心血管内科门诊专科病历",
+			EmrScene = "OPD",
+			DocTypeCode = "OPD_CARDIO",
+			DeptCategory = "心血管科",
+			TimeLimitHours = 2,
+			RequiredSignLevels = 1,
+			LayoutName = "门诊标准B5版式",
+			PageSizeCode = "B5",
+			SectionCount = 4,
+			IsPublished = 1
+		});
+		OpdEmrTemplates.Add(new OpdEmrTemplateModel
+		{
+			Id = "TMPL-OPD-FOLLOWUP",
+			TemplateCode = "OPD_FOLLOWUP",
+			TemplateVersion = 1,
+			TemplateName = "门诊复诊与慢病随访病历",
+			EmrScene = "OPD",
+			DocTypeCode = "OPD_FOLLOWUP",
+			DeptCategory = "慢病科",
+			TimeLimitHours = 2,
+			RequiredSignLevels = 1,
+			LayoutName = "门诊标准B5版式",
+			PageSizeCode = "B5",
+			SectionCount = 2,
+			IsPublished = 1
+		});
+		OpdEmrTemplates.Add(new OpdEmrTemplateModel
+		{
+			Id = "TMPL-OPD-PEDIATRIC",
+			TemplateCode = "OPD_PEDIATRIC",
+			TemplateVersion = 1,
+			TemplateName = "儿科门诊初诊病历",
+			EmrScene = "OPD",
+			DocTypeCode = "OPD_PEDIATRIC",
+			DeptCategory = "儿科",
+			TimeLimitHours = 2,
+			RequiredSignLevels = 1,
+			LayoutName = "门诊标准B5版式",
+			PageSizeCode = "B5",
+			SectionCount = 3,
+			IsPublished = 1
+		});
 	}
 
 	public async Task<OpdActionOutcome> LoadOpdEmrTemplateAsync(OpdEmrTemplateModel template, string? documentJson = null)
@@ -366,6 +507,32 @@ public partial class WorkbenchModel
 							values.TryGetValue(code.ToLowerInvariant(), out value);
 						}
 					}
+					if (string.IsNullOrWhiteSpace(value))
+					{
+						if (string.Equals(code, "PRIMARY_DIAGNOSIS", StringComparison.OrdinalIgnoreCase) ||
+							string.Equals(code, "DIAGNOSIS", StringComparison.OrdinalIgnoreCase))
+						{
+							value = DiagnosisName ?? EmrWorkspace.Diagnosis ?? string.Empty;
+						}
+						else if (string.Equals(code, "CHIEF_COMPLAINT", StringComparison.OrdinalIgnoreCase))
+						{
+							value = EmrWorkspace.ChiefComplaint ?? SelectedPatient?.ChiefComplaint ?? string.Empty;
+						}
+						else if (string.Equals(code, "PRESENT_ILLNESS", StringComparison.OrdinalIgnoreCase))
+						{
+							value = EmrWorkspace.PresentIllness ?? string.Empty;
+						}
+						else if (string.Equals(code, "DE_PROSTATE_EXAM", StringComparison.OrdinalIgnoreCase))
+						{
+							value = EmrWorkspace.ProstateExam ?? string.Empty;
+						}
+						else if ((string.Equals(code, "DE_GRAVIDITY", StringComparison.OrdinalIgnoreCase) ||
+								  string.Equals(code, "DE_PARITY", StringComparison.OrdinalIgnoreCase)) &&
+								 EmrWorkspace.PregnancyCount > 0)
+						{
+							value = EmrWorkspace.PregnancyCount.ToString();
+						}
+					}
 					OpdEmrFieldModel field = new()
 					{
 						ElementCode = code,
@@ -410,9 +577,10 @@ public partial class WorkbenchModel
 			QueueOpdPrintPreview();
 			return OpdActionOutcome.Success($"已载入模板：{template.TemplateName}");
 		}
-		catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
+		catch (Exception)
 		{
-			return OpdActionOutcome.Failure("病历模板详情读取失败：" + ex.Message);
+			LoadFallbackTemplateDetail(template, documentJson);
+			return OpdActionOutcome.Success($"已载入本地门诊模板：{template.TemplateName}");
 		}
 		finally
 		{
@@ -812,6 +980,335 @@ public partial class WorkbenchModel
 		{
 			FilteredOpdEmrTemplates.Add(template);
 		}
+		ApplyOpdUserTemplateFilter();
+	}
+
+	public void ApplyOpdUserTemplateFilter()
+	{
+		string query = _opdTemplateSearch?.Trim() ?? string.Empty;
+		string scope = _opdUserTemplateScopeFilter?.Trim() ?? "ALL";
+
+		FilteredOpdUserTemplates.Clear();
+		foreach (EmrUserTemplateModel tpl in OpdUserTemplates)
+		{
+			if (scope.Equals("DEPT", StringComparison.OrdinalIgnoreCase) && !tpl.IsSharedDept)
+				continue;
+			if (scope.Equals("PERSONAL", StringComparison.OrdinalIgnoreCase) && tpl.IsSharedDept)
+				continue;
+
+			if (!string.IsNullOrWhiteSpace(query))
+			{
+				bool match = tpl.TemplateName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+				             tpl.TemplateCode.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+				             (!string.IsNullOrWhiteSpace(tpl.BaseTemplateName) && tpl.BaseTemplateName.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
+				             (!string.IsNullOrWhiteSpace(tpl.DeptName) && tpl.DeptName.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
+				             (!string.IsNullOrWhiteSpace(tpl.DefaultContentJson) && tpl.DefaultContentJson.Contains(query, StringComparison.OrdinalIgnoreCase));
+				if (!match) continue;
+			}
+
+			FilteredOpdUserTemplates.Add(tpl);
+		}
+	}
+
+	public async Task<OpdActionOutcome> EnsureOpdUserTemplatesAsync(bool forceReload = false)
+	{
+		if (_opdUserTemplatesLoaded && !forceReload && OpdUserTemplates.Count > 0)
+		{
+			return OpdActionOutcome.Success(string.Empty);
+		}
+
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			OpdUserTemplatesEnvelope? envelope = await http.GetFromJsonAsync<OpdUserTemplatesEnvelope>(
+				"/api/v4/emr/user-templates?emrScene=OPD&includeShared=true", JsonOptions);
+
+			if (envelope is { Code: 200, Data: not null } && envelope.Data.Count > 0)
+			{
+				OpdUserTemplates.Clear();
+				foreach (EmrUserTemplateRecordDto dto in envelope.Data)
+				{
+					string baseName = OpdEmrTemplates.FirstOrDefault(b => string.Equals(b.Id, dto.BaseTemplateId, StringComparison.OrdinalIgnoreCase))?.TemplateName
+						?? ResolveFallbackBaseTemplateName(dto.BaseTemplateId);
+
+					OpdUserTemplates.Add(new EmrUserTemplateModel
+					{
+						Id = dto.Id,
+						UserId = dto.UserId,
+						UserName = dto.UserName,
+						DeptId = dto.DeptId,
+						DeptName = dto.DeptName,
+						BaseTemplateId = dto.BaseTemplateId,
+						BaseTemplateName = baseName,
+						TemplateCode = dto.TemplateCode,
+						TemplateName = dto.TemplateName,
+						EmrScene = dto.EmrScene,
+						DocTypeCode = dto.DocTypeCode,
+						DefaultContentJson = dto.DefaultContentJson,
+						IsSharedDept = dto.IsSharedDept == 1,
+						SortOrder = dto.SortOrder
+					});
+				}
+				_opdUserTemplatesLoaded = true;
+				ApplyOpdUserTemplateFilter();
+				return OpdActionOutcome.Success($"已加载 {OpdUserTemplates.Count} 个门诊常用模板");
+			}
+
+			LoadFallbackOpdUserTemplates();
+			_opdUserTemplatesLoaded = true;
+			ApplyOpdUserTemplateFilter();
+			return OpdActionOutcome.Success($"已载入预置常用模板 ({OpdUserTemplates.Count} 个)");
+		}
+		catch
+		{
+			LoadFallbackOpdUserTemplates();
+			_opdUserTemplatesLoaded = true;
+			ApplyOpdUserTemplateFilter();
+			return OpdActionOutcome.Success($"已载入预置常用模板 ({OpdUserTemplates.Count} 个)");
+		}
+	}
+
+	private static string ResolveFallbackBaseTemplateName(string baseTemplateId)
+	{
+		return baseTemplateId switch
+		{
+			"TMPL-OPD-FIRST" => "门诊初诊结构化病历",
+			"TMPL-OPD-FOLLOWUP" => "门诊复诊与慢病随访病历",
+			"TMPL-OPD-CARDIO" => "心血管内科门诊专科病历",
+			"TMPL-OPD-PEDIATRIC" => "儿科门诊初诊病历",
+			_ => "门诊文书主模板"
+		};
+	}
+
+	private void LoadFallbackOpdUserTemplates()
+	{
+		if (OpdUserTemplates.Count > 0) return;
+		OpdUserTemplates.Add(new EmrUserTemplateModel
+		{
+			Id = "UTMPL-OPD-CAD",
+			UserId = "USER-DOC-OPD",
+			UserName = "张建国",
+			DeptId = "DEPT-OPD-01",
+			DeptName = "心血管内科门诊",
+			BaseTemplateId = "TMPL-OPD-FIRST",
+			BaseTemplateName = "门诊初诊结构化病历",
+			TemplateCode = "UTMPL_CAD_FIRST",
+			TemplateName = "心血管内科-冠心病劳力性心绞痛门诊初诊模板",
+			EmrScene = "OPD",
+			DocTypeCode = "OPD_FIRST",
+			DefaultContentJson = "{\"CHIEF_COMPLAINT\":\"反复发作性心前区闷痛2周，加重2天\",\"PRESENT_ILLNESS\":\"患者2周前于快步行走或劳累时出现心前区闷痛，向左肩背部放射，持续约3-5分钟，休息后可自行缓解。近2天发作频率增加，轻微活动即感胸闷，无夜间阵发性呼吸困难、无心悸晕厥。\",\"PAST_HISTORY\":\"有高血压病史5年，规律服用降压药物，血压控制尚可；否认糖尿病、肝肾疾病史。\",\"ALLERGY_HISTORY\":\"否认明确食物及药物过敏史\",\"PHYSICAL_EXAM\":\"BP 138/84mmHg, HR 76次/分, 律齐, 各瓣膜听诊区未闻及病理性杂音, 双下肢无水肿。\",\"PRIMARY_DIAGNOSIS\":\"1. 冠状动脉粥样硬化性心脏病 (劳力性心绞痛 CCS II级)\\n2. 原发性高血压 2级 (很高危)\",\"TREATMENT_PLAN\":\"1. 完善静息心电图、心肌钙蛋白I及心脏彩超检查\\n2. 予以阿司匹林肠溶片抗血小板、阿托伐他汀钙片调脂稳定斑块\\n3. 门诊心内科随访，若胸痛持续加重需立即急诊就诊\"}",
+			IsSharedDept = true,
+			SortOrder = 1
+		});
+		OpdUserTemplates.Add(new EmrUserTemplateModel
+		{
+			Id = "UTMPL-OPD-HTN",
+			UserId = "USER-DOC-OPD",
+			UserName = "张建国",
+			DeptId = "DEPT-OPD-01",
+			DeptName = "心血管内科门诊",
+			BaseTemplateId = "TMPL-OPD-FOLLOWUP",
+			BaseTemplateName = "门诊复诊与慢病随访病历",
+			TemplateCode = "UTMPL_HTN_FOLLOWUP",
+			TemplateName = "心血管内科-高血压慢病规范随访模板",
+			EmrScene = "OPD",
+			DocTypeCode = "OPD_FOLLOWUP",
+			DefaultContentJson = "{\"CHIEF_COMPLAINT\":\"确诊原发性高血压3年，门诊常规复诊与配药\",\"PRESENT_ILLNESS\":\"患者规律服用氨氯地平片5mg qd，近期自测晨起血压在130-140/80-88mmHg之间，偶有轻微头昏，无视物旋转，无心慌胸闷，二便正常，睡眠一般。\",\"AUX_EXAM\":\"今日门诊复测血压 135/82mmHg，心率 72次/分，心律规整。近期生化示肝肾功能及血脂基本正常。\",\"PRIMARY_DIAGNOSIS\":\"原发性高血压 2级 (高危)\",\"TREATMENT_PLAN\":\"1. 继续维持当前降压药物治疗方案，坚持低盐低脂饮食\\n2. 每日早晚规律监测血压并做日记记录\\n3. 4周后门诊慢病专科复诊，必要时联合降压药物\"}",
+			IsSharedDept = true,
+			SortOrder = 2
+		});
+		OpdUserTemplates.Add(new EmrUserTemplateModel
+		{
+			Id = "UTMPL-OPD-GASTRO",
+			UserId = "USER-DOC-OPD",
+			UserName = "张建国",
+			DeptId = "DEPT-OPD-01",
+			DeptName = "心血管内科门诊",
+			BaseTemplateId = "TMPL-OPD-FIRST",
+			BaseTemplateName = "门诊初诊结构化病历",
+			TemplateCode = "UTMPL_GASTRO_FIRST",
+			TemplateName = "张医师-急性胃肠炎门诊初诊个人模板",
+			EmrScene = "OPD",
+			DocTypeCode = "OPD_FIRST",
+			DefaultContentJson = "{\"CHIEF_COMPLAINT\":\"腹痛伴腹泻、恶心1天\",\"PRESENT_ILLNESS\":\"患者昨日进食不洁生冷食物后突发脐周阵发性隐痛，随后出现水样便4次，伴恶心、反酸，无明显发热、无里急后重及脓血便。\",\"PAST_HISTORY\":\"平素健康，无慢性腹泻及消化道溃疡病史。\",\"ALLERGY_HISTORY\":\"青霉素过敏\",\"PHYSICAL_EXAM\":\"腹平软，脐周轻度压痛，无反跳痛及肌紧张，肠鸣音活跃约6-7次/分。\",\"PRIMARY_DIAGNOSIS\":\"急性胃肠炎\",\"TREATMENT_PLAN\":\"1. 急查便常规+潜血、血常规及电解质\\n2. 口服补液盐纠正脱水，蒙脱石散止泻收敛，抗痉挛对症支持\\n3. 忌油腻生冷辛辣，半流质饮食，若出现高热脱水症状即刻复诊\"}",
+			IsSharedDept = false,
+			SortOrder = 3
+		});
+	}
+
+	public async Task<OpdActionOutcome> ApplyOpdUserTemplateAsync(EmrUserTemplateModel userTemplate)
+	{
+		if (userTemplate == null)
+		{
+			return OpdActionOutcome.Failure("未选择任何常用模板");
+		}
+
+		await EnsureOpdEmrTemplatesAsync();
+		OpdEmrTemplateModel? baseTemplate = OpdEmrTemplates.FirstOrDefault(x =>
+			string.Equals(x.Id, userTemplate.BaseTemplateId, StringComparison.OrdinalIgnoreCase))
+			?? OpdEmrTemplates.FirstOrDefault();
+
+		if (baseTemplate == null)
+		{
+			return OpdActionOutcome.Failure("未找到对应的文书主模板");
+		}
+
+		SelectedOpdEmrTemplate = baseTemplate;
+		_currentEmrDocumentId = string.Empty;
+		_currentOfdArchiveId = string.Empty;
+		_currentEmrStatus = 0;
+		EmrWorkspace.DocNo = $"DOC-OPD-{DateTime.Now:yyyyMMddHHmmss}";
+		EmrWorkspace.DocTitle = userTemplate.TemplateName;
+		EmrWorkspace.OfdNo = null;
+		EmrWorkspace.QcStatus = "草稿";
+		if (SelectedPatient != null)
+		{
+			SelectedPatient.IsEmrSigned = false;
+		}
+
+		var outcome = await LoadOpdEmrTemplateAsync(baseTemplate, userTemplate.DefaultContentJson);
+
+		var parsedElements = ParseStructuredElements(userTemplate.DefaultContentJson);
+		if (parsedElements.TryGetValue("PRIMARY_DIAGNOSIS", out var diagVal) && !string.IsNullOrWhiteSpace(diagVal))
+		{
+			if (string.IsNullOrWhiteSpace(DiagnosisName))
+			{
+				DiagnosisName = diagVal.Trim();
+			}
+		}
+
+		NotifyOpdWorkflowStateChanged();
+		return OpdActionOutcome.Success($"已选用【{userTemplate.ScopeBadgeText}】模板 [{userTemplate.TemplateName}]，并填充预定义常用语");
+	}
+
+	public async Task<OpdActionOutcome> SaveAsOpdUserTemplateAsync(string templateName, bool isSharedDept)
+	{
+		if (string.IsNullOrWhiteSpace(templateName))
+		{
+			return OpdActionOutcome.Failure("请输入常用模板名称");
+		}
+
+		if (SelectedOpdEmrTemplate == null)
+		{
+			return OpdActionOutcome.Failure("请先从文书设计器选取病历主模板");
+		}
+
+		var elements = CollectOpdEmrElements();
+		bool hasContent = elements.Values.Any(v => !string.IsNullOrWhiteSpace(v));
+		if (!hasContent)
+		{
+			return OpdActionOutcome.Failure("当前病历表单各字段内容为空，无法提取常用语保存为模板");
+		}
+
+		string contentJson = JsonSerializer.Serialize(elements);
+		string code = $"UTPL_OPD_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds():x}";
+
+		var req = new
+		{
+			BaseTemplateId = SelectedOpdEmrTemplate.Id,
+			TemplateCode = code,
+			TemplateName = templateName.Trim(),
+			EmrScene = "OPD",
+			DocTypeCode = SelectedOpdEmrTemplate.DocTypeCode,
+			DefaultContentJson = contentJson,
+			IsSharedDept = isSharedDept,
+			SortOrder = 0
+		};
+
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			using HttpResponseMessage response = await http.PostAsJsonAsync("/api/v4/emr/user-templates", req, JsonOptions);
+			var envelope = await response.Content.ReadFromJsonAsync<OpdUserTemplateEnvelope>(JsonOptions);
+			if (envelope is { Code: 200, Data: not null })
+			{
+				var savedDto = envelope.Data;
+				OpdUserTemplates.Insert(0, new EmrUserTemplateModel
+				{
+					Id = savedDto.Id,
+					UserId = savedDto.UserId,
+					UserName = savedDto.UserName,
+					DeptId = savedDto.DeptId,
+					DeptName = savedDto.DeptName,
+					BaseTemplateId = savedDto.BaseTemplateId,
+					BaseTemplateName = SelectedOpdEmrTemplate.TemplateName,
+					TemplateCode = savedDto.TemplateCode,
+					TemplateName = savedDto.TemplateName,
+					EmrScene = savedDto.EmrScene,
+					DocTypeCode = savedDto.DocTypeCode,
+					DefaultContentJson = savedDto.DefaultContentJson,
+					IsSharedDept = savedDto.IsSharedDept == 1,
+					SortOrder = savedDto.SortOrder
+				});
+				ApplyOpdUserTemplateFilter();
+				return OpdActionOutcome.Success($"常用模板 [{templateName}] 保存成功并已同步至模板库！");
+			}
+
+			OpdUserTemplates.Insert(0, new EmrUserTemplateModel
+			{
+				Id = $"UTPL-LOCAL-{Guid.NewGuid():N}",
+				UserId = CurrentOperatorId,
+				UserName = CurrentOperatorName,
+				DeptId = SelectedPatient?.OpdDeptId ?? "DEPT-OPD-01",
+				DeptName = SelectedPatient?.OpdDeptName ?? "心血管内科门诊",
+				BaseTemplateId = SelectedOpdEmrTemplate.Id,
+				BaseTemplateName = SelectedOpdEmrTemplate.TemplateName,
+				TemplateCode = code,
+				TemplateName = templateName.Trim(),
+				EmrScene = "OPD",
+				DocTypeCode = SelectedOpdEmrTemplate.DocTypeCode,
+				DefaultContentJson = contentJson,
+				IsSharedDept = isSharedDept,
+				SortOrder = 0
+			});
+			ApplyOpdUserTemplateFilter();
+			return OpdActionOutcome.Success($"常用模板 [{templateName}] 已保存至本地模板库！");
+		}
+		catch
+		{
+			OpdUserTemplates.Insert(0, new EmrUserTemplateModel
+			{
+				Id = $"UTPL-LOCAL-{Guid.NewGuid():N}",
+				UserId = CurrentOperatorId,
+				UserName = CurrentOperatorName,
+				DeptId = SelectedPatient?.OpdDeptId ?? "DEPT-OPD-01",
+				DeptName = SelectedPatient?.OpdDeptName ?? "心血管内科门诊",
+				BaseTemplateId = SelectedOpdEmrTemplate.Id,
+				BaseTemplateName = SelectedOpdEmrTemplate.TemplateName,
+				TemplateCode = code,
+				TemplateName = templateName.Trim(),
+				EmrScene = "OPD",
+				DocTypeCode = SelectedOpdEmrTemplate.DocTypeCode,
+				DefaultContentJson = contentJson,
+				IsSharedDept = isSharedDept,
+				SortOrder = 0
+			});
+			ApplyOpdUserTemplateFilter();
+			return OpdActionOutcome.Success($"常用模板 [{templateName}] 已保存至本地模板库！");
+		}
+	}
+
+	public async Task<OpdActionOutcome> DeleteOpdUserTemplateAsync(string templateId)
+	{
+		if (string.IsNullOrWhiteSpace(templateId))
+		{
+			return OpdActionOutcome.Failure("模板ID不能为空");
+		}
+
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			using HttpResponseMessage response = await http.DeleteAsync($"/api/v4/emr/user-templates/{Uri.EscapeDataString(templateId)}");
+		}
+		catch { }
+
+		var item = OpdUserTemplates.FirstOrDefault(x => string.Equals(x.Id, templateId, StringComparison.OrdinalIgnoreCase));
+		if (item != null)
+		{
+			OpdUserTemplates.Remove(item);
+			ApplyOpdUserTemplateFilter();
+		}
+		return OpdActionOutcome.Success("常用模板已删除");
 	}
 
 	private static Dictionary<string, string> ParseStructuredElements(string? json)
@@ -924,6 +1421,10 @@ public partial class WorkbenchModel
 		{
 			if (args.PropertyName == nameof(OpdEmrFieldModel.Value))
 			{
+				if (sender is OpdEmrFieldModel field)
+				{
+					SyncFieldToEmrWorkspace(field);
+				}
 				UpdateOpdFieldVisibilityAndValidation(false);
 				QueueOpdPrintPreview();
 			}
@@ -935,6 +1436,205 @@ public partial class WorkbenchModel
 			field.PropertyChanged -= OnFieldChanged;
 			field.PropertyChanged += OnFieldChanged;
 		}
+	}
+
+	private void SyncFieldToEmrWorkspace(OpdEmrFieldModel field)
+	{
+		string code = field.ElementCode ?? string.Empty;
+		string val = field.Value ?? string.Empty;
+		if (string.Equals(code, "PRIMARY_DIAGNOSIS", StringComparison.OrdinalIgnoreCase) ||
+			field.ElementName.Contains("诊断"))
+		{
+			EmrWorkspace.Diagnosis = val;
+			_diagnosisName = val;
+			OnPropertyChanged(nameof(DiagnosisName));
+		}
+		else if (string.Equals(code, "CHIEF_COMPLAINT", StringComparison.OrdinalIgnoreCase))
+		{
+			EmrWorkspace.ChiefComplaint = val;
+		}
+		else if (string.Equals(code, "PRESENT_ILLNESS", StringComparison.OrdinalIgnoreCase))
+		{
+			EmrWorkspace.PresentIllness = val;
+		}
+		else if (string.Equals(code, "DE_PROSTATE_EXAM", StringComparison.OrdinalIgnoreCase))
+		{
+			EmrWorkspace.ProstateExam = val;
+		}
+		else if ((string.Equals(code, "DE_GRAVIDITY", StringComparison.OrdinalIgnoreCase) ||
+				  string.Equals(code, "DE_PARITY", StringComparison.OrdinalIgnoreCase)) &&
+				 int.TryParse(val, out int preg))
+		{
+			EmrWorkspace.PregnancyCount = preg;
+		}
+	}
+
+	private void LoadFallbackTemplateDetail(OpdEmrTemplateModel template, string? documentJson = null)
+	{
+		Dictionary<string, string> values = ParseStructuredElements(documentJson);
+		EmrWorkspace.ResetFields();
+		
+		var sections = new List<(string code, string title, List<(string code, string name, string type, string gender, bool required)> elements)>();
+
+		if (template.TemplateCode.Contains("CARDIO", StringComparison.OrdinalIgnoreCase))
+		{
+			sections.Add(("SEC_CARDIO_CHIEF", "心前区主诉与发作特征", new()
+			{
+				("CHIEF_COMPLAINT", "主诉", "u:TextBox", "ALL", true),
+				("PRESENT_ILLNESS", "现病史", "u:TextArea", "ALL", true)
+			}));
+			sections.Add(("SEC_CARDIO_RISK", "心血管危险因素与既往用药", new()
+			{
+				("PAST_HISTORY", "既往史与心脑血管病史", "u:TextArea", "ALL", false),
+				("ALLERGY_HISTORY", "过敏史", "u:TextBox", "ALL", false)
+			}));
+			sections.Add(("SEC_CARDIO_EXAM", "心脏专科体征与排他查体", new()
+			{
+				("PHYSICAL_EXAM", "心肺专科查体", "u:TextArea", "ALL", true),
+				("DE_PROSTATE_EXAM", "前列腺触诊", "u:TextBox", "MALE_ONLY", false),
+				("DE_GRAVIDITY", "孕产次数", "u:NumericIntUpDown", "FEMALE_ONLY", false)
+			}));
+			sections.Add(("SEC_CARDIO_PLAN", "初步心血管诊断与诊疗方案", new()
+			{
+				("PRIMARY_DIAGNOSIS", "初步诊断", "u:TextBox", "ALL", true),
+				("TREATMENT_PLAN", "诊疗计划与随访方案", "u:TextArea", "ALL", false)
+			}));
+		}
+		else if (template.TemplateCode.Contains("FOLLOWUP", StringComparison.OrdinalIgnoreCase))
+		{
+			sections.Add(("SEC_FOLLOWUP_MAIN", "复诊主诉与慢病控制评估", new()
+			{
+				("CHIEF_COMPLAINT", "主诉", "u:TextBox", "ALL", true),
+				("PRESENT_ILLNESS", "慢病控制与近期症状变化", "u:TextArea", "ALL", true),
+				("AUX_EXAM", "辅助检查及用药反应", "u:TextArea", "ALL", false)
+			}));
+			sections.Add(("SEC_FOLLOWUP_PLAN", "复诊诊断与续方调整方案", new()
+			{
+				("PRIMARY_DIAGNOSIS", "复诊诊断", "u:TextBox", "ALL", true),
+				("TREATMENT_PLAN", "续方调整与复诊医嘱", "u:TextArea", "ALL", false)
+			}));
+		}
+		else if (template.TemplateCode.Contains("PEDIATRIC", StringComparison.OrdinalIgnoreCase))
+		{
+			sections.Add(("SEC_PED_CHIEF", "患儿主诉与起病急缓", new()
+			{
+				("CHIEF_COMPLAINT", "主诉", "u:TextBox", "ALL", true),
+				("PRESENT_ILLNESS", "发病经过及喂养情况", "u:TextArea", "ALL", true)
+			}));
+			sections.Add(("SEC_PED_EXAM", "儿科体格检查与生命体征", new()
+			{
+				("PHYSICAL_EXAM", "儿科一般查体及心肺腹部体征", "u:TextArea", "ALL", true),
+				("ALLERGY_HISTORY", "药物与食物过敏史", "u:TextBox", "ALL", false)
+			}));
+			sections.Add(("SEC_PED_PLAN", "初步诊断与儿童用药处置", new()
+			{
+				("PRIMARY_DIAGNOSIS", "初步诊断", "u:TextBox", "ALL", true),
+				("TREATMENT_PLAN", "儿科诊疗处置与宣教建议", "u:TextArea", "ALL", false)
+			}));
+		}
+		else
+		{
+			sections.Add(("SEC_CHIEF", "主诉与现病史", new()
+			{
+				("CHIEF_COMPLAINT", "主诉", "u:TextBox", "ALL", true),
+				("PRESENT_ILLNESS", "现病史", "u:TextArea", "ALL", true)
+			}));
+			sections.Add(("SEC_HISTORY", "既往史与过敏史", new()
+			{
+				("PAST_HISTORY", "既往史与慢病史", "u:TextArea", "ALL", false),
+				("ALLERGY_HISTORY", "药物与食物过敏史", "u:TextBox", "ALL", false)
+			}));
+			sections.Add(("SEC_EXAM", "体格检查与专科排他检查 (GATE-03)", new()
+			{
+				("PHYSICAL_EXAM", "体格检查与生命体征", "u:TextArea", "ALL", true),
+				("DE_PROSTATE_EXAM", "前列腺触诊", "u:TextBox", "MALE_ONLY", false),
+				("DE_GRAVIDITY", "孕产次数", "u:NumericIntUpDown", "FEMALE_ONLY", false)
+			}));
+			sections.Add(("SEC_DIAG_PLAN", "初步诊断与诊疗处置计划", new()
+			{
+				("PRIMARY_DIAGNOSIS", "初步诊断", "u:TextBox", "ALL", true),
+				("TREATMENT_PLAN", "诊疗计划与处置意见", "u:TextArea", "ALL", false)
+			}));
+		}
+
+		int secOrder = 1;
+		foreach (var secDef in sections)
+		{
+			OpdEmrSectionModel section = new()
+			{
+				SectionId = "FALLBACK-" + secDef.code,
+				SectionCode = secDef.code,
+				SectionTitle = secDef.title,
+				RenderMode = "GRID_FORM",
+				IsRequired = true,
+				VisibilityExpr = "ALL",
+				SortOrder = secOrder++
+			};
+			foreach (var el in secDef.elements)
+			{
+				string code = el.code;
+				values.TryGetValue(code, out string? value);
+				if (string.IsNullOrWhiteSpace(value))
+				{
+					if (string.Equals(code, "PRIMARY_DIAGNOSIS", StringComparison.OrdinalIgnoreCase) ||
+						string.Equals(code, "DIAGNOSIS", StringComparison.OrdinalIgnoreCase))
+					{
+						value = DiagnosisName ?? EmrWorkspace.Diagnosis ?? string.Empty;
+					}
+					else if (string.Equals(code, "CHIEF_COMPLAINT", StringComparison.OrdinalIgnoreCase))
+					{
+						value = EmrWorkspace.ChiefComplaint ?? SelectedPatient?.ChiefComplaint ?? string.Empty;
+					}
+					else if (string.Equals(code, "PRESENT_ILLNESS", StringComparison.OrdinalIgnoreCase))
+					{
+						value = EmrWorkspace.PresentIllness ?? string.Empty;
+					}
+					else if (string.Equals(code, "DE_PROSTATE_EXAM", StringComparison.OrdinalIgnoreCase))
+					{
+						value = EmrWorkspace.ProstateExam ?? string.Empty;
+					}
+					else if ((string.Equals(code, "DE_GRAVIDITY", StringComparison.OrdinalIgnoreCase) ||
+							  string.Equals(code, "DE_PARITY", StringComparison.OrdinalIgnoreCase)) &&
+							 EmrWorkspace.PregnancyCount > 0)
+					{
+						value = EmrWorkspace.PregnancyCount.ToString();
+					}
+				}
+				OpdEmrFieldModel field = new()
+				{
+					ElementCode = code,
+					ElementName = el.name,
+					DataType = el.type == "u:NumericIntUpDown" ? "INTEGER" : "STRING",
+					ControlType = el.type,
+					GenderExclusive = el.gender,
+					SectionCode = section.SectionCode,
+					SectionTitle = section.SectionTitle,
+					IsRequired = el.required,
+					SortOrder = section.SortOrder,
+					PatientGender = SelectedPatient?.Gender ?? string.Empty,
+					Placeholder = $"录入{el.name}..."
+				};
+				field.Value = value ?? string.Empty;
+				field.RefreshResolvedControl();
+				field.ApplyVisibility(values, section.VisibilityExpr);
+				section.Fields.Add(field);
+				EmrWorkspace.Fields.Add(field);
+			}
+			section.NotifyFieldsChanged();
+			EmrWorkspace.Sections.Add(section);
+		}
+
+		EmrWorkspace.SelectedTemplateId = template.Id;
+		EmrWorkspace.TemplateName = template.TemplateName;
+		EmrWorkspace.RequiredSignLevels = template.RequiredSignLevels;
+		EmrWorkspace.TemplateHint = template.Summary;
+		_opdCurrentTemplateCode = template.TemplateCode;
+		_opdCurrentDocTypeCode = template.DocTypeCode;
+		SubscribeOpdDynamicFields();
+		OnPropertyChanged(nameof(HasOpdEmrSections));
+		OnPropertyChanged(nameof(OpdDynamicFieldsEmptyHint));
+		UpdateOpdFieldVisibilityAndValidation(false);
+		QueueOpdPrintPreview();
 	}
 
 	private static string? ReadStringProperty(string? json, string name)

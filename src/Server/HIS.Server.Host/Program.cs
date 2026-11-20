@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -42,6 +42,31 @@ using HIS.Modules.Pharmacy.Models;
 using HIS.Modules.Platform.Controllers;
 using HIS.Modules.Platform.Models;
 using HIS.Modules.Platform.Services;
+using HIS.Modules.KnowledgeBase.Controllers;
+using HIS.Modules.KnowledgeBase.Models;
+using HIS.Modules.KnowledgeBase.Services;
+using HIS.Modules.ClinicalPathway.Controllers;
+using HIS.Modules.ClinicalPathway.Models;
+using HIS.Modules.ClinicalPathway.Services;
+using HIS.Modules.Treatment.Controllers;
+using HIS.Modules.Treatment.Models;
+using HIS.Modules.Treatment.Services;
+using HIS.Modules.Monitoring.Controllers;
+using HIS.Modules.Monitoring.Models;
+using HIS.Modules.Monitoring.Services;
+using HIS.Modules.BloodBank.Controllers;
+using HIS.Modules.BloodBank.Models;
+using HIS.Modules.BloodBank.Services;
+using HIS.Modules.EmrQc.Controllers;
+using HIS.Modules.EmrQc.Models;
+using HIS.Modules.EmrQc.Services;
+using HIS.Modules.HieGateway.Controllers;
+using HIS.Modules.HieGateway.Models;
+using HIS.Modules.HieGateway.Services;
+using HIS.Modules.Workflow.Controllers;
+using HIS.Modules.Workflow.Models;
+using HIS.Modules.Workflow.Services;
+using HIS.Server.Host.Hubs;
 using HIS.Server.Host;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors.Infrastructure;
@@ -67,7 +92,16 @@ public class Program
 			.AddApplicationPart(typeof(InventoryController).Assembly)
 			.AddApplicationPart(typeof(FinanceController).Assembly)
 			.AddApplicationPart(typeof(OperationsController).Assembly)
-			.AddApplicationPart(typeof(ConsumablesController).Assembly);
+			.AddApplicationPart(typeof(ConsumablesController).Assembly)
+			.AddApplicationPart(typeof(KnowledgeController).Assembly)
+			.AddApplicationPart(typeof(ClinicalPathwayController).Assembly)
+			.AddApplicationPart(typeof(TreatmentController).Assembly)
+			.AddApplicationPart(typeof(MonitoringController).Assembly)
+			.AddApplicationPart(typeof(BloodBankController).Assembly)
+			.AddApplicationPart(typeof(EmrQcController).Assembly)
+			.AddApplicationPart(typeof(HieGatewayController).Assembly)
+			.AddApplicationPart(typeof(WorkflowController).Assembly);
+		builder.Services.AddSignalR();
 		builder.Services.AddSingleton((Func<IServiceProvider, IDbConnectionFactory>)((IServiceProvider sp) => new SqliteConnectionFactory()));
 		RegisterRepo<SysDepartment>(builder.Services, "sys_departments");
 		RegisterRepo<SysDeptWardRelation>(builder.Services, "sys_dept_ward_relations");
@@ -92,6 +126,10 @@ public class Program
 		RegisterRepo<EmrDocument>(builder.Services, "emr_documents");
 		RegisterRepo<EmrDocumentElement>(builder.Services, "emr_document_elements");
 		RegisterRepo<EmrOfdArchive>(builder.Services, "emr_ofd_archives");
+		RegisterRepo<EmrUserTemplate>(builder.Services, "emr_user_templates");
+		RegisterRepo<EmrDigitizedHistory>(builder.Services, "emr_digitized_history");
+		RegisterRepo<EmrStoragePolicy>(builder.Services, "emr_storage_policies");
+		RegisterRepo<EmrExternalHealthRecord>(builder.Services, "emr_external_health_records");
 		RegisterRepo<PatPatient>(builder.Services, "pat_patients");
 		RegisterRepo<OpdScheduleSlot>(builder.Services, "opd_schedule_slots");
 		RegisterRepo<OpdScheduleTemplate>(builder.Services, "opd_schedule_templates");
@@ -174,10 +212,83 @@ public class Program
 		RegisterRepo<EqpEquipment>(builder.Services, "eqp_equipments");
 		RegisterRepo<EqpMaintenanceRecord>(builder.Services, "eqp_maintenance_records");
 
+		// Custom SQL Reports & Parameterized Dynamic Queries
+		RegisterRepo<OpsReportDefinition>(builder.Services, "ops_report_definitions");
+		RegisterRepo<OpsReportExecution>(builder.Services, "ops_report_executions");
+
+		// EMR Level 7 Security, Audit & Access Grants
+		RegisterRepo<SecDigitalSignature>(builder.Services, "sec_digital_signatures");
+		RegisterRepo<SecEmrAccessGrant>(builder.Services, "sec_emr_access_grants");
+		RegisterRepo<EmrSectionAcl>(builder.Services, "emr_section_acl");
+		RegisterRepo<SecEmrReadAuditLog>(builder.Services, "sec_emr_read_audit_logs");
+
+		// EMR Level 7 CDSS & CPW
+		RegisterRepo<KbDocument>(builder.Services, "kb_documents");
+		RegisterRepo<KbClinicalRule>(builder.Services, "kb_clinical_rules");
+		RegisterRepo<KbOrderBinding>(builder.Services, "kb_order_bindings");
+		RegisterRepo<KbExternalSource>(builder.Services, "kb_external_sources");
+		RegisterRepo<CpwPathway>(builder.Services, "cpw_pathways");
+		RegisterRepo<CpwStage>(builder.Services, "cpw_stages");
+		RegisterRepo<CpwStageItem>(builder.Services, "cpw_stage_items");
+		RegisterRepo<CpwPatientEnrollment>(builder.Services, "cpw_patient_enrollments");
+		RegisterRepo<CpwVariance>(builder.Services, "cpw_variances");
+
+		// EMR Level 7 Pharmacy & Rational Drug Review
+		RegisterRepo<OrdOrderReviewLog>(builder.Services, "ord_order_review_logs");
+		RegisterRepo<PhmPrescriptionComment>(builder.Services, "phm_prescription_comments");
+		RegisterRepo<AdrReport>(builder.Services, "adr_reports");
+		RegisterRepo<PhmWardPivasBatch>(builder.Services, "phm_ward_pivas_batches");
+		RegisterRepo<PhmUnitDoseBarcode>(builder.Services, "phm_unit_dose_barcodes");
+		RegisterRepo<PhmMedicationReconciliation>(builder.Services, "phm_medication_reconciliations");
+		RegisterRepo<PhmExternalPrescription>(builder.Services, "phm_external_prescriptions");
+
+		// EMR Level 7 Treatment & Monitoring
+		RegisterRepo<TrtTreatmentCatalog>(builder.Services, "trt_treatment_catalog");
+		RegisterRepo<TrtRequest>(builder.Services, "trt_requests");
+		RegisterRepo<TrtAppointment>(builder.Services, "trt_appointments");
+		RegisterRepo<TrtParameterRule>(builder.Services, "trt_parameter_rules");
+		RegisterRepo<TrtExecutionRecord>(builder.Services, "trt_execution_records");
+		RegisterRepo<MonDevice>(builder.Services, "mon_devices");
+		RegisterRepo<MonVitalStream>(builder.Services, "mon_vital_streams");
+		RegisterRepo<MonAlarm>(builder.Services, "mon_alarms");
+		RegisterRepo<MonRiskScore>(builder.Services, "mon_risk_scores");
+
+		// EMR Level 7 Blood Bank
+		RegisterRepo<BldBloodDictionary>(builder.Services, "bld_blood_dictionary");
+		RegisterRepo<BldInventoryBag>(builder.Services, "bld_inventory_bags");
+		RegisterRepo<BldStockPolicy>(builder.Services, "bld_stock_policies");
+		RegisterRepo<BldCrossmatchRecord>(builder.Services, "bld_crossmatch_records");
+		RegisterRepo<BldTransfusionExecution>(builder.Services, "bld_transfusion_executions");
+		RegisterRepo<BldTransfusionReaction>(builder.Services, "bld_transfusion_reactions");
+		RegisterRepo<BldExternalSyncLog>(builder.Services, "bld_external_sync_logs");
+
+		// EMR Level 7 Quality Control
+		RegisterRepo<EmrQcRule>(builder.Services, "emr_qc_rules");
+		RegisterRepo<EmrQcTask>(builder.Services, "emr_qc_tasks");
+		RegisterRepo<EmrQcDefect>(builder.Services, "emr_qc_defects");
+		RegisterRepo<EmrQcCrossOrgTrack>(builder.Services, "emr_qc_cross_org_tracks");
+
+		// EMR Level 7 HIE
+		RegisterRepo<HieEmpiMapping>(builder.Services, "hie_empi_mappings");
+		RegisterRepo<HieItemCodeMapping>(builder.Services, "hie_item_code_mappings");
+		RegisterRepo<HieExchangeLog>(builder.Services, "hie_exchange_logs");
+
+		// Workflow Engine
+		RegisterRepo<WfDefinition>(builder.Services, "wf_definitions");
+		RegisterRepo<WfInstance>(builder.Services, "wf_instances");
+		RegisterRepo<WfTask>(builder.Services, "wf_tasks");
+		RegisterRepo<WfHistoryTrack>(builder.Services, "wf_history_tracks");
+		RegisterRepo<WfBusinessBinding>(builder.Services, "wf_business_bindings");
+		RegisterRepo<WfNotification>(builder.Services, "wf_notifications");
+
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);
 		builder.Services.AddSingleton(new JwtTokenService(securityKeys.JwtSigningKey));
 		builder.Services.AddSingleton<LoginAttemptLockoutService>();
+		builder.Services.AddSingleton<IEmrPrefetchCache, EmrPrefetchCache>();
+		builder.Services.AddHostedService<EmrPrefetchBackgroundService>();
+		builder.Services.AddHostedService<EmrQcTimelinessWorker>();
+		builder.Services.AddHostedService<NursingCarePlanReminderWorker>();
 		builder.Services.AddHostedService<OutboxBackgroundDispatcher>();
 		builder.Services.AddScoped((Func<IServiceProvider, IUserSession>)((IServiceProvider sp) =>
 		{
@@ -216,19 +327,21 @@ public class Program
 			_ => throw new InvalidOperationException($"未知医保适配器: {insuranceProvider}")
 		});
 
-		string lisProvider = builder.Configuration["HIS_LIS_PROVIDER"] ?? "Mock";
-		builder.Services.AddSingleton<ILisAdapter>(lisProvider switch
+		string lisProvider = builder.Configuration["HIS_LIS_PROVIDER"] ?? "HL7";
+		builder.Services.AddSingleton<ILisAdapter>((Func<IServiceProvider, ILisAdapter>)(sp => lisProvider switch
 		{
+			"HL7" => new Hl7AstMLisAdapter(sp.GetRequiredService<IDbConnectionFactory>()),
 			"Mock" => new MockLisAdapter(),
-			_ => throw new InvalidOperationException($"未知 LIS 适配器: {lisProvider}")
-		});
+			_ => new MockLisAdapter()
+		}));
 
-		string pacsProvider = builder.Configuration["HIS_PACS_PROVIDER"] ?? "Mock";
-		builder.Services.AddSingleton<IPacsAdapter>(pacsProvider switch
+		string pacsProvider = builder.Configuration["HIS_PACS_PROVIDER"] ?? "Orthanc";
+		builder.Services.AddSingleton<IPacsAdapter>((Func<IServiceProvider, IPacsAdapter>)(sp => pacsProvider switch
 		{
+			"Orthanc" => new OrthancDicomWebPacsAdapter(sp.GetRequiredService<IDbConnectionFactory>()),
 			"Mock" => new MockPacsAdapter(),
-			_ => throw new InvalidOperationException($"未知 PACS 适配器: {pacsProvider}")
-		});
+			_ => new MockPacsAdapter()
+		}));
 		builder.Services.AddScoped<EmrQualityControlService>();
 		builder.Services.AddScoped<EmrOfdRenderService>();
 		builder.Services.AddScoped<DischargeChecklistService>();
@@ -244,6 +357,68 @@ public class Program
 		builder.Services.AddScoped<SecurityIntrusionDetectionService>();
 		builder.Services.AddScoped<KmsKeyLifecycleService>();
 		builder.Services.AddScoped<HIS.Modules.Outpatient.Services.IPrescriptionReviewEngine, HIS.Modules.Outpatient.Services.PrescriptionReviewEngine>();
+		builder.Services.AddScoped<IClinicalOrderReviewEngine, HIS.Modules.Outpatient.Services.UnifiedClinicalOrderReviewEngine>();
+
+		// Level 7 Subsystem Contracts & Protocol Gateways
+		string caProvider = builder.Configuration["HIS_CA_PROVIDER"] ?? "DevSandbox";
+		builder.Services.AddSingleton<ICaSignatureProvider>(sp => caProvider switch
+		{
+			"HttpThirdParty" => new HttpThirdPartyCaProvider(sp.GetService<System.Net.Http.IHttpClientFactory>()?.CreateClient()),
+			"DevSandbox" => new DevSandboxCaProvider(),
+			_ => new DevSandboxCaProvider()
+		});
+
+		string tsaProvider = builder.Configuration["HIS_TSA_PROVIDER"] ?? "Rfc3161Http";
+		builder.Services.AddSingleton<IExternalTsaClient>(sp => tsaProvider switch
+		{
+			"Rfc3161Http" => new Rfc3161HttpTsaClient(sp.GetService<System.Net.Http.IHttpClientFactory>()?.CreateClient()),
+			"DevSandbox" => new Rfc3161HttpTsaClient(sp.GetService<System.Net.Http.IHttpClientFactory>()?.CreateClient()),
+			_ => new Rfc3161HttpTsaClient(sp.GetService<System.Net.Http.IHttpClientFactory>()?.CreateClient())
+		});
+
+		string hieProvider = builder.Configuration["HIS_HIE_PROVIDER"] ?? "LocalSimulator";
+		builder.Services.AddHttpClient("HieFhirClient");
+		builder.Services.AddSingleton<IHieRemoteTransport>(sp => hieProvider switch
+		{
+			"FhirHttp" => new HttpFhirHieTransport(
+				sp.GetRequiredService<System.Net.Http.IHttpClientFactory>(),
+				sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>(),
+				sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<HttpFhirHieTransport>>()),
+			"LocalSimulator" => new LocalFederatedHieTransport(),
+			_ => new LocalFederatedHieTransport()
+		});
+
+		if (builder.Environment.IsProduction())
+		{
+			var devAdapters = new List<string>();
+			if (string.Equals(caProvider, "DevSandbox", StringComparison.OrdinalIgnoreCase)) devAdapters.Add("CA (DevSandbox)");
+			if (string.Equals(tsaProvider, "DevSandbox", StringComparison.OrdinalIgnoreCase)) devAdapters.Add("TSA (DevSandbox)");
+			if (string.Equals(lisProvider, "Mock", StringComparison.OrdinalIgnoreCase)) devAdapters.Add("LIS (Mock)");
+			if (string.Equals(pacsProvider, "Mock", StringComparison.OrdinalIgnoreCase)) devAdapters.Add("PACS (Mock)");
+			if (string.Equals(hieProvider, "LocalSimulator", StringComparison.OrdinalIgnoreCase)) devAdapters.Add("HIE (LocalSimulator)");
+
+			if (devAdapters.Count > 0)
+			{
+				throw new InvalidOperationException(
+					$"[生产环境门禁阻断] 生产环境严禁使用演示/模拟适配器！已阻断组件: {string.Join(", ", devAdapters)}。请在配置或环境变量中指定正式生产对接参数。");
+			}
+		}
+
+		builder.Services.AddScoped<IClinicalProcessSignatureContract, ClinicalProcessSignatureService>();
+		builder.Services.AddScoped<IEmrAccessPolicyContract, EmrAccessControlService>();
+		builder.Services.AddScoped<IClinicalKnowledgeContract, ClinicalKnowledgeService>();
+		builder.Services.AddScoped<IClinicalPathwayContract, ClinicalPathwayService>();
+		builder.Services.AddScoped<ITreatmentContract, TreatmentService>();
+		builder.Services.AddScoped<IMonitoringContract, MonitoringService>();
+		builder.Services.AddScoped<IBloodBankContract, BloodBankService>();
+		builder.Services.AddScoped<IEmrQcContract, EmrQcService>();
+		builder.Services.AddScoped<IHieGatewayContract, HieGatewayService>();
+		builder.Services.AddScoped<IClinicalAlertPublisher, ClinicalAlertPublisher>();
+		builder.Services.AddScoped<WorkflowAssigneeResolver>();
+		builder.Services.AddScoped<WorkflowBusinessCallbackDispatcher>();
+		builder.Services.AddScoped<IWorkflowBusinessCallback>(sp => sp.GetRequiredService<WorkflowBusinessCallbackDispatcher>());
+		builder.Services.AddScoped<WorkflowRuntimeService>();
+		builder.Services.AddScoped<IWorkflowEngineContract>(sp => sp.GetRequiredService<WorkflowRuntimeService>());
 		builder.Services.AddCors((CorsOptions opt) =>
 		{
 			opt.AddDefaultPolicy((CorsPolicyBuilder p) =>
@@ -280,6 +455,7 @@ public class Program
 			bool isAnonymous = HttpMethods.IsOptions(context.Request.Method)
 				|| path == "/"
 				|| path.Equals("/health", StringComparison.OrdinalIgnoreCase)
+				|| path.StartsWithSegments("/hubs")
 				|| path.Equals("/api/v4/platform/auth/login", StringComparison.OrdinalIgnoreCase)
 				|| path.Equals("/api/v4/platform/auth/refresh", StringComparison.OrdinalIgnoreCase)
 				|| path.Equals("/api/v4/platform/auth/contexts", StringComparison.OrdinalIgnoreCase);
@@ -338,6 +514,7 @@ public class Program
 			}
 		});
 		app.MapControllers();
+		app.MapHub<ClinicalAlertHub>("/hubs/clinical-alerts");
 		app.MapGet("/", (Func<IResult>)(() => Results.Ok(new
 		{
 			System = "HIS V4.3 Hospital Information System",

@@ -13,6 +13,8 @@ public class OpsAuditEvent : BaseEntity
     public string? ActionDetail { get; set; }
     public string PrevHash { get; set; } = "GENESIS_BLOCK_HASH_00000000000000000000000000000000000000000000";
     public string CurrHash { get; set; } = string.Empty;
+    public string CurrentHash => CurrHash;
+    public long TimestampMs => CreatedAtMs;
 }
 
 public class OpsIdempotencyKey : BaseEntity

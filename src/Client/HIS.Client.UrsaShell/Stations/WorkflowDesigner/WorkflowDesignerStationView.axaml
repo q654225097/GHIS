@@ -1,0 +1,342 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.WorkflowDesigner"
+             x:Class="HIS.Client.UrsaShell.Stations.WorkflowDesigner.WorkflowDesignerStationView"
+             x:DataType="local:WorkflowDesignerViewModel">
+    <Grid ColumnDefinitions="260,*,320" Background="{DynamicResource SemiColorBackground0}">
+        <!-- Left: Workflow Definitions Master List -->
+        <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,1,0" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,*">
+                <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,10">
+                    <TextBlock Text="业务流程定义" FontSize="16" FontWeight="Bold"/>
+                    <TextBlock Text="低代码状态机工作流配置" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,10" ColumnSpacing="6">
+                    <Button Grid.Column="0" Content="+ 新建流程" Classes="Primary" Height="30" FontWeight="Bold"
+                            Command="{Binding NewDefinitionCommand}"/>
+                    <Button Grid.Column="1" Content="刷新" Classes="Secondary" Height="30"
+                            Command="{Binding RefreshDefinitionsCommand}"/>
+                </Grid>
+
+                <ListBox Grid.Row="2" ItemsSource="{Binding Definitions}"
+                         SelectedItem="{Binding SelectedDefinition, Mode=TwoWay}"
+                         Background="Transparent" BorderThickness="0">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0,0,0,6"/>
+                            <Setter Property="CornerRadius" Value="6"/>
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="local:WorkflowDefinitionItemModel">
+                            <Border Padding="10,8" CornerRadius="6"
+                                    Background="{DynamicResource SemiColorBackground0}"
+                                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="4">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding DefName}" FontWeight="Bold" FontSize="12"/>
+                                        <Border Grid.Column="1" Background="{Binding StatusBrush}" CornerRadius="3" Padding="4,1">
+                                            <TextBlock Text="{Binding VersionBadge}" FontSize="9" Foreground="White" FontWeight="Bold"/>
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="{Binding DefKey}" FontSize="10" Foreground="{DynamicResource SemiColorText3}"/>
+                                    <TextBlock Text="{Binding BoType, StringFormat='业务类型: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <!-- Center: Design Canvas & Top Control Strip -->
+        <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto">
+            <!-- Top Control & Node Palette Strip -->
+            <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1" Padding="12,8">
+                <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+                    <!-- Row 1: Def Info & Actions -->
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="标识:" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBox Text="{Binding DefKey, Mode=TwoWay}" Width="130" Height="28" FontSize="11"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="名称:" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBox Text="{Binding DefName, Mode=TwoWay}" Width="150" Height="28" FontSize="11"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="单据类型:" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <ComboBox ItemsSource="{Binding BoTypes}"
+                                      SelectedValue="{Binding SelectedBoType, Mode=TwoWay}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      DisplayMemberBinding="{Binding DisplayText}"
+                                      Width="160" Height="28" FontSize="11"/>
+                        </StackPanel>
+
+                        <Button Grid.Column="4" Content="💾 保存草稿" Classes="Secondary" Height="28" FontWeight="Bold"
+                                Command="{Binding SaveDraftCommand}"/>
+                        <Button Grid.Column="5" Content="🚀 发布生效" Classes="Primary" Height="28" FontWeight="Bold"
+                                Command="{Binding PublishCommand}"/>
+                        <Button Grid.Column="6" Content="🗑 删除选中" Classes="Danger" Height="28"
+                                Command="{Binding DeleteSelectedCommand}"/>
+                    </Grid>
+
+                    <!-- Row 2: Add Node Palette & Connection Mode Banner -->
+                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="添加节点:" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <Button Content="🟢 + 开始" Classes="Tertiary" Height="26" Padding="8,0" FontSize="11"
+                                    Command="{Binding AddNodeCommand}" CommandParameter="START"/>
+                            <Button Content="👤 + 审批" Classes="Secondary" Height="26" Padding="8,0" FontSize="11" FontWeight="Bold"
+                                    Command="{Binding AddNodeCommand}" CommandParameter="APPROVAL"/>
+                            <Button Content="🔀 + 条件网关" Classes="Tertiary" Height="26" Padding="8,0" FontSize="11"
+                                    Command="{Binding AddNodeCommand}" CommandParameter="EXCLUSIVE_GATEWAY"/>
+                            <Button Content="📋 + 抄送" Classes="Tertiary" Height="26" Padding="8,0" FontSize="11"
+                                    Command="{Binding AddNodeCommand}" CommandParameter="CC"/>
+                            <Button Content="🛑 + 结束" Classes="Tertiary" Height="26" Padding="8,0" FontSize="11"
+                                    Command="{Binding AddNodeCommand}" CommandParameter="END"/>
+                        </StackPanel>
+
+                        <!-- Connecting Mode Notification -->
+                        <Border Grid.Column="1" HorizontalAlignment="Right" Background="#FEF3C7" BorderBrush="#F59E0B"
+                                BorderThickness="1" CornerRadius="4" Padding="8,2" IsVisible="{Binding IsConnectingMode}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="🔗 连线模式中: 请点击目标节点完成连接" FontSize="11" Foreground="#B45309" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Button Content="取消" Classes="Tertiary" Padding="4,0" FontSize="10" Command="{Binding CancelConnectCommand}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- Interactive Workflow Canvas -->
+            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <Canvas x:Name="DesignerCanvas" Width="2000" Height="1500" Background="#F8FAFC">
+                    <!-- Layer 1: Directed Connection Edges -->
+                    <ItemsControl ItemsSource="{Binding Edges}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="local:WorkflowEdgeModel">
+                                <Canvas>
+                                    <!-- Connecting Line with Arrow -->
+                                    <Line StartPoint="{Binding X1, StringFormat='{}{0},{1}', Converter={x:Null}}"
+                                          EndPoint="{Binding X2, StringFormat='{}{0},{1}', Converter={x:Null}}"
+                                          Stroke="{DynamicResource SemiColorPrimary}"
+                                          StrokeThickness="2"/>
+                                    <!-- Edge Selection / Label Badge placed at (MidX, MidY) -->
+                                    <Button Canvas.Left="{Binding MidX}" Canvas.Top="{Binding MidY}"
+                                            Classes="Tertiary"
+                                            Padding="6,2"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Command="{Binding $parent[UserControl].((local:WorkflowDesignerViewModel)DataContext).SelectEdgeCommand}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock Text="{Binding Label}" FontSize="10" Foreground="{DynamicResource SemiColorText1}" FontWeight="SemiBold"/>
+                                    </Button>
+                                </Canvas>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Layer 2: Draggable Workflow Nodes -->
+                    <ItemsControl ItemsSource="{Binding Nodes}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="local:WorkflowNodeModel">
+                                <Border Canvas.Left="{Binding X}" Canvas.Top="{Binding Y}"
+                                        Width="140" MinHeight="65"
+                                        Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{Binding NodeBrush}"
+                                        BorderThickness="2"
+                                        CornerRadius="6"
+                                        Padding="8,6"
+                                        BoxShadow="0 2 8 0 #15000000"
+                                        PointerPressed="OnNodePointerPressed"
+                                        PointerMoved="OnNodePointerMoved"
+                                        PointerReleased="OnNodePointerReleased">
+                                    <Grid RowDefinitions="Auto,*,Auto">
+                                        <!-- Node Header Strip -->
+                                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding TypeTitle}" FontSize="10" FontWeight="Bold" Foreground="{Binding NodeBrush}"/>
+                                            <!-- Connect Button -->
+                                            <Button Grid.Column="1" Content="➔" Classes="Tertiary" Padding="4,0" FontSize="10"
+                                                    ToolTip.Tip="以此节点为起点连线"
+                                                    Command="{Binding $parent[UserControl].((local:WorkflowDesignerViewModel)DataContext).StartConnectCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+
+                                        <!-- Node Title -->
+                                        <TextBlock Grid.Row="1" Text="{Binding Name}" FontWeight="Bold" FontSize="12" Margin="0,3" TextTrimming="CharacterEllipsis"/>
+
+                                        <!-- Node Details (Mode, Strategy) -->
+                                        <StackPanel Grid.Row="2" Spacing="1" IsVisible="{Binding IsApprovalOrCC}">
+                                            <TextBlock Text="{Binding AssigneeStrategy, StringFormat='策略: {0}'}" FontSize="9" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <TextBlock Text="{Binding ApprovalMode, StringFormat='模式: {0}'}" FontSize="9" Foreground="{DynamicResource SemiColorText3}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Canvas>
+            </ScrollViewer>
+
+            <!-- Bottom Status Bar -->
+            <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,1,0,0" Padding="12,6">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="{Binding StatusNotice}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="提示: 鼠标拖拽移动节点，点击 ➔ 开启连线" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Right: Inspector & Property Editor Panel -->
+        <Border Grid.Column="2" Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1,0,0,0" Padding="14">
+            <ScrollViewer>
+                <StackPanel Spacing="12">
+                    <TextBlock Text="属性配置面板" FontSize="14" FontWeight="Bold"/>
+
+                    <!-- No Selection State -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="16"
+                            IsVisible="{Binding !HasSelectedNode}">
+                        <StackPanel Spacing="6" HorizontalAlignment="Center" IsVisible="{Binding !HasSelectedEdge}">
+                            <TextBlock Text="👈 请在画布中选中节点或连线" FontSize="12" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                            <TextBlock Text="配置对应审批策略、网关条件与兜底逻辑" FontSize="10" Foreground="{DynamicResource SemiColorText3}" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Node Properties Inspector -->
+                    <StackPanel Spacing="10" IsVisible="{Binding HasSelectedNode}">
+                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="8,4">
+                            <TextBlock Text="{Binding SelectedNode.TypeTitle, StringFormat='节点配置: {0}'}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        </Border>
+
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="节点名称:" FontSize="11" FontWeight="Bold"/>
+                            <TextBox Text="{Binding SelectedNode.Name, Mode=TwoWay}" Height="28" FontSize="11"/>
+                        </StackPanel>
+
+                        <!-- Approval Configuration -->
+                        <StackPanel Spacing="8" IsVisible="{Binding SelectedNode.IsApprovalOnly}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="审批多人模式:" FontSize="11" FontWeight="Bold"/>
+                                <ComboBox ItemsSource="{Binding ApprovalModes}"
+                                          SelectedItem="{Binding SelectedNode.ApprovalMode, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch" Height="28" FontSize="11"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="审批人指派策略:" FontSize="11" FontWeight="Bold"/>
+                                <ComboBox ItemsSource="{Binding AssigneeStrategies}"
+                                          SelectedItem="{Binding SelectedNode.AssigneeStrategy, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch" Height="28" FontSize="11"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="指派配置参数 (人员/角色/表达式):" FontSize="11" FontWeight="Bold"/>
+                                <TextBox Text="{Binding SelectedNode.AssigneeConfig, Mode=TwoWay}" Height="28" FontSize="11"
+                                         PlaceholderText="选择或输入对应ID/表达式..."/>
+                            </StackPanel>
+
+                            <!-- Role Fast Picker -->
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="快捷选择角色:" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                <ComboBox ItemsSource="{Binding RolesList}"
+                                          SelectedValue="{Binding SelectedNode.AssigneeConfig, Mode=TwoWay}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          DisplayMemberBinding="{Binding DisplayText}"
+                                          HorizontalAlignment="Stretch" Height="28" FontSize="11"/>
+                            </StackPanel>
+
+                            <!-- User Fast Picker -->
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="快捷选择人员:" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                <ComboBox ItemsSource="{Binding UsersList}"
+                                          SelectedValue="{Binding SelectedNode.AssigneeConfig, Mode=TwoWay}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          DisplayMemberBinding="{Binding DisplayText}"
+                                          HorizontalAlignment="Stretch" Height="28" FontSize="11"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="兜底审批人 (策略计算为空时触发):" FontSize="11" FontWeight="Bold"/>
+                                <ComboBox ItemsSource="{Binding UsersList}"
+                                          SelectedValue="{Binding SelectedNode.FallbackApproverId, Mode=TwoWay}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          DisplayMemberBinding="{Binding DisplayText}"
+                                          HorizontalAlignment="Stretch" Height="28" FontSize="11"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Edge Properties Inspector -->
+                    <StackPanel Spacing="10" IsVisible="{Binding HasSelectedEdge}">
+                        <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="8,4">
+                            <TextBlock Text="连线条件分支配置" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorWarning}"/>
+                        </Border>
+
+                        <CheckBox IsChecked="{Binding SelectedEdge.IsDefault, Mode=TwoWay}"
+                                  Content="设为网关默认兜底分支 (isDefault)"
+                                  FontWeight="Bold" FontSize="11"/>
+
+                        <StackPanel Spacing="8" IsVisible="{Binding !SelectedEdge.IsDefault}">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="条件规则列表 (同时满足):" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="+ 添加条件" Classes="Primary" Height="24" Padding="6,0" FontSize="10"
+                                        Command="{Binding AddConditionRowCommand}"/>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding SelectedEdge.Conditions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:WorkflowConditionRowModel">
+                                        <Border Margin="0,0,0,6" Padding="6" Background="{DynamicResource SemiColorBackground0}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="4">
+                                            <StackPanel Spacing="4">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                                    <ComboBox Grid.Column="0" ItemsSource="{Binding $parent[UserControl].((local:WorkflowDesignerViewModel)DataContext).AvailableBoFields}"
+                                                              SelectedValue="{Binding Field, Mode=TwoWay}"
+                                                              SelectedValueBinding="{Binding Value}"
+                                                              DisplayMemberBinding="{Binding DisplayText}"
+                                                              Height="26" FontSize="11"/>
+                                                    <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[UserControl].((local:WorkflowDesignerViewModel)DataContext).Operators}"
+                                                              SelectedItem="{Binding Op, Mode=TwoWay}"
+                                                              Width="60" Height="26" FontSize="11"/>
+                                                </Grid>
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                                    <TextBox Grid.Column="0" Text="{Binding Value, Mode=TwoWay}"
+                                                             PlaceholderText="阈值/比较值" Height="26" FontSize="11"/>
+                                                    <Button Grid.Column="1" Content="✕" Classes="Danger" Height="26" Padding="6,0" FontSize="10"
+                                                            Command="{Binding $parent[UserControl].((local:WorkflowDesignerViewModel)DataContext).RemoveConditionRowCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

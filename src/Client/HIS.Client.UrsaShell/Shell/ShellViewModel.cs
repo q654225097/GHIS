@@ -14,6 +14,17 @@ using HIS.Client.UrsaShell.Views;
 
 namespace HIS.Client.UrsaShell.Shell;
 
+public sealed class ClinicalAlertRecordItem : ClientModelBase
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string EventType { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string PatientName { get; set; } = string.Empty;
+    public string Severity { get; set; } = "Info";
+    public string TimeText { get; set; } = DateTime.Now.ToString("HH:mm:ss");
+}
+
 public sealed class ShellViewModel : ClientModelBase
 {
     private readonly Dictionary<string, Control> _stationViewCache = new();
@@ -22,6 +33,9 @@ public sealed class ShellViewModel : ClientModelBase
     private Action<int>? _openLegacyWindowCallback;
     private Action? _logoutCallback;
     private Action? _focusSearchCallback;
+
+    private bool _isAlertHubConnected;
+    private int _unreadAlertCount;
 
     private ShellNavItem? _activeNavItem;
     private object? _currentStationView;
@@ -78,7 +92,17 @@ public sealed class ShellViewModel : ClientModelBase
             cb?.Invoke();
         });
         ConfirmCancelCommand = new RelayCommand(CloseConfirm);
-        LogoutCommand = new RelayCommand(() => _logoutCallback?.Invoke());
+        LogoutCommand = new RelayCommand(() =>
+        {
+            StopAlertHub();
+            _logoutCallback?.Invoke();
+        });
+        OpenAlertHistoryDrawerCommand = new RelayCommand(OpenAlertHistoryDrawer);
+        ClearAlertHistoryCommand = new RelayCommand(() =>
+        {
+            AlertHistory.Clear();
+            UnreadAlertCount = 0;
+        });
         SwitchToContextCommand = new AsyncRelayCommand(async param =>
         {
             if (param is string ctxId)
@@ -105,6 +129,7 @@ public sealed class ShellViewModel : ClientModelBase
         });
 
         RebuildNavigation();
+        StartAlertHub();
     }
 
     public WorkbenchModel Workbench { get; }
@@ -114,11 +139,44 @@ public sealed class ShellViewModel : ClientModelBase
     public ObservableCollection<ShellNavGroup> NavGroups { get; } = new();
     public ObservableCollection<ToastMessage> Toasts { get; } = new();
     public ObservableCollection<GlobalPatientHit> GlobalSearchResults { get; } = new();
+    public ObservableCollection<ClinicalAlertRecordItem> AlertHistory { get; } = new();
+
+    public bool IsAlertHubConnected
+    {
+        get => _isAlertHubConnected;
+        private set
+        {
+            if (SetField(ref _isAlertHubConnected, value))
+            {
+                OnPropertyChanged(nameof(AlertConnectionText));
+            }
+        }
+    }
+
+    public string AlertConnectionText => _isAlertHubConnected ? "实时告警: 已连接" : "实时告警: 离线重连中";
+
+    public int UnreadAlertCount
+    {
+        get => _unreadAlertCount;
+        set
+        {
+            if (SetField(ref _unreadAlertCount, value))
+            {
+                OnPropertyChanged(nameof(UnreadAlertCountText));
+                OnPropertyChanged(nameof(HasUnreadAlerts));
+            }
+        }
+    }
+
+    public string UnreadAlertCountText => _unreadAlertCount > 99 ? "99+" : _unreadAlertCount.ToString();
+    public bool HasUnreadAlerts => _unreadAlertCount > 0;
 
     public ICommand NavigateCommand { get; }
     public ICommand SelectSearchHitCommand { get; }
     public ICommand OpenTimelineDrawerCommand { get; }
     public ICommand OpenCriticalValueDrawerCommand { get; }
+    public ICommand OpenAlertHistoryDrawerCommand { get; }
+    public ICommand ClearAlertHistoryCommand { get; }
     public ICommand OpenContextSwitchDrawerCommand { get; }
     public ICommand FocusGlobalSearchCommand { get; }
     public ICommand CloseDrawerCommand { get; }
@@ -322,6 +380,15 @@ public sealed class ShellViewModel : ClientModelBase
             IsClinical = false,
             Description = "按当前岗位聚合待处理队列、医嘱、处方与危急值"
         });
+        overview.Items.Add(new ShellNavItem
+        {
+            Key = "workflow_inbox",
+            LegacyNavIndex = -1,
+            Title = "审批中心",
+            Icon = "📥",
+            IsClinical = false,
+            Description = "我的待办、已办、抄送与全院单据审批中心"
+        });
         NavGroups.Add(overview);
 
         var clinical = new ShellNavGroup("clinical", "临床诊疗", isExpanded: true);
@@ -373,6 +440,33 @@ public sealed class ShellViewModel : ClientModelBase
                 Description = "检查申请确费锁单、结果报告与危急值双签"
             });
         }
+        clinical.Items.Add(new ShellNavItem
+        {
+            Key = "treatment",
+            LegacyNavIndex = -1,
+            Title = "一般治疗",
+            Icon = "🩹",
+            IsClinical = true,
+            Description = "透析、化疗、理疗与高压氧等治疗项目与参数联动"
+        });
+        clinical.Items.Add(new ShellNavItem
+        {
+            Key = "monitoring",
+            LegacyNavIndex = -1,
+            Title = "重症监护",
+            Icon = "📈",
+            IsClinical = true,
+            Description = "ICU 连续生命体征采集、生理报警与重症风险评分"
+        });
+        clinical.Items.Add(new ShellNavItem
+        {
+            Key = "blood_bank",
+            LegacyNavIndex = -1,
+            Title = "血库管理",
+            Icon = "🩸",
+            IsClinical = true,
+            Description = "全院血液库存、备血建议、交叉配血与双签发血闭环"
+        });
         if (clinical.Items.Count > 0) NavGroups.Add(clinical);
 
         if (ctx.CanSeePharmacy)
@@ -498,6 +592,24 @@ public sealed class ShellViewModel : ClientModelBase
                 IsClinical = true,
                 Description = "OFD 电子病历版式归档与完整性验签"
             });
+            records.Items.Add(new ShellNavItem
+            {
+                Key = "emr_designer",
+                LegacyNavIndex = -1,
+                Title = "文书设计器",
+                Icon = "📐",
+                IsClinical = false,
+                Description = "填写模式组件布局与打印模式纸张防超限文书设计"
+            });
+            records.Items.Add(new ShellNavItem
+            {
+                Key = "emr_qc",
+                LegacyNavIndex = -1,
+                Title = "病历质控",
+                Icon = "🛡️",
+                IsClinical = true,
+                Description = "全过程时效性监控、内涵质控缺陷下发与整改复核闭环"
+            });
             NavGroups.Add(records);
         }
 
@@ -511,6 +623,7 @@ public sealed class ShellViewModel : ClientModelBase
             sys.Items.Add(new ShellNavItem { Key = "user_admin", LegacyNavIndex = 7, Title = "用户账号维护", Icon = "👤", Description = "全院用户账号、科室岗位绑定" });
             sys.Items.Add(new ShellNavItem { Key = "role_admin", LegacyNavIndex = 8, Title = "角色与权限", Icon = "🔐", Description = "角色权限矩阵与数据隔离策略" });
             sys.Items.Add(new ShellNavItem { Key = "audit_log", LegacyNavIndex = 9, Title = "安全审计日志", Icon = "📜", Description = "关键操作不可篡改审计与链校验" });
+            sys.Items.Add(new ShellNavItem { Key = "workflow_designer", LegacyNavIndex = -1, Title = "流程设计器", Icon = "🔀", Description = "低代码可视化状态机审批流设计与发布" });
             NavGroups.Add(sys);
         }
 
@@ -603,6 +716,7 @@ public sealed class ShellViewModel : ClientModelBase
             "registration" => new Stations.Registration.RegistrationStationView { DataContext = new Stations.Registration.RegistrationStationViewModel(Workbench, this) },
             "finance" => new Stations.Finance.FinanceStationView { DataContext = new Stations.Finance.FinanceStationViewModel(Workbench, this) },
             "emr_archive" => new Stations.EmrArchive.EmrArchiveView { DataContext = new Stations.EmrArchive.EmrArchiveViewModel(Workbench, this) },
+            "emr_designer" => new Stations.EmrDesigner.EmrDesignerStationView { DataContext = new Stations.EmrDesigner.EmrDesignerStationViewModel(Workbench, this) },
             "dynamic_form" => new Stations.Admin.DynamicFormStationView { DataContext = new Stations.Admin.DynamicFormStationViewModel(Workbench, this) },
             "user_admin" => new Stations.Admin.UserAdminStationView { DataContext = new Stations.Admin.UserAdminStationViewModel(Workbench, this) },
             "role_admin" => new Stations.Admin.RoleAdminStationView { DataContext = new Stations.Admin.RoleAdminStationViewModel(Workbench, this) },
@@ -611,6 +725,12 @@ public sealed class ShellViewModel : ClientModelBase
             "consumables_warehouse" => new Stations.Consumables.ConsumablesWarehouseView { DataContext = new Stations.Consumables.ConsumablesWarehouseViewModel(Workbench, this) },
             "consumables_ward" => new Stations.Consumables.ConsumablesWardView { DataContext = new Stations.Consumables.ConsumablesWardViewModel(Workbench, this) },
             "analytics" => new Stations.Analytics.AnalyticsStationView { DataContext = new Stations.Analytics.AnalyticsStationViewModel(Workbench, this) },
+            "treatment" => new Stations.Treatment.TreatmentStationView { DataContext = new Stations.Treatment.TreatmentStationViewModel(Workbench, this) },
+            "monitoring" => new Stations.Monitoring.MonitoringStationView { DataContext = new Stations.Monitoring.MonitoringStationViewModel(Workbench, this) },
+            "blood_bank" => new Stations.BloodBank.BloodBankStationView { DataContext = new Stations.BloodBank.BloodBankStationViewModel(Workbench, this) },
+            "emr_qc" => new Stations.EmrQc.EmrQcStationView { DataContext = new Stations.EmrQc.EmrQcStationViewModel(Workbench, this) },
+            "workflow_designer" => new Stations.WorkflowDesigner.WorkflowDesignerStationView { DataContext = new Stations.WorkflowDesigner.WorkflowDesignerViewModel(Workbench, this) },
+            "workflow_inbox" => new Stations.WorkflowInbox.WorkflowInboxStationView { DataContext = new Stations.WorkflowInbox.WorkflowInboxViewModel(Workbench, this) },
             _ => new LegacyStationBridgeView(
                 item.Title,
                 item.Description,
@@ -957,8 +1077,261 @@ public sealed class ShellViewModel : ClientModelBase
         OnPropertyChanged(nameof(BannerAllergyText));
     }
 
+    public void OpenAlertHistoryDrawer()
+    {
+        UnreadAlertCount = 0;
+        OpenDrawer("临床实时告警中心 (SignalR)", $"实时推送通道: /hubs/clinical-alerts (累计接收: {AlertHistory.Count} 条)", CreateAlertHistoryDrawerView(), 520);
+    }
+
+    private Control CreateAlertHistoryDrawerView()
+    {
+        var root = new StackPanel { Spacing = 12 };
+
+        var topRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var summaryText = new TextBlock
+        {
+            Text = $"实时告警消息流 (当前: {(IsAlertHubConnected ? "已连接" : "离线")})",
+            FontSize = 13,
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+        };
+        topRow.Children.Add(summaryText);
+
+        var clearBtn = new Button
+        {
+            Content = "清空历史",
+            Height = 28,
+            Command = ClearAlertHistoryCommand
+        };
+        clearBtn.Classes.Add("Tertiary");
+        Grid.SetColumn(clearBtn, 1);
+        topRow.Children.Add(clearBtn);
+        root.Children.Add(topRow);
+
+        var scroll = new ScrollViewer { MaxHeight = 650 };
+        var listStack = new StackPanel { Spacing = 8 };
+
+        if (AlertHistory.Count == 0)
+        {
+            var empty = new Border
+            {
+                Padding = new Avalonia.Thickness(20),
+                CornerRadius = new Avalonia.CornerRadius(8),
+                Background = Avalonia.Media.Brushes.Transparent
+            };
+            empty.Child = new TextBlock
+            {
+                Text = "暂无未确认或新到达的临床实时告警。",
+                FontSize = 12,
+                Foreground = Avalonia.Media.Brushes.Gray,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
+            };
+            listStack.Children.Add(empty);
+        }
+        else
+        {
+            foreach (var a in AlertHistory)
+            {
+                var card = new Border
+                {
+                    Padding = new Avalonia.Thickness(12),
+                    CornerRadius = new Avalonia.CornerRadius(8),
+                    BorderThickness = new Avalonia.Thickness(1)
+                };
+                card[!Border.BackgroundProperty] = new Avalonia.Data.Binding { Source = Avalonia.Application.Current?.FindResource("SemiColorBackground1") };
+                card[!Border.BorderBrushProperty] = new Avalonia.Data.Binding { Source = Avalonia.Application.Current?.FindResource("SemiColorBorder") };
+
+                var inner = new StackPanel { Spacing = 4 };
+                var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                headerGrid.Children.Add(new TextBlock { Text = a.Title, FontWeight = Avalonia.Media.FontWeight.Bold, FontSize = 13 });
+                var timeBlock = new TextBlock { Text = a.TimeText, FontSize = 11, Foreground = Avalonia.Media.Brushes.Gray };
+                Grid.SetColumn(timeBlock, 1);
+                headerGrid.Children.Add(timeBlock);
+                inner.Children.Add(headerGrid);
+
+                inner.Children.Add(new TextBlock { Text = $"患者/对象: {a.PatientName}", FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+                inner.Children.Add(new TextBlock { Text = a.Message, FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+                card.Child = inner;
+                listStack.Children.Add(card);
+            }
+        }
+
+        scroll.Content = listStack;
+        root.Children.Add(scroll);
+        return root;
+    }
+
+    private void StartAlertHub()
+    {
+        ClinicalAlertHubClient.Current.ConnectionStateChanged -= OnAlertHubConnectionChanged;
+        ClinicalAlertHubClient.Current.ConnectionStateChanged += OnAlertHubConnectionChanged;
+
+        ClinicalAlertHubClient.Current.OnCriticalValue -= HandleCriticalValue;
+        ClinicalAlertHubClient.Current.OnCriticalValue += HandleCriticalValue;
+
+        ClinicalAlertHubClient.Current.OnOrderChanged -= HandleOrderChanged;
+        ClinicalAlertHubClient.Current.OnOrderChanged += HandleOrderChanged;
+
+        ClinicalAlertHubClient.Current.OnTimelinessAlert -= HandleTimelinessAlert;
+        ClinicalAlertHubClient.Current.OnTimelinessAlert += HandleTimelinessAlert;
+
+        ClinicalAlertHubClient.Current.OnMonitoringAlarm -= HandleMonitoringAlarm;
+        ClinicalAlertHubClient.Current.OnMonitoringAlarm += HandleMonitoringAlarm;
+
+        ClinicalAlertHubClient.Current.OnPrescriptionComment -= HandlePrescriptionComment;
+        ClinicalAlertHubClient.Current.OnPrescriptionComment += HandlePrescriptionComment;
+
+        ClinicalAlertHubClient.Current.OnCarePlanReminder -= HandleCarePlanReminder;
+        ClinicalAlertHubClient.Current.OnCarePlanReminder += HandleCarePlanReminder;
+
+        ClinicalAlertHubClient.Current.Start();
+        IsAlertHubConnected = ClinicalAlertHubClient.Current.IsConnected;
+    }
+
+    private void StopAlertHub()
+    {
+        ClinicalAlertHubClient.Current.ConnectionStateChanged -= OnAlertHubConnectionChanged;
+        ClinicalAlertHubClient.Current.OnCriticalValue -= HandleCriticalValue;
+        ClinicalAlertHubClient.Current.OnOrderChanged -= HandleOrderChanged;
+        ClinicalAlertHubClient.Current.OnTimelinessAlert -= HandleTimelinessAlert;
+        ClinicalAlertHubClient.Current.OnMonitoringAlarm -= HandleMonitoringAlarm;
+        ClinicalAlertHubClient.Current.OnPrescriptionComment -= HandlePrescriptionComment;
+        ClinicalAlertHubClient.Current.OnCarePlanReminder -= HandleCarePlanReminder;
+
+        ClinicalAlertHubClient.Current.Stop();
+        IsAlertHubConnected = false;
+    }
+
+    private void OnAlertHubConnectionChanged(bool connected)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            IsAlertHubConnected = connected;
+        });
+    }
+
+    private void HandleCriticalValue(ClinicalAlertPayload payload)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            UnreadAlertCount++;
+            var item = new ClinicalAlertRecordItem
+            {
+                EventType = "CRITICAL_VALUE",
+                Title = "⚠ 检验危急值急迫告警",
+                PatientName = payload.PatientName ?? "急救/病区患者",
+                Message = $"{payload.Item ?? "检验项"}: {payload.Value ?? "超出极值"} - {payload.Message ?? "需经治医师在 10 分钟内双人签收闭环"}",
+                Severity = "Danger",
+                TimeText = DateTime.Now.ToString("HH:mm:ss")
+            };
+            AlertHistory.Insert(0, item);
+            Workbench.CriticalValueAlert.PatientName = item.PatientName;
+            Workbench.CriticalValueAlert.TestItem = $"{payload.Item}: {payload.Value}";
+            Workbench.CriticalValueAlert.DoctorAck = "待经治医师签收";
+            Workbench.CriticalValueAlert.NurseAck = "待病区护士复核";
+            ShowToast($"【危急值突发强告警】{item.PatientName} - {item.Message}", "Danger", "立即签收", () => OpenCriticalValueDrawer(), 15);
+            OpenCriticalValueDrawer();
+        });
+    }
+
+    private void HandleOrderChanged(ClinicalAlertPayload payload)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            UnreadAlertCount++;
+            var item = new ClinicalAlertRecordItem
+            {
+                EventType = "ORDER_CHANGED",
+                Title = "📋 医嘱状态变更通知",
+                PatientName = payload.PatientName ?? "在院患者",
+                Message = payload.Message ?? $"{payload.Item}: 医嘱已更新状态",
+                Severity = "Info",
+                TimeText = DateTime.Now.ToString("HH:mm:ss")
+            };
+            AlertHistory.Insert(0, item);
+            ShowToast($"【医嘱变更】{item.PatientName}：{item.Message}", "Info");
+        });
+    }
+
+    private void HandleTimelinessAlert(ClinicalAlertPayload payload)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            UnreadAlertCount++;
+            var item = new ClinicalAlertRecordItem
+            {
+                EventType = "TIMELINESS_ALERT",
+                Title = "⏰ 电子病历书写时效性预警",
+                PatientName = payload.PatientName ?? "在院患者",
+                Message = payload.Message ?? $"{payload.Item} 接近书写时限，请及时完成！",
+                Severity = "Warning",
+                TimeText = DateTime.Now.ToString("HH:mm:ss")
+            };
+            AlertHistory.Insert(0, item);
+            ShowToast($"【时效预警】{item.PatientName}：{item.Message}", "Warning");
+        });
+    }
+
+    private void HandleMonitoringAlarm(ClinicalAlertPayload payload)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            UnreadAlertCount++;
+            var item = new ClinicalAlertRecordItem
+            {
+                EventType = "MONITORING_ALARM",
+                Title = $"🚨 ICU 床旁监护仪报警 ({payload.BedCode ?? "监护床"})",
+                PatientName = payload.PatientName ?? "重症监护患者",
+                Message = payload.Message ?? $"{payload.Item ?? "生理体征"} 异常: {payload.Value}",
+                Severity = "Danger",
+                TimeText = DateTime.Now.ToString("HH:mm:ss")
+            };
+            AlertHistory.Insert(0, item);
+            ShowToast($"【监护报警】床位 {payload.BedCode} ({item.PatientName})：{item.Message}", "Danger", durationSeconds: 12);
+        });
+    }
+
+    private void HandlePrescriptionComment(ClinicalAlertPayload payload)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            UnreadAlertCount++;
+            var item = new ClinicalAlertRecordItem
+            {
+                EventType = "PRESCRIPTION_COMMENT",
+                Title = "💊 临床药师前置点评与不合理用药拦截",
+                PatientName = payload.PatientName ?? "门诊/住院患者",
+                Message = payload.Message ?? $"{payload.Item}: 处方经药师点评存在用药风险，请确认",
+                Severity = "Warning",
+                TimeText = DateTime.Now.ToString("HH:mm:ss")
+            };
+            AlertHistory.Insert(0, item);
+            ShowToast($"【处方点评】{item.PatientName}：{item.Message}", "Warning");
+        });
+    }
+
+    private void HandleCarePlanReminder(ClinicalAlertPayload payload)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            UnreadAlertCount++;
+            var item = new ClinicalAlertRecordItem
+            {
+                EventType = "CARE_PLAN_REMINDER",
+                Title = "🩺 责任护理计划执行与巡视提醒",
+                PatientName = payload.PatientName ?? "病区患者",
+                Message = payload.Message ?? $"{payload.Item}: 护理评估/给药计划已到预定执行时间",
+                Severity = "Info",
+                TimeText = DateTime.Now.ToString("HH:mm:ss")
+            };
+            AlertHistory.Insert(0, item);
+            ShowToast($"【护理提醒】{item.PatientName}：{item.Message}", "Info");
+        });
+    }
+
     public void Dispose()
     {
+        StopAlertHub();
         DeactivateCurrentStation();
         Workbench.PropertyChanged -= OnWorkbenchPropertyChanged;
         Workbench.NoticeRaised -= OnWorkbenchNoticeRaised;

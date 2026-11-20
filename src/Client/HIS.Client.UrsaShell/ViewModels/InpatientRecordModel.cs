@@ -31,6 +31,13 @@ public class InpatientRecordModel : ClientModelBase
 
 	public string PatientName { get; set; } = string.Empty;
 
+	private string _patientId = string.Empty;
+	public string PatientId
+	{
+		get => !string.IsNullOrWhiteSpace(_patientId) ? _patientId : (!string.IsNullOrWhiteSpace(MedicalRecordNo) ? MedicalRecordNo : AdmissionNo);
+		set => _patientId = value;
+	}
+
 	public string Gender { get; set; } = string.Empty;
 
 	public int Age { get; set; }
@@ -151,6 +158,36 @@ public class InpatientRecordModel : ClientModelBase
 	public decimal ActualSelfPay { get; set; }
 
 	public decimal RefundAmount => PrepaymentAmount - ActualSelfPay;
+
+	private bool _isBannerExpanded = true;
+	public bool IsBannerExpanded
+	{
+		get => _isBannerExpanded;
+		set
+		{
+			if (SetField(ref _isBannerExpanded, value, nameof(IsBannerExpanded)))
+			{
+				OnPropertyChanged(nameof(BannerExpandText));
+			}
+		}
+	}
+
+	public string BannerExpandText => IsBannerExpanded ? "收起" : "展开";
+
+	public decimal AvailableBalance { get; set; } = -23550.00m;
+	public string AvailableBalanceText => AvailableBalance < 0 ? $"-{Math.Abs(AvailableBalance):0.##}cs" : $"{AvailableBalance:0.##}cs";
+	public bool IsBalanceNegative => AvailableBalance < 0;
+
+	public decimal TotalCost { get; set; } = 23550.00m;
+	public decimal DepositTotal { get; set; } = 0.00m;
+	public decimal InsuranceCoordination { get; set; } = 0.00m;
+	public int StayDays { get; set; } = 157;
+	public string PaymentType { get; set; } = "自费";
+	public string HomeAddress { get; set; } = "---";
+	public string ContactPhone { get; set; } = "---";
+	public string IdCard { get; set; } = "310101202506150024";
+	public string HeightText { get; set; } = "75 cm";
+	public string WeightText { get; set; } = "10.5 kg";
 
 	public bool IsCritical
 	{

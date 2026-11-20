@@ -309,6 +309,16 @@ public class FinanceController : ControllerBase
 					}, _connFactory.CurrentTransaction, cancellationToken: ct));
 				notifiedPrescriptionNos.Add(rx.PrescriptionNo);
 			}
+
+			await conn.ExecuteAsync(new CommandDefinition(
+				"""
+				UPDATE mtc_service_requests
+				SET status = 1, updated_at_ms = @Now, updated_by = @Cashier, version_no = version_no + 1
+				WHERE source_visit_id = @VisitId AND source_type = 'OPD' AND is_fee_confirmed = 0 AND status = 0
+				""",
+				new { VisitId = req.VisitOrEncounterId, Now = nowMs, Cashier = cashierId },
+				_connFactory.CurrentTransaction, cancellationToken: ct));
+
 			return payment;
 		});
 		string insTraceText = "";

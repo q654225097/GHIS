@@ -347,6 +347,31 @@ public partial class WorkbenchModel
 		NewOrderContent = string.Empty;
 		NotifyInpatientChanged(selectedInpatient);
 		SystemNotice = $"✓ [步骤A：医生开立医嘱完成] {inpatientOrderModel.OrderType} [{inpatientOrderModel.Content}] 状态为【待护士校对】。下一步必须执行【步骤B：护士校对审签】➔【步骤C：分解生成执行单】➔【步骤D：扫码执行】➔【步骤E：双人核对】！";
+
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			var orderTermType = longTerm ? 1 : 2;
+			var createDto = new
+			{
+				EncounterId = selectedInpatient.AdmissionNo,
+				PatientId = selectedInpatient.PatientId,
+				OrderIpdDeptId = "DEPT-IPD-01",
+				PatientWardId = "DEPT-WARD-02",
+				ExecTargetDeptId = "DEPT-WARD-02",
+				OrderTermType = orderTermType,
+				GroupNo = selectedInpatient.Orders.Count + 1,
+				OrderCategory = "DRUG",
+				ItemCode = "ORD-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+				ItemName = inpatientOrderModel.Content,
+				Dosage = 1.0m,
+				FrequencyCode = inpatientOrderModel.Frequency,
+				RouteCode = inpatientOrderModel.Route,
+				OrderDoctorId = CurrentOperatorId
+			};
+			_ = http.PostAsJsonAsync("/api/v4/ordering/orders", createDto);
+		}
+		catch { }
 	}
 
 	public void ReviewSelectedInpatientOrders()
@@ -377,6 +402,20 @@ public partial class WorkbenchModel
 		}
 		NotifyInpatientChanged(selectedInpatient);
 		SystemNotice = $"✓ [步骤B：护士校对审签完成] 已核对 {list.Count} 条医嘱并转为【已校对待分解】，已解锁【步骤C：⚡ 自动分解今日医嘱】，请点击分解生成执行单！";
+
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			foreach (var item in list)
+			{
+				_ = http.PostAsJsonAsync($"/api/v4/ordering/orders/{item.OrderNo}/verify-and-split", new
+				{
+					VerifyNurseId = CurrentOperatorId,
+					WardId = "DEPT-WARD-02"
+				});
+			}
+		}
+		catch { }
 	}
 
 	public void ReviewSingleInpatientOrder(InpatientOrderModel order)
@@ -429,6 +468,13 @@ public partial class WorkbenchModel
 		}
 		NotifyInpatientChanged(selectedInpatient);
 		SystemNotice = ((num > 0) ? $"✓ 医嘱 [{order.Content}] 已下达停止，并自动撤销其关联的 {num} 项未执行分解任务。" : ("✓ 医嘱 [" + order.Content + "] 已停止，出院医嘱闭环校验已刷新。"));
+
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			_ = http.PostAsync($"/api/v4/ordering/orders/{order.OrderNo}/stop", null);
+		}
+		catch { }
 	}
 
 	public void CancelInpatientOrder(InpatientOrderModel order)
@@ -438,7 +484,7 @@ public partial class WorkbenchModel
 		{
 			if (!order.CanCancel)
 			{
-				SystemNotice = "⚠\ufe0f [A➔B➔C 闭环拦截] 该医嘱已由护士校对或进入执行阶段，严禁直接作废！请使用「停止」医嘱流程。";
+				SystemNotice = "⚠️ [A➔B➔C 闭环拦截] 该医嘱已由护士校对或进入执行阶段，严禁直接作废！请使用「停止」医嘱流程。";
 				return;
 			}
 			order.Status = "已作废";
@@ -447,6 +493,13 @@ public partial class WorkbenchModel
 			order.ReviewInfo = $"{CurrentOperatorName} 于 {DateTime.Now:HH:mm} 作废未校对医嘱";
 			NotifyInpatientChanged(selectedInpatient);
 			SystemNotice = "✓ 未校对医嘱 [" + order.Content + "] 已作废。";
+
+			try
+			{
+				using HttpClient http = CreateConfigHttpClient();
+				_ = http.PostAsync($"/api/v4/ordering/orders/{order.OrderNo}/discontinue", null);
+			}
+			catch { }
 		}
 	}
 
@@ -1010,7 +1063,7 @@ public partial class WorkbenchModel
 		};
 	}
 
-	private void NotifyInpatientChanged(InpatientRecordModel patient)
+	public void NotifyInpatientChanged(InpatientRecordModel patient)
 	{
 		patient.NotifyWorkflowChanged();
 		SyncInpatientBed(patient);
@@ -1024,7 +1077,7 @@ public partial class WorkbenchModel
 		RefreshInpatientMetrics();
 	}
 
-	private void SyncInpatientBed(InpatientRecordModel patient)
+	public void SyncInpatientBed(InpatientRecordModel patient)
 	{
 		BedCardModel bedCardModel = AllBedCards.FirstOrDefault((BedCardModel x) => x.AdmissionNo == patient.AdmissionNo);
 		if (bedCardModel != null)
@@ -1076,7 +1129,7 @@ public partial class WorkbenchModel
 		}
 	}
 
-	private string NextInpatientId(string prefix, int sequence)
+	public string NextInpatientId(string prefix, int sequence)
 	{
 		string value = DateTime.Now.ToString("MMddHHmmss");
 		return $"{prefix}-{value}-{sequence + 1:D2}";

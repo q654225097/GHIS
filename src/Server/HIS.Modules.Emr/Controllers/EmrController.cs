@@ -1,4 +1,5 @@
-using System.Text.Json;
+﻿using System.Text.Json;
+using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.BuildingBlocks.OfdEngine;
@@ -12,7 +13,7 @@ namespace HIS.Modules.Emr.Controllers;
 
 [ApiController]
 [Route("api/v4/emr")]
-public class EmrController : ControllerBase
+public partial class EmrController : ControllerBase
 {
     private readonly IRepository<EmrDocument> _docRepo;
     private readonly IRepository<EmrDocumentElement> _docElementRepo;
@@ -22,6 +23,12 @@ public class EmrController : ControllerBase
     private readonly IRepository<EmrDocTemplate> _templateRepo;
     private readonly IRepository<EmrSectionSchema> _sectionRepo;
     private readonly IRepository<EmrInpatientFrontSheet> _frontSheetRepo;
+    private readonly IRepository<EmrUserTemplate> _userTemplateRepo;
+    private readonly IRepository<EmrDigitizedHistory> _digitizedRepo;
+    private readonly IRepository<EmrStoragePolicy> _storagePolicyRepo;
+    private readonly IRepository<EmrExternalHealthRecord> _externalRecordRepo;
+    private readonly IEmrAccessPolicyContract? _accessPolicy;
+    private readonly IClinicalProcessSignatureContract? _signatureContract;
     private readonly EmrQualityControlService _qcService;
     private readonly EmrOfdRenderService _ofdRenderService;
     private readonly IDbConnectionFactory _connFactory;
@@ -43,7 +50,13 @@ public class EmrController : ControllerBase
         IDbConnectionFactory? connFactory = null,
         IAuditTrailContract? auditTrail = null,
         IUserSession? userSession = null,
-        IRepository<EmrInpatientFrontSheet>? frontSheetRepo = null)
+        IRepository<EmrInpatientFrontSheet>? frontSheetRepo = null,
+        IRepository<EmrUserTemplate>? userTemplateRepo = null,
+        IEmrAccessPolicyContract? accessPolicy = null,
+        IClinicalProcessSignatureContract? signatureContract = null,
+        IRepository<EmrDigitizedHistory>? digitizedRepo = null,
+        IRepository<EmrStoragePolicy>? storagePolicyRepo = null,
+        IRepository<EmrExternalHealthRecord>? externalRecordRepo = null)
     {
         _docRepo = docRepo;
         _docElementRepo = docElementRepo;
@@ -56,9 +69,15 @@ public class EmrController : ControllerBase
         _templateRepo = templateRepo ?? new DapperRepository<EmrDocTemplate>(_connFactory, "emr_doc_templates");
         _sectionRepo = sectionRepo ?? new DapperRepository<EmrSectionSchema>(_connFactory, "emr_section_schemas");
         _frontSheetRepo = frontSheetRepo ?? new DapperRepository<EmrInpatientFrontSheet>(_connFactory, "emr_inpatient_front_sheets");
+        _userTemplateRepo = userTemplateRepo ?? new DapperRepository<EmrUserTemplate>(_connFactory, "emr_user_templates");
         _patientContract = patientContract;
         _auditTrail = auditTrail;
         _userSession = userSession;
+        _accessPolicy = accessPolicy;
+        _signatureContract = signatureContract;
+        _digitizedRepo = digitizedRepo ?? new DapperRepository<EmrDigitizedHistory>(_connFactory, "emr_digitized_history");
+        _storagePolicyRepo = storagePolicyRepo ?? new DapperRepository<EmrStoragePolicy>(_connFactory, "emr_storage_policies");
+        _externalRecordRepo = externalRecordRepo ?? new DapperRepository<EmrExternalHealthRecord>(_connFactory, "emr_external_health_records");
     }
 
     // ==========================================
@@ -330,6 +349,24 @@ public class EmrController : ControllerBase
     // 3. Admin Visual EMR Template & Section Designer
     // ==========================================
 
+    public sealed record EmrLayoutControlDto(
+        string ElementCode,
+        string ElementName,
+        string ControlType = "SINGLE_TEXT", // SINGLE_TEXT, MULTI_TEXT, INT_INPUT, DECIMAL_INPUT, SELECT, DATE, DATETIME, CHECKBOX, MACRO_LABEL
+        int Row = 0,
+        int Col = 0,
+        int ColSpan = 1,
+        int RowSpan = 1,
+        int WidthPx = 180,
+        int HeightPx = 32,
+        decimal PrintHeightMm = 8.0m,
+        string? DefaultValue = null,
+        string? Placeholder = null,
+        string? UnitText = null,
+        string? DictCode = null,
+        bool IsRequired = false
+    );
+
     public sealed record EmrSectionDesignItemDto(
         string SectionCode,
         string SectionTitle,
@@ -337,7 +374,9 @@ public class EmrController : ControllerBase
         List<string> ElementCodes,
         short IsRequired = 1,
         string VisibilityExpr = "ALL",
-        int SortOrder = 1
+        int SortOrder = 1,
+        List<EmrLayoutControlDto>? LayoutControls = null,
+        decimal EstimatedHeightMm = 0
     );
 
     public sealed record EmrSectionDetailDto(
@@ -348,7 +387,9 @@ public class EmrController : ControllerBase
         short IsRequired,
         string VisibilityExpr,
         int SortOrder,
-        List<EmrDataElement> Elements
+        List<EmrDataElement> Elements,
+        List<EmrLayoutControlDto>? LayoutControls = null,
+        decimal EstimatedHeightMm = 0
     );
 
     public sealed record EmrTemplateSummaryDto(
@@ -387,7 +428,15 @@ public class EmrController : ControllerBase
         int RequiredSignLevels,
         string? OfdLayoutId,
         short IsPublished,
-        List<EmrSectionDesignItemDto> Sections
+        List<EmrSectionDesignItemDto> Sections,
+        string DesignMode = "FILL", // "FILL" (填写模式) or "PRINT" (打印模式)
+        string PageSizeCode = "A4",
+        decimal PageWidthMm = 210.0m,
+        decimal PageHeightMm = 297.0m,
+        decimal MarginTopMm = 20.0m,
+        decimal MarginBottomMm = 20.0m,
+        decimal MarginLeftMm = 20.0m,
+        decimal MarginRightMm = 20.0m
     );
 
     [HttpGet("templates")]
@@ -463,6 +512,8 @@ public class EmrController : ControllerBase
                     resolvedElements.Add(el);
             }
 
+            var layoutControls = ParseSectionLayoutControls(sec.ContentTemplateJson);
+            var estimatedHeight = ParseSectionEstimatedHeight(sec.ContentTemplateJson);
             sectionDetails.Add(new EmrSectionDetailDto(
                 sec.Id,
                 sec.SectionCode,
@@ -471,7 +522,9 @@ public class EmrController : ControllerBase
                 sec.IsRequired,
                 sec.VisibilityExpr ?? "ALL",
                 sec.SortOrder,
-                resolvedElements));
+                resolvedElements,
+                layoutControls,
+                estimatedHeight));
         }
 
         return ApiResponse<EmrTemplateDetailDto>.Success(new EmrTemplateDetailDto(tpl, layout, sectionDetails));
@@ -494,6 +547,65 @@ public class EmrController : ControllerBase
 
         var operatorId = _userSession?.UserId ?? "USER-ADMIN";
         var operatorName = _userSession?.DisplayName ?? "系统管理员";
+
+        // 打印模式强约束：设计内容绝对不可超过纸张大小 (Page Height & Margin)
+        var isPrintMode = string.Equals(req.DesignMode, "PRINT", StringComparison.OrdinalIgnoreCase);
+        if (isPrintMode)
+        {
+            var pHeight = req.PageHeightMm > 0 ? req.PageHeightMm : 297.0m;
+            var mTop = req.MarginTopMm >= 0 ? req.MarginTopMm : 20.0m;
+            var mBottom = req.MarginBottomMm >= 0 ? req.MarginBottomMm : 20.0m;
+            var availableHeightMm = pHeight - mTop - mBottom;
+
+            decimal headerOverheadMm = 22.0m;
+            decimal bannerOverheadMm = 14.0m;
+            decimal footerOverheadMm = 12.0m;
+            decimal signOverheadMm = 18.0m;
+            decimal totalOverheadMm = headerOverheadMm + bannerOverheadMm + footerOverheadMm + signOverheadMm;
+
+            decimal totalSectionsHeightMm = 0;
+            if (req.Sections != null && req.Sections.Count > 0)
+            {
+                foreach (var sec in req.Sections)
+                {
+                    decimal secHeaderMm = 8.0m;
+                    decimal secBodyMm = 0;
+                    if (sec.EstimatedHeightMm > 0)
+                    {
+                        secBodyMm = sec.EstimatedHeightMm;
+                    }
+                    else if (sec.LayoutControls != null && sec.LayoutControls.Count > 0)
+                    {
+                        var rows = sec.LayoutControls.GroupBy(c => c.Row);
+                        foreach (var rowGroup in rows)
+                        {
+                            var rowMax = rowGroup.Max(c => c.PrintHeightMm > 0 ? c.PrintHeightMm : 8.0m);
+                            secBodyMm += rowMax;
+                        }
+                    }
+                    else
+                    {
+                        var count = sec.ElementCodes?.Count ?? 1;
+                        var rowCount = Math.Max(1, (int)Math.Ceiling(count / 2.0));
+                        secBodyMm = rowCount * 8.0m;
+                    }
+                    totalSectionsHeightMm += (secHeaderMm + secBodyMm);
+                }
+            }
+
+            var totalContentHeightMm = totalOverheadMm + totalSectionsHeightMm;
+            if (totalContentHeightMm > availableHeightMm)
+            {
+                var overflowMm = totalContentHeightMm - availableHeightMm;
+                try
+                {
+                    if (Response != null) Response.StatusCode = 400;
+                }
+                catch { }
+                return ApiResponse<EmrTemplateDetailDto>.Fail(400,
+                    $"[打印模式尺寸超限] 文书内容总高度 ({totalContentHeightMm:0.#}mm) 超过纸张 {req.PageSizeCode} 可打印有效高度 ({availableHeightMm:0.#}mm)，超限 {overflowMm:0.#}mm！打印模式下设计内容不可超过纸张大小，请调整控件高度或精简章节。");
+            }
+        }
 
         var savedId = await _connFactory.ExecuteInTransactionAsync(async ct =>
         {
@@ -555,9 +667,22 @@ public class EmrController : ControllerBase
                     var secCode = string.IsNullOrWhiteSpace(secReq.SectionCode)
                         ? $"SEC_{i + 1:D2}"
                         : secReq.SectionCode.Trim().ToUpperInvariant();
+
+                    var elCodes = new HashSet<string>(secReq.ElementCodes ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+                    if (secReq.LayoutControls != null)
+                    {
+                        foreach (var c in secReq.LayoutControls)
+                        {
+                            if (!string.IsNullOrWhiteSpace(c.ElementCode))
+                                elCodes.Add(c.ElementCode.Trim());
+                        }
+                    }
+
                     var contentJson = JsonSerializer.Serialize(new
                     {
-                        elements = secReq.ElementCodes ?? new List<string>()
+                        elements = elCodes.ToList(),
+                        controls = secReq.LayoutControls ?? new List<EmrLayoutControlDto>(),
+                        estimatedHeightMm = secReq.EstimatedHeightMm
                     });
 
                     var secEntity = new EmrSectionSchema
@@ -588,13 +713,195 @@ public class EmrController : ControllerBase
                 "EMR_TEMPLATE_DESIGN",
                 nameof(EmrDocTemplate),
                 savedId,
-                $"管理员可视化保存 [{scene}] 病历模板 [{req.TemplateName}]，共配置 {req.Sections?.Count ?? 0} 个结构化章节，绑定打印版式 [{req.OfdLayoutId}]",
+                $"管理员可视化保存 [{scene}] 病历模板 [{req.TemplateName}]，模式 [{req.DesignMode}]，共配置 {req.Sections?.Count ?? 0} 个结构化章节，绑定打印版式 [{req.OfdLayoutId}]",
                 operatorId,
                 operatorName,
                 _userSession?.ActiveDeptId);
         }
 
         return await GetTemplateDetail(savedId);
+    }
+
+    // ==========================================
+    // 3.5. Clinician & Nurse Custom User Templates
+    // ==========================================
+
+    public sealed record SaveEmrUserTemplateRequestDto(
+        string? Id,
+        string BaseTemplateId,
+        string TemplateCode,
+        string TemplateName,
+        string EmrScene,
+        string DocTypeCode,
+        string DefaultContentJson,
+        bool IsSharedDept = false,
+        int SortOrder = 0
+    );
+
+    [HttpGet("user-templates")]
+    public async Task<ApiResponse<IReadOnlyList<EmrUserTemplate>>> GetUserTemplates(
+        [FromQuery] string? emrScene = null,
+        [FromQuery] string? baseTemplateId = null,
+        [FromQuery] bool includeShared = true)
+    {
+        var userId = _userSession?.UserId ?? "USER-ADMIN";
+        var deptId = _userSession?.ActiveDeptId ?? string.Empty;
+
+        var list = await _userTemplateRepo.QueryAsync(
+            "SELECT * FROM emr_user_templates WHERE is_active = 1 ORDER BY sort_order ASC, updated_at_ms DESC");
+
+        if (includeShared && !string.IsNullOrWhiteSpace(deptId))
+        {
+            list = list.Where(t => t.UserId.Equals(userId, StringComparison.OrdinalIgnoreCase)
+                                || (t.IsSharedDept == 1 && t.DeptId?.Equals(deptId, StringComparison.OrdinalIgnoreCase) == true))
+                       .ToList();
+        }
+        else if (includeShared && (_userSession?.IsAdmin == true || string.IsNullOrWhiteSpace(deptId)))
+        {
+            list = list.Where(t => t.UserId.Equals(userId, StringComparison.OrdinalIgnoreCase) || t.IsSharedDept == 1).ToList();
+        }
+        else
+        {
+            list = list.Where(t => t.UserId.Equals(userId, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(emrScene) && !emrScene.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+        {
+            list = list.Where(t => t.EmrScene.Equals(emrScene.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(baseTemplateId))
+        {
+            list = list.Where(t => t.BaseTemplateId.Equals(baseTemplateId.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        return ApiResponse<IReadOnlyList<EmrUserTemplate>>.Success(list);
+    }
+
+    [HttpGet("user-templates/{id}")]
+    public async Task<ApiResponse<EmrUserTemplate>> GetUserTemplateById(string id)
+    {
+        var tpl = await _userTemplateRepo.QuerySingleOrDefaultAsync(
+            "SELECT * FROM emr_user_templates WHERE id = @Id AND is_active = 1",
+            new { Id = id.Trim() });
+
+        if (tpl == null)
+            return ApiResponse<EmrUserTemplate>.Fail(404, $"未找到指定的用户文书模板 [{id}]");
+
+        return ApiResponse<EmrUserTemplate>.Success(tpl);
+    }
+
+    [HttpPost("user-templates")]
+    public async Task<ApiResponse<EmrUserTemplate>> SaveUserTemplate([FromBody] SaveEmrUserTemplateRequestDto req)
+    {
+        if (string.IsNullOrWhiteSpace(req.TemplateName) || string.IsNullOrWhiteSpace(req.BaseTemplateId))
+        {
+            return ApiResponse<EmrUserTemplate>.Fail(400, "模板名称与关联基础模板ID不能为空");
+        }
+
+        var userId = _userSession?.UserId ?? "USER-ADMIN";
+        var userName = _userSession?.DisplayName ?? "系统用户";
+        var deptId = _userSession?.ActiveDeptId;
+        var deptName = _userSession?.ActiveDeptId switch
+        {
+            "DEPT-OPD-01" => "心血管内科门诊",
+            "DEPT-IPD-01" => "心血管内科一病区",
+            "DEPT-WARD-01" => "心血管内科病区",
+            _ => string.IsNullOrWhiteSpace(_userSession?.ActiveDeptId) ? "门诊科室" : _userSession.ActiveDeptId
+        };
+        var scene = string.IsNullOrWhiteSpace(req.EmrScene) ? "IPD" : req.EmrScene.Trim().ToUpperInvariant();
+
+        EmrUserTemplate entity;
+        if (!string.IsNullOrWhiteSpace(req.Id))
+        {
+            var existing = await _userTemplateRepo.QuerySingleOrDefaultAsync(
+                "SELECT * FROM emr_user_templates WHERE id = @Id",
+                new { Id = req.Id.Trim() });
+
+            if (existing != null)
+            {
+                if (!existing.UserId.Equals(userId, StringComparison.OrdinalIgnoreCase) && _userSession?.IsAdmin != true)
+                {
+                    return ApiResponse<EmrUserTemplate>.Fail(403, "无权修改其他用户的常用文书模板");
+                }
+
+                existing.TemplateName = req.TemplateName.Trim();
+                existing.TemplateCode = string.IsNullOrWhiteSpace(req.TemplateCode) ? existing.TemplateCode : req.TemplateCode.Trim();
+                existing.BaseTemplateId = req.BaseTemplateId.Trim();
+                existing.EmrScene = scene;
+                existing.DocTypeCode = req.DocTypeCode.Trim();
+                existing.DefaultContentJson = req.DefaultContentJson ?? "{}";
+                existing.IsSharedDept = (short)(req.IsSharedDept ? 1 : 0);
+                existing.SortOrder = req.SortOrder;
+                existing.UpdatedBy = userId;
+                await _userTemplateRepo.UpdateAsync(existing);
+
+                return ApiResponse<EmrUserTemplate>.Success(existing, "用户常用文书模板已更新");
+            }
+        }
+
+        var code = string.IsNullOrWhiteSpace(req.TemplateCode)
+            ? $"UTPL_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds():x}"
+            : req.TemplateCode.Trim().ToUpperInvariant();
+
+        entity = new EmrUserTemplate
+        {
+            Id = $"UTPL-{Guid.NewGuid():N}",
+            UserId = userId,
+            UserName = userName,
+            DeptId = deptId,
+            DeptName = deptName,
+            BaseTemplateId = req.BaseTemplateId.Trim(),
+            TemplateCode = code,
+            TemplateName = req.TemplateName.Trim(),
+            EmrScene = scene,
+            DocTypeCode = string.IsNullOrWhiteSpace(req.DocTypeCode) ? "CLINICAL_NOTE" : req.DocTypeCode.Trim(),
+            DefaultContentJson = req.DefaultContentJson ?? "{}",
+            IsSharedDept = (short)(req.IsSharedDept ? 1 : 0),
+            SortOrder = req.SortOrder,
+            IsActive = 1,
+            CreatedBy = userId,
+            UpdatedBy = userId
+        };
+
+        await _userTemplateRepo.InsertAsync(entity);
+
+        if (_auditTrail != null)
+        {
+            await _auditTrail.RecordAuditAsync(
+                "EMR_USER_TEMPLATE_CREATE",
+                nameof(EmrUserTemplate),
+                entity.Id,
+                $"用户 {userName} 创建常用文书模板 [{entity.TemplateName}] (场景: {scene}, 基础模板: {req.BaseTemplateId})",
+                userId,
+                userName,
+                deptId);
+        }
+
+        return ApiResponse<EmrUserTemplate>.Success(entity, "用户常用文书模板创建成功");
+    }
+
+    [HttpDelete("user-templates/{id}")]
+    public async Task<ApiResponse<bool>> DeleteUserTemplate(string id)
+    {
+        var existing = await _userTemplateRepo.QuerySingleOrDefaultAsync(
+            "SELECT * FROM emr_user_templates WHERE id = @Id",
+            new { Id = id.Trim() });
+
+        if (existing == null)
+            return ApiResponse<bool>.Fail(404, "未找到指定的模板");
+
+        var userId = _userSession?.UserId ?? "USER-ADMIN";
+        if (!existing.UserId.Equals(userId, StringComparison.OrdinalIgnoreCase) && _userSession?.IsAdmin != true)
+        {
+            return ApiResponse<bool>.Fail(403, "仅模板创建人或管理员可删除此常用模板");
+        }
+
+        existing.IsActive = 0;
+        existing.UpdatedBy = userId;
+        await _userTemplateRepo.UpdateAsync(existing);
+
+        return ApiResponse<bool>.Success(true, "用户常用文书模板已删除");
     }
 
     // ==========================================
@@ -628,7 +935,10 @@ public class EmrController : ControllerBase
     public async Task<ApiResponse<IReadOnlyList<EmrDocument>>> GetDocuments(
         [FromQuery] string? emrScene = null,
         [FromQuery] string? visitOrEncounterId = null,
-        [FromQuery] string? patientId = null)
+        [FromQuery] string? patientId = null,
+        [FromQuery] string? icdCode = null,
+        [FromQuery] string? surgeryCode = null,
+        [FromQuery] string? keyword = null)
     {
         var list = await _docRepo.QueryAsync(
             "SELECT * FROM emr_documents ORDER BY clinical_time_ms DESC");
@@ -646,6 +956,64 @@ public class EmrController : ControllerBase
         if (!string.IsNullOrWhiteSpace(patientId))
         {
             list = list.Where(d => d.PatientId.Equals(patientId.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(icdCode))
+        {
+            var code = icdCode.Trim();
+            list = list.Where(d => (d.PlainTextSummary != null && d.PlainTextSummary.Contains(code, StringComparison.OrdinalIgnoreCase))
+                                || (d.StructuredAstJson != null && d.StructuredAstJson.Contains(code, StringComparison.OrdinalIgnoreCase))).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(surgeryCode))
+        {
+            var sc = surgeryCode.Trim();
+            list = list.Where(d => (d.PlainTextSummary != null && d.PlainTextSummary.Contains(sc, StringComparison.OrdinalIgnoreCase))
+                                || (d.StructuredAstJson != null && d.StructuredAstJson.Contains(sc, StringComparison.OrdinalIgnoreCase))).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var kw = keyword.Trim();
+            list = list.Where(d => (d.DocTitle != null && d.DocTitle.Contains(kw, StringComparison.OrdinalIgnoreCase))
+                                || (d.PlainTextSummary != null && d.PlainTextSummary.Contains(kw, StringComparison.OrdinalIgnoreCase))
+                                || (d.StructuredAstJson != null && d.StructuredAstJson.Contains(kw, StringComparison.OrdinalIgnoreCase))).ToList();
+        }
+
+        if (_accessPolicy != null && _userSession != null && !string.IsNullOrWhiteSpace(patientId))
+        {
+            var decision = await _accessPolicy.AuthorizeAndAuditReadAsync(new EmrAccessRequest(
+                UserId: _userSession.UserId,
+                UserName: _userSession.DisplayName ?? _userSession.UserId,
+                UserRole: _userSession.RoleCode,
+                UserDeptId: _userSession.ActiveDeptId,
+                ExternalOrgCode: null,
+                IsExternalDoctor: false,
+                PatientId: patientId,
+                EncounterId: visitOrEncounterId,
+                ResourceType: "EMR_DOCUMENT",
+                ResourceId: visitOrEncounterId ?? patientId,
+                ActionType: "READ"
+            ));
+
+            if (!decision.Allowed)
+            {
+                return ApiResponse<IReadOnlyList<EmrDocument>>.Fail(403, decision.DenyReason ?? "无权限访问该病历文档");
+            }
+
+            if (decision.RequiresSectionMasking && decision.DeniedSectionCodes?.Count > 0)
+            {
+                foreach (var doc in list)
+                {
+                    foreach (var deniedSec in decision.DeniedSectionCodes)
+                    {
+                        if (!string.IsNullOrEmpty(doc.PlainTextSummary))
+                        {
+                            doc.PlainTextSummary = doc.PlainTextSummary.Replace(deniedSec, "[***已根据权限脱敏***]");
+                        }
+                    }
+                }
+            }
         }
 
         return ApiResponse<IReadOnlyList<EmrDocument>>.Success(list);
@@ -774,6 +1142,66 @@ public class EmrController : ControllerBase
             return targetDoc;
         });
 
+        if (doc != null)
+        {
+            // EMR Timeliness QC Check
+            long baselineTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            try
+            {
+                await using var checkConn = _connFactory.CreateConnection();
+                var admitTime = await checkConn.QuerySingleOrDefaultAsync<long?>(
+                    "SELECT admit_time_ms FROM ipd_encounters WHERE id = @Id OR admission_no = @Id LIMIT 1",
+                    new { Id = req.VisitOrEncounterId });
+                if (admitTime.HasValue && admitTime.Value > 0)
+                {
+                    baselineTimeMs = admitTime.Value;
+                }
+            }
+            catch { }
+
+            var timeLimitResult = _qcService.ValidateWritingTimeLimit(req.DocTypeCode ?? "", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), baselineTimeMs);
+            if (!timeLimitResult.IsSuccess)
+            {
+                try
+                {
+                    await using var qcConn = _connFactory.CreateConnection();
+                    var defectId = Guid.NewGuid().ToString();
+                    var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    await qcConn.ExecuteAsync(@"
+                        INSERT INTO emr_qc_defects (id, task_id, encounter_id, doc_id, rule_code, qc_dimension, defect_description, deduct_points, responsible_doctor_id, deadline_ms, status, schema_version, created_at_ms, updated_at_ms, version_no)
+                        VALUES (@Id, @TaskId, @EncounterId, @DocId, 'QC_TIMELINESS_OVERDUE', 'TIMELINESS', @Desc, 5.0, @DoctorId, @DeadlineMs, 'OPEN', 1, @NowMs, @NowMs, 1)",
+                        new
+                        {
+                            Id = defectId,
+                            TaskId = "QC-TASK-" + req.VisitOrEncounterId,
+                            EncounterId = req.VisitOrEncounterId,
+                            DocId = doc.Id,
+                            Desc = timeLimitResult.Error,
+                            DoctorId = req.AuthorId,
+                            DeadlineMs = nowMs + 24 * 3600 * 1000,
+                            NowMs = nowMs
+                        });
+                }
+                catch { }
+            }
+
+            // Clinical Process Signature
+            if (_signatureContract != null)
+            {
+                var signerSession = _userSession ?? new UserSession { UserId = req.AuthorId, DisplayName = req.AuthorId, RoleCode = "DOCTOR" };
+                try
+                {
+                    await _signatureContract.SignClinicalRecordAsync(
+                        "EMR_DOCUMENT",
+                        doc.Id,
+                        "SAVE_DRAFT",
+                        new { doc.Id, doc.DocNo, doc.DocTitle, doc.PlainTextSummary, doc.VisitOrEncounterId, doc.PatientId },
+                        signerSession);
+                }
+                catch { }
+            }
+        }
+
         if (_auditTrail != null && doc != null)
         {
             await _auditTrail.RecordAuditAsync(
@@ -787,6 +1215,41 @@ public class EmrController : ControllerBase
         }
 
         return doc == null ? ApiResponse<EmrDocument>.Fail(500, "病历保存失败") : ApiResponse<EmrDocument>.Success(doc, "病历结构化草稿保存成功");
+    }
+
+    [HttpDelete("documents/{docId}")]
+    public async Task<ApiResponse<bool>> DeleteDocument(string docId)
+    {
+        var doc = await _docRepo.GetByIdAsync(docId);
+        if (doc == null)
+        {
+            return ApiResponse<bool>.Fail(404, "病历文档不存在");
+        }
+
+        // Statutory retention check: OPD 15 years, IPD 30 years
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var retentionYears = doc.EmrScene.Equals("OPD", StringComparison.OrdinalIgnoreCase) ? 15 : 30;
+        try
+        {
+            var retentionPolicy = await _storagePolicyRepo.QuerySingleOrDefaultAsync(
+                "SELECT * FROM emr_storage_policies WHERE scene_type = @Scene",
+                new { Scene = doc.EmrScene });
+            if (retentionPolicy != null && retentionPolicy.RetentionYears > 0)
+            {
+                retentionYears = retentionPolicy.RetentionYears;
+            }
+        }
+        catch { }
+
+        var expiryTimeMs = doc.ClinicalTimeMs + (long)(retentionYears * 365.25 * 24 * 3600 * 1000);
+        if (nowMs < expiryTimeMs)
+        {
+            return ApiResponse<bool>.Fail(403, $"根据国家《电子病历应用管理规范》及电子病历7级要求，该病历处于法定保存期内（门急诊15年/住院30年，到期时间：{DateTimeOffset.FromUnixTimeMilliseconds(expiryTimeMs):yyyy-MM-dd}），严禁物理删除！");
+        }
+
+        await _docElementRepo.ExecuteAsync("DELETE FROM emr_document_elements WHERE document_id = @DocId", new { DocId = docId });
+        await _docRepo.DeleteAsync(docId);
+        return ApiResponse<bool>.Success(true, "过期病历已安全清除");
     }
 
     public sealed record SignEmrRequestDto(string SignerId, string SignerName, int SignLevel);
@@ -825,6 +1288,24 @@ public class EmrController : ControllerBase
             return BadRequest(ApiResponse<EmrOfdArchive>.Fail(400, "审签等级必须为 1、2 或 3"));
         if (!_userSession.IsAdmin && _userSession.EmrSignLevel < requestedLevel)
             return StatusCode(403, ApiResponse<EmrOfdArchive>.Fail(403, $"当前账号电子病历审签权限为 {_userSession.EmrSignLevel} 级，不能执行 {requestedLevel} 级审签"));
+
+        // 住院三级审签职责分离校验（门诊病历仅需一级审签）
+        if (!_userSession.IsAdmin && !string.Equals(doc.EmrScene, "OPD", StringComparison.OrdinalIgnoreCase))
+        {
+            if (requestedLevel == 2 && string.Equals(doc.AuthorId, req.SignerId, StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<EmrOfdArchive>.Fail(403, "二级审签（主治医师）不能由书写医师本人审签"));
+            }
+            if (requestedLevel == 3)
+            {
+                if (string.Equals(doc.AuthorId, req.SignerId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(doc.AttendingDoctorId, req.SignerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(403, ApiResponse<EmrOfdArchive>.Fail(403, "三级审签（主任医师）不能由书写医师或主治审签医师兼任"));
+                }
+            }
+        }
+
         if (doc.Status is (int)EmrDocumentStatus.ChiefLocked or (int)EmrDocumentStatus.Archived)
             return StatusCode(409, ApiResponse<EmrOfdArchive>.Fail(409, "病历已终审锁定或归档封存，禁止再次审签或降级解锁"));
         if (doc.Status == (int)EmrDocumentStatus.ReturnedForCorrection)
@@ -1218,6 +1699,24 @@ public class EmrController : ControllerBase
 
         var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
 
+        if (_accessPolicy != null && _userSession != null)
+        {
+            await _accessPolicy.AuthorizeAndAuditReadAsync(new EmrAccessRequest(
+                UserId: _userSession.UserId,
+                UserName: _userSession.DisplayName ?? _userSession.UserId,
+                UserRole: _userSession.RoleCode,
+                UserDeptId: _userSession.ActiveDeptId,
+                ExternalOrgCode: null,
+                IsExternalDoctor: false,
+                PatientId: archive.PatientId,
+                EncounterId: archive.VisitOrEncounterId,
+                ResourceType: "EMR_OFD",
+                ResourceId: archive.Id,
+                ActionType: "EXPORT",
+                ClientIp: HttpContext.Connection.RemoteIpAddress?.ToString()
+            ));
+        }
+
         if (_auditTrail != null)
         {
             await _auditTrail.RecordAuditAsync(
@@ -1231,6 +1730,20 @@ public class EmrController : ControllerBase
         }
 
         return File(bytes, "application/ofd", $"{archive.OfdNo}.ofd");
+    }
+
+    [HttpGet("archives")]
+    public async Task<ApiResponse<IReadOnlyList<EmrOfdArchive>>> GetArchives(
+        [FromQuery] string? patientId = null,
+        [FromQuery] string? visitOrEncounterId = null)
+    {
+        var archives = await _archiveRepo.QueryAsync(
+            "SELECT * FROM emr_ofd_archives ORDER BY generated_at_ms DESC");
+        if (!string.IsNullOrWhiteSpace(patientId))
+            archives = archives.Where(a => a.PatientId == patientId.Trim()).ToList();
+        if (!string.IsNullOrWhiteSpace(visitOrEncounterId))
+            archives = archives.Where(a => a.VisitOrEncounterId == visitOrEncounterId.Trim()).ToList();
+        return ApiResponse<IReadOnlyList<EmrOfdArchive>>.Success(archives);
     }
 
     private static List<string> ParseSectionElementCodes(string? json)
@@ -1254,6 +1767,45 @@ public class EmrController : ControllerBase
         }
         catch (JsonException) { }
         return result;
+    }
+
+    private static List<EmrLayoutControlDto> ParseSectionLayoutControls(string? json)
+    {
+        var result = new List<EmrLayoutControlDto>();
+        if (string.IsNullOrWhiteSpace(json)) return result;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("controls", out var arr) &&
+                arr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in arr.EnumerateArray())
+                {
+                    var dto = JsonSerializer.Deserialize<EmrLayoutControlDto>(item.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (dto != null) result.Add(dto);
+                }
+            }
+        }
+        catch { }
+        return result;
+    }
+
+    private static decimal ParseSectionEstimatedHeight(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return 0;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("estimatedHeightMm", out var prop) &&
+                prop.TryGetDecimal(out var h))
+            {
+                return h;
+            }
+        }
+        catch { }
+        return 0;
     }
 
     private static List<EmrPreviewSignSlotDto> ParseSignatureSlots(
@@ -1463,6 +2015,25 @@ public class EmrController : ControllerBase
             new { EncId = encounterId.Trim() });
         if (sheet == null)
             return ApiResponse<EmrInpatientFrontSheet>.Fail(404, "未找到住院病案首页");
+
+        if (_accessPolicy != null && _userSession != null)
+        {
+            await _accessPolicy.AuthorizeAndAuditReadAsync(new EmrAccessRequest(
+                UserId: _userSession.UserId,
+                UserName: _userSession.DisplayName ?? _userSession.UserId,
+                UserRole: _userSession.RoleCode,
+                UserDeptId: _userSession.ActiveDeptId,
+                ExternalOrgCode: null,
+                IsExternalDoctor: false,
+                PatientId: sheet.PatientId,
+                EncounterId: encounterId,
+                ResourceType: "EMR_FRONT_SHEET",
+                ResourceId: sheet.Id,
+                ActionType: "READ",
+                ClientIp: HttpContext.Connection.RemoteIpAddress?.ToString()
+            ));
+        }
+
         return ApiResponse<EmrInpatientFrontSheet>.Success(sheet);
     }
 

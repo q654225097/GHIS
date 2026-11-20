@@ -31,6 +31,11 @@ public class MteSurgerySchedule : BaseEntity
     public short WhoTimeoutOk { get; set; } = 0;
     public short WhoSignOutOk { get; set; } = 0;
     public short InstrumentCountBalanced { get; set; } = 0;
+    public string ApprovalStatus { get; set; } = "DRAFT";
+    public string? WorkflowInstanceId { get; set; }
+    public long? SubmittedAtMs { get; set; }
+    public long? ApprovedAtMs { get; set; }
+    public string? ApprovedBy { get; set; }
 }
 
 public class MteAnesthesiaRecord : BaseEntity

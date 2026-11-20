@@ -6,7 +6,7 @@ using Dapper;
 
 namespace HIS.BuildingBlocks.Database;
 
-public static class DbSchemaInitializer
+public static partial class DbSchemaInitializer
 {
 	private sealed class TableColumnInfo
 	{
@@ -68,14 +68,23 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_opd_schedule_slots_date_dept ON opd_schedule_slots (schedule_date_int, opd_dept_id)");
 		await EnsureRegistrationColumnsAsync(conn);
 		await EnsureSchemaExtensionsAsync(conn);
+		await EnsureEmrLevel7SchemaAsync(conn);
+		await EnsureWorkflowSchemaAsync(conn);
 		await CleanUpDirtyDataAsync(conn);
 	}
 
 	private static async Task EnsureColumnAsync(DbConnection conn, string table, string column, string definition)
 	{
-		if (!(await conn.QueryAsync<TableColumnInfo>("PRAGMA table_info(" + table + ")")).Any((TableColumnInfo row) => string.Equals(row.Name, column, StringComparison.OrdinalIgnoreCase)))
+		try
 		{
-			await conn.ExecuteAsync($"ALTER TABLE {table} ADD COLUMN {column} {definition}");
+			if (!(await conn.QueryAsync<TableColumnInfo>("PRAGMA table_info(" + table + ")")).Any((TableColumnInfo row) => string.Equals(row.Name, column, StringComparison.OrdinalIgnoreCase)))
+			{
+				await conn.ExecuteAsync($"ALTER TABLE {table} ADD COLUMN {column} {definition}");
+			}
+		}
+		catch (Exception ex) when (ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+		{
+			// Concurrently added by another thread/test, safe to ignore
 		}
 	}
 
@@ -1224,6 +1233,77 @@ CREATE TABLE IF NOT EXISTS eqp_maintenance_records (
     version_no INT NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS ix_eqp_maint_eqp ON eqp_maintenance_records (equipment_id);
+
+-- Custom SQL Reports & Parameterized Dynamic Queries
+CREATE TABLE IF NOT EXISTS ops_report_definitions (
+    id VARCHAR(36) PRIMARY KEY,
+    report_code VARCHAR(64) NOT NULL UNIQUE,
+    report_name VARCHAR(200) NOT NULL,
+    category VARCHAR(64) NOT NULL DEFAULT '综合',
+    description VARCHAR(1000),
+    sql_template TEXT NOT NULL,
+    parameters_schema_json TEXT,
+    display_columns_json TEXT,
+    is_published SMALLINT NOT NULL DEFAULT 1,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ops_report_definitions_code ON ops_report_definitions (report_code);
+CREATE INDEX IF NOT EXISTS ix_ops_report_definitions_cat ON ops_report_definitions (category);
+
+CREATE TABLE IF NOT EXISTS ops_report_executions (
+    id VARCHAR(36) PRIMARY KEY,
+    report_definition_id VARCHAR(36) NOT NULL,
+    report_code VARCHAR(64) NOT NULL,
+    report_name VARCHAR(200) NOT NULL,
+    parameters_json TEXT,
+    result_row_count INT NOT NULL DEFAULT 0,
+    execution_duration_ms BIGINT NOT NULL DEFAULT 0,
+    executed_by VARCHAR(36),
+    executed_by_name VARCHAR(128),
+    executed_at_ms BIGINT NOT NULL,
+    error_message TEXT,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_ops_report_executions_report ON ops_report_executions (report_definition_id, executed_at_ms);
+
+-- Highly Structured EMR & Nursing User Custom Templates
+CREATE TABLE IF NOT EXISTS emr_user_templates (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    user_name VARCHAR(128) NOT NULL,
+    dept_id VARCHAR(36),
+    dept_name VARCHAR(128),
+    base_template_id VARCHAR(36) NOT NULL,
+    template_code VARCHAR(64) NOT NULL,
+    template_name VARCHAR(128) NOT NULL,
+    emr_scene VARCHAR(16) NOT NULL,
+    doc_type_code VARCHAR(64) NOT NULL,
+    default_content_json TEXT NOT NULL,
+    is_shared_dept SMALLINT NOT NULL DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_active SMALLINT NOT NULL DEFAULT 1,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_emr_user_templates_user ON emr_user_templates (user_id, emr_scene);
+CREATE INDEX IF NOT EXISTS ix_emr_user_templates_dept ON emr_user_templates (dept_id, emr_scene);
 ");
 	}
 

@@ -852,20 +852,42 @@ public partial class WorkbenchModel : ClientModelBase
 	public string? DiagnosisCode
 	{
 		get => _diagnosisCode;
-		set => SetField(ref _diagnosisCode, value, "DiagnosisCode");
+		set
+		{
+			if (SetField(ref _diagnosisCode, value, nameof(DiagnosisCode)))
+			{
+				OnPropertyChanged(nameof(HasDiagnosis));
+				NotifyOpdWorkflowStateChanged();
+			}
+		}
 	}
 
 	public string? DiagnosisName
 	{
 		get => _diagnosisName;
-		set => SetField(ref _diagnosisName, value, "DiagnosisName");
+		set
+		{
+			if (SetField(ref _diagnosisName, value, nameof(DiagnosisName)))
+			{
+				if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(EmrWorkspace.Diagnosis))
+				{
+					EmrWorkspace.Diagnosis = value.Trim();
+				}
+				OnPropertyChanged(nameof(HasDiagnosis));
+				NotifyOpdWorkflowStateChanged();
+			}
+		}
 	}
 
 	public void SetDiagnosis(string? code, string? name)
 	{
-		DiagnosisCode = string.IsNullOrWhiteSpace(code) ? null : code.Trim();
-		DiagnosisName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
-		EmrWorkspace.Diagnosis = DiagnosisName ?? string.Empty;
+		_diagnosisCode = string.IsNullOrWhiteSpace(code) ? null : code.Trim();
+		_diagnosisName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+		EmrWorkspace.Diagnosis = _diagnosisName ?? string.Empty;
+		SyncDiagnosisToDynamicFields(_diagnosisName ?? string.Empty);
+		OnPropertyChanged(nameof(DiagnosisCode));
+		OnPropertyChanged(nameof(DiagnosisName));
+		OnPropertyChanged(nameof(HasDiagnosis));
 		NotifyOpdWorkflowStateChanged();
 	}
 
@@ -887,7 +909,7 @@ public partial class WorkbenchModel : ClientModelBase
 
 	public bool HasOpdPrescriptionDraft => _currentPrescriptionStatus == 0 || _currentPrescriptionStatus == 2;
 
-	public bool CanSubmitOpdPrescription => IsOpdPrescriptionEditable && IsOpdEmrSigned && !HasBlockedPrescription
+	public bool CanSubmitOpdPrescription => IsOpdPrescriptionEditable && !HasBlockedPrescription
 		&& Prescriptions.Any(x => x.IsVisible);
 
 	public string PrescriptionWorkflowStatusText => IsOpdOrdersPushed
@@ -900,7 +922,9 @@ public partial class WorkbenchModel : ClientModelBase
 
 	public string SelectedPatientAllergyText => SelectedPatient?.AllergyTags ?? string.Empty;
 
-	private bool HasDiagnosis => !string.IsNullOrWhiteSpace(DiagnosisCode) || !string.IsNullOrWhiteSpace(EmrWorkspace.Diagnosis);
+	public bool HasDiagnosis => !string.IsNullOrWhiteSpace(DiagnosisCode)
+		|| !string.IsNullOrWhiteSpace(EmrWorkspace.Diagnosis)
+		|| !string.IsNullOrWhiteSpace(DiagnosisName);
 
 	public bool CanFinishOpdVisit => IsOpdVisitActive && IsOpdEmrSigned && IsOpdOrdersPushed;
 
@@ -2406,7 +2430,7 @@ public partial class WorkbenchModel : ClientModelBase
 			if (1 == 0)
 			{
 			}
-			string result = ((!(text == "IPD") && !(text == "WARD")) ? (SelectedPatient?.PatientName ?? "周建强") : (SelectedInpatient?.PatientName ?? SelectedPatient?.PatientName ?? "周建强"));
+			string result = ((!(text == "IPD") && !(text == "WARD")) ? (SelectedPatient?.PatientName ?? "未选患者") : (SelectedInpatient?.PatientName ?? SelectedPatient?.PatientName ?? "未选患者"));
 			if (1 == 0)
 			{
 			}
@@ -3487,6 +3511,7 @@ public partial class WorkbenchModel : ClientModelBase
 		OnPropertyChanged("OpdStepDClass");
 		OnPropertyChanged("OpdWorkflowGuideText");
 		OnPropertyChanged("CanEditDiagnosis");
+		OnPropertyChanged("HasDiagnosis");
 		OnPropertyChanged("CanAddOpdPrescription");
 		OnPropertyChanged("IsOpdPrescriptionEditable");
 		OnPropertyChanged("HasOpdPrescriptionDraft");
@@ -3839,7 +3864,7 @@ public partial class WorkbenchModel : ClientModelBase
 			{
 				BedCode = "02 床",
 				BedType = "⚡ 跨病区借床",
-				PatientName = "周建强",
+				PatientName = "借床待收",
 				Gender = "男",
 				Age = 41,
 				AdmissionNo = "ADM20261105001",
@@ -3943,6 +3968,24 @@ public partial class WorkbenchModel : ClientModelBase
 		inpatientOrderModel.StopTime = stopTime;
 		inpatientOrderModel.StopDoctor = stopDoctor;
 		inpatientOrderModel.NurseSign = nurseSign;
+		inpatientOrderModel.Spec = content.Contains("*") || content.Contains("mg") || content.Contains("ml") ? "标准规格" : "常规处置";
+		inpatientOrderModel.SingleDose = dose.Replace("mg", "").Replace("ml", "").Replace("片", "").Replace("支", "").Replace("套", "").Trim();
+		if (string.IsNullOrWhiteSpace(inpatientOrderModel.SingleDose)) inpatientOrderModel.SingleDose = "1";
+		inpatientOrderModel.DoseUnit = dose.Contains("mg") ? "mg" : (dose.Contains("ml") ? "ml" : (dose.Contains("支") ? "支" : "片"));
+		inpatientOrderModel.UsageAmount = "1";
+		inpatientOrderModel.UsageUnit = "次";
+		inpatientOrderModel.Quantity = 1;
+		inpatientOrderModel.Unit = "盒";
+		inpatientOrderModel.Days = 1;
+		inpatientOrderModel.ExecDept = "普外二病区护理站";
+		inpatientOrderModel.UnitPrice = "¥18.00";
+		inpatientOrderModel.TotalPrice = "¥18.00";
+		inpatientOrderModel.SpecialAttr = "常规";
+		inpatientOrderModel.SkinTestInfo = "免试";
+		inpatientOrderModel.GroupComboNo = $"11317{Random.Shared.Next(1000, 9999)}";
+		inpatientOrderModel.SeqNo = 1;
+		inpatientOrderModel.StartExecTime = inpatientOrderModel.StartTime;
+		inpatientOrderModel.ItemCategory = content.Contains("片") || content.Contains("注射液") || content.Contains("胶囊") ? "西药" : (content.Contains("检查") || content.Contains("CT") ? "检查" : "处置");
 		InpatientOrderModel inpatientOrderModel2 = inpatientOrderModel;
 		bool flag;
 		switch (status)
@@ -4043,10 +4086,95 @@ public partial class WorkbenchModel : ClientModelBase
 	private void InitInpatientRecords()
 	{
 		AllInpatientRecords.Clear();
+
+		InpatientRecordModel inpatientRecordModel0 = new InpatientRecordModel
+		{
+			AdmissionNo = "0000000001",
+			PatientName = "小敏",
+			Gender = "女",
+			Age = 1,
+			MedicalRecordNo = "PAT0000000001",
+			BedCode = "018床(2F)",
+			AdmittingDept = "胸外科病区",
+			NursingWard = "二病区(2F)",
+			NursingLevel = "二级护理",
+			Diagnosis = "胸腺脓肿",
+			AttendingDoctor = !string.IsNullOrWhiteSpace(SessionContext.Current.DisplayName) ? SessionContext.Current.DisplayName : "主治医师",
+			AdmissionDate = "2026-06-15 09:30",
+			DailySummary = "患儿因胸腺脓肿切开引流术后在院治疗，一般情况良好，今日复查胸部CT评估吸收情况。",
+			HasAllergyAlert = false,
+			AllergyTags = "无已知药物过敏",
+			AvailableBalance = -23550.00m,
+			TotalCost = 23550.00m,
+			DepositTotal = 0.00m,
+			InsuranceCoordination = 0.00m,
+			StayDays = 157,
+			PaymentType = "自费",
+			HomeAddress = "---",
+			ContactPhone = "---",
+			IdCard = "---",
+			HeightText = "75 cm",
+			WeightText = "10.0 kg",
+			MedTechReportsAllSigned = true,
+			DischargeMedsDispensed = false,
+			MedicalInsuranceSettled = false,
+			PrepaymentCleared = false,
+			PrepaymentAmount = 0m,
+			ActualSelfPay = 23550m
+		};
+		var ord01 = NewOrder("ORD-001", "临时医嘱", "吸氧 (鼻导管)", "2L/min", "吸入", "持续", "执行中", "李华");
+		ord01.ItemCategory = "全部";
+		ord01.Spec = "持续";
+		ord01.SingleDose = "2";
+		ord01.DoseUnit = "L/min";
+		ord01.UsageAmount = "1";
+		ord01.UsageUnit = "次";
+		ord01.Days = 1;
+		ord01.Quantity = 1;
+		ord01.Unit = "次";
+		ord01.Route = "吸入";
+		ord01.Frequency = "持续";
+		ord01.ExecDept = "普外二病区护理站";
+		ord01.UnitPrice = "¥12.00";
+		ord01.TotalPrice = "¥12.00";
+		ord01.Remark = "根据SPO2调整";
+		ord01.SpecialAttr = "常规";
+		ord01.GroupComboNo = "113170254";
+		ord01.SeqNo = 1;
+		ord01.SkinTestInfo = "免试";
+		inpatientRecordModel0.Orders.Add(ord01);
+
+		var ord02 = NewOrder("ORD-002", "临时医嘱", "胸部CT平扫", "1次", "检查", "st (立即执行)", "执行中", "李华");
+		ord02.ItemCategory = "全部";
+		ord02.IsUrgent = true;
+		ord02.Spec = "单部位";
+		ord02.SingleDose = "1";
+		ord02.DoseUnit = "次";
+		ord02.UsageAmount = "1";
+		ord02.UsageUnit = "次";
+		ord02.Days = 1;
+		ord02.Quantity = 1;
+		ord02.Unit = "次";
+		ord02.Route = "检查";
+		ord02.Frequency = "st";
+		ord02.ExecDept = "放射科CT室";
+		ord02.UnitPrice = "¥280.00";
+		ord02.TotalPrice = "¥280.00";
+		ord02.Remark = "评估脓肿吸收情况";
+		ord02.SpecialAttr = "加急";
+		ord02.GroupComboNo = "113170258";
+		ord02.SeqNo = 2;
+		ord02.Specimen = "全血";
+		ord02.BodyPart = "胸部";
+		ord02.ExamMethod = "CT平扫";
+		ord02.SkinTestInfo = "免试";
+		inpatientRecordModel0.Orders.Add(ord02);
+		inpatientRecordModel0.ApplyOrderFilter();
+
 		InpatientRecordModel inpatientRecordModel = new InpatientRecordModel
 		{
 			AdmissionNo = "ADM20261105001",
-			PatientName = "周建强",
+			PatientName = "借床待收",
 			Gender = "男",
 			Age = 41,
 			MedicalRecordNo = "PAT85061801",
@@ -4200,6 +4328,7 @@ public partial class WorkbenchModel : ClientModelBase
 		inpatientRecordModel4.NursingTasks.Add(NewTask("NT-Q03", "10:00", "出院", "出院带药核对与床单位终末处理", "出院流程", "中", "已核对", "10:10"));
 		inpatientRecordModel4.VitalSigns.Add(NewVitals("2026-11-06 07:30", "36.5", "68", "16", "118", "72", "99", "陈劳", abnormal: false));
 		inpatientRecordModel4.HandoverNotes.Add(NewHandover("夜班 → 白班", "赵敏 (责任护士)", "2026-11-06 07:45", "患者今日拟出院，出院带药及结算资料已备齐。", confirmed: true));
+		AllInpatientRecords.Add(inpatientRecordModel0);
 		AllInpatientRecords.Add(inpatientRecordModel);
 		AllInpatientRecords.Add(inpatientRecordModel2);
 		AllInpatientRecords.Add(inpatientRecordModel3);
@@ -4217,7 +4346,7 @@ public partial class WorkbenchModel : ClientModelBase
 			new PharmacyDispenseModel
 			{
 				PrescriptionNo = "RX-20261105-001",
-				PatientName = "周建强",
+				PatientName = "待核发患者",
 				DrugId = "DRUG-04",
 				DispenseQuantity = 2,
 				TotalAmount = 89.30m,
@@ -4303,7 +4432,7 @@ public partial class WorkbenchModel : ClientModelBase
 			{
 				ArchiveNo = "OFD-20261105-CARDIO-001",
 				DocType = "门诊初诊病历 (OPD_EMR)",
-				PatientName = "周建强",
+				PatientName = "归档患者",
 				DeptName = "心血管内科门诊",
 				OfdStandard = "GB/T 33190-2016",
 				ZipEntries = "OFD.xml | Document.xml | CustomTags/EmrStructuredData.xml | Signatures.xml",

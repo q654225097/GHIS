@@ -8,6 +8,7 @@ using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
+using HIS.BuildingBlocks.Security;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HIS.Modules.Operations.Controllers;
@@ -15,6 +16,7 @@ namespace HIS.Modules.Operations.Controllers;
 [ApiController]
 [Route("api/v4/analytics")]
 [Route("api/v4/ops/analytics")]
+[RequireRole(RoleCode.Admin, "DIRECTOR", "LEADER", RoleCode.Cashier, RoleCode.DoctorOpd, RoleCode.DoctorIpd)]
 public class AnalyticsController : ControllerBase
 {
     private readonly IDbConnectionFactory _connFactory;

@@ -19,6 +19,14 @@
     <ProjectReference Include="..\HIS.Modules.Finance\HIS.Modules.Finance.csproj" />
     <ProjectReference Include="..\HIS.Modules.Integration\HIS.Modules.Integration.csproj" />
     <ProjectReference Include="..\HIS.Modules.Operations\HIS.Modules.Operations.csproj" />
+    <ProjectReference Include="..\HIS.Modules.KnowledgeBase\HIS.Modules.KnowledgeBase.csproj" />
+    <ProjectReference Include="..\HIS.Modules.ClinicalPathway\HIS.Modules.ClinicalPathway.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Treatment\HIS.Modules.Treatment.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Monitoring\HIS.Modules.Monitoring.csproj" />
+    <ProjectReference Include="..\HIS.Modules.BloodBank\HIS.Modules.BloodBank.csproj" />
+    <ProjectReference Include="..\HIS.Modules.EmrQc\HIS.Modules.EmrQc.csproj" />
+    <ProjectReference Include="..\HIS.Modules.HieGateway\HIS.Modules.HieGateway.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Workflow\HIS.Modules.Workflow.csproj" />
   </ItemGroup>
 </Project>
 

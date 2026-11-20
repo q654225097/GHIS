@@ -28,27 +28,52 @@ public class PrescriptionItemModel : ClientModelBase
 
 	public const string AuditStatusCode = "AUDIT_STATUS";
 
-	private static readonly HashSet<string> BuiltInFieldCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "DRUG_NAME", "SPEC", "DOSE", "FREQ", "ROUTE", "DAYS", "QUANTITY", "AMOUNT", "SKIN_TEST_STATUS", "AUDIT_STATUS" };
+	private static readonly HashSet<string> BuiltInFieldCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"DRUG_NAME", "SPEC", "DOSE", "FREQ", "ROUTE", "DAYS", "QUANTITY", "AMOUNT", "SKIN_TEST_STATUS", "AUDIT_STATUS",
+		"ORDER_TYPE", "GROUP_NO", "SKIN_TEST", "TOTAL_QTY", "TOTAL_UNIT", "SINGLE_DOSE", "DOSE_UNIT", "PKG_RATIO",
+		"PAYMENT_COUNT", "FREQ_CODE", "ROUTE_NAME", "HOSP_INJECT_CNT", "DOCTOR_NAME", "EXEC_DEPT", "IS_URGENT",
+		"EXAM_PART", "SPECIMEN_TYPE", "DEDUCT_DEPT", "MEDICATION_NOTE", "OPERATOR", "OPD_DEPT", "CREATED_AT",
+		"STOP_TIME", "STOP_DOCTOR"
+	};
 
 	private readonly Dictionary<string, string> _fieldValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 	private int _seq;
-
 	private string _skinTestClass = "Info";
-
 	private string _auditClass = "Info";
-
 	private bool _isBlocked;
-
 	private bool _isEditing;
-
 	private bool _isDeleted;
-
 	private bool _isEditable = true;
-
 	private string _customFieldsSummary = string.Empty;
-
 	private string? _extDataJson;
+
+	private string _orderType = "西药";
+	private string _groupNo = string.Empty;
+	private string _groupNoText = "-";
+	private string _skinTest = "免试";
+	private string _totalUnit = "盒";
+	private string _singleDose = "1";
+	private string _doseUnit = "片";
+	private string _packageRatio = "0.250 g";
+	private int _paymentCount = 1;
+	private string _freqCode = "tid";
+	private string _routeName = "口服";
+	private int _hospitalInjectionCount = 0;
+	private string _doctorName = !string.IsNullOrWhiteSpace(SessionContext.Current.DisplayName) ? SessionContext.Current.DisplayName : "主治医师";
+	private string _execDeptName = "门诊西药房";
+	private bool _isUrgent = false;
+	private string _examBodyPart = string.Empty;
+	private string _specimenType = string.Empty;
+	private string _deductStockDept = "门诊西药房";
+	private string _medicationNote = string.Empty;
+	private string _operatorName = !string.IsNullOrWhiteSpace(SessionContext.Current.DisplayName) ? SessionContext.Current.DisplayName : "录入人";
+	private string _deptName = "心血管门诊";
+	private string _createdAtText = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+	private string _stopTimeText = "--";
+	private string _stopDoctor = "--";
+	private bool _isSelected = false;
 
 	public string Id { get; set; } = Guid.NewGuid().ToString("D");
 
@@ -253,6 +278,168 @@ public class PrescriptionItemModel : ClientModelBase
 		}
 	}
 
+	public string OrderType
+	{
+		get => GetColumnValue("ORDER_TYPE") is { Length: > 0 } v ? v : _orderType;
+		set { _orderType = value; SetColumnValue("ORDER_TYPE", value); }
+	}
+
+	public string GroupNo
+	{
+		get => GetColumnValue("GROUP_NO") is { Length: > 0 } v ? v : _groupNo;
+		set { _groupNo = value; SetColumnValue("GROUP_NO", value); OnPropertyChanged(nameof(GroupNoDisplay)); OnPropertyChanged(nameof(GroupNoText)); }
+	}
+
+	public string GroupNoText
+	{
+		get => !string.IsNullOrWhiteSpace(_groupNoText) && _groupNoText != "-" ? _groupNoText : (string.IsNullOrWhiteSpace(GroupNo) ? "-" : $"组{GroupNo}");
+		set => SetField(ref _groupNoText, value, nameof(GroupNoText));
+	}
+
+	public string GroupNoDisplay => GroupNoText;
+
+	public string SkinTest
+	{
+		get => GetColumnValue("SKIN_TEST") is { Length: > 0 } v ? v : _skinTest;
+		set { _skinTest = value; SetColumnValue("SKIN_TEST", value); }
+	}
+
+	public string TotalQuantity
+	{
+		get => Quantity;
+		set => Quantity = value;
+	}
+
+	public string TotalUnit
+	{
+		get => GetColumnValue("TOTAL_UNIT") is { Length: > 0 } v ? v : _totalUnit;
+		set { _totalUnit = value; SetColumnValue("TOTAL_UNIT", value); }
+	}
+
+	public string SingleDose
+	{
+		get => GetColumnValue("SINGLE_DOSE") is { Length: > 0 } v ? v : (string.IsNullOrWhiteSpace(Dose) ? _singleDose : Dose);
+		set { _singleDose = value; SetColumnValue("SINGLE_DOSE", value); Dose = value; }
+	}
+
+	public string DoseUnit
+	{
+		get => GetColumnValue("DOSE_UNIT") is { Length: > 0 } v ? v : _doseUnit;
+		set { _doseUnit = value; SetColumnValue("DOSE_UNIT", value); }
+	}
+
+	public string PackageRatio
+	{
+		get => GetColumnValue("PKG_RATIO") is { Length: > 0 } v ? v : _packageRatio;
+		set { _packageRatio = value; SetColumnValue("PKG_RATIO", value); }
+	}
+
+	public int PaymentCount
+	{
+		get => int.TryParse(GetColumnValue("PAYMENT_COUNT"), out var c) ? c : _paymentCount;
+		set { _paymentCount = value; SetColumnValue("PAYMENT_COUNT", value.ToString()); }
+	}
+
+	public string FrequencyCode
+	{
+		get => GetColumnValue("FREQ_CODE") is { Length: > 0 } v ? v : (string.IsNullOrWhiteSpace(Freq) ? _freqCode : Freq);
+		set { _freqCode = value; SetColumnValue("FREQ_CODE", value); Freq = value; }
+	}
+
+	public string RouteName
+	{
+		get => GetColumnValue("ROUTE_NAME") is { Length: > 0 } v ? v : (string.IsNullOrWhiteSpace(Route) ? _routeName : Route);
+		set { _routeName = value; SetColumnValue("ROUTE_NAME", value); Route = value; }
+	}
+
+	public int HospitalInjectionCount
+	{
+		get => int.TryParse(GetColumnValue("HOSP_INJECT_CNT"), out var c) ? c : _hospitalInjectionCount;
+		set { _hospitalInjectionCount = value; SetColumnValue("HOSP_INJECT_CNT", value.ToString()); }
+	}
+
+	public string DoctorName
+	{
+		get => GetColumnValue("DOCTOR_NAME") is { Length: > 0 } v ? v : _doctorName;
+		set { _doctorName = value; SetColumnValue("DOCTOR_NAME", value); }
+	}
+
+	public string ExecDeptName
+	{
+		get => GetColumnValue("EXEC_DEPT") is { Length: > 0 } v ? v : _execDeptName;
+		set { _execDeptName = value; SetColumnValue("EXEC_DEPT", value); }
+	}
+
+	public bool IsUrgent
+	{
+		get => _isUrgent || string.Equals(GetColumnValue("IS_URGENT"), "1", StringComparison.OrdinalIgnoreCase);
+		set { SetField(ref _isUrgent, value, nameof(IsUrgent)); SetColumnValue("IS_URGENT", value ? "1" : "0"); OnPropertyChanged(nameof(IsUrgentText)); }
+	}
+
+	public string IsUrgentText => IsUrgent ? "加急" : "常规";
+
+	public string ExamBodyPart
+	{
+		get => GetColumnValue("EXAM_PART") is { Length: > 0 } v ? v : _examBodyPart;
+		set { _examBodyPart = value; SetColumnValue("EXAM_PART", value); }
+	}
+
+	public string SpecimenType
+	{
+		get => GetColumnValue("SPECIMEN_TYPE") is { Length: > 0 } v ? v : _specimenType;
+		set { _specimenType = value; SetColumnValue("SPECIMEN_TYPE", value); }
+	}
+
+	public string DeductStockDept
+	{
+		get => GetColumnValue("DEDUCT_DEPT") is { Length: > 0 } v ? v : _deductStockDept;
+		set { _deductStockDept = value; SetColumnValue("DEDUCT_DEPT", value); }
+	}
+
+	public string MedicationNote
+	{
+		get => GetColumnValue("MEDICATION_NOTE") is { Length: > 0 } v ? v : _medicationNote;
+		set { _medicationNote = value; SetColumnValue("MEDICATION_NOTE", value); }
+	}
+
+	public string OperatorName
+	{
+		get => GetColumnValue("OPERATOR") is { Length: > 0 } v ? v : _operatorName;
+		set { _operatorName = value; SetColumnValue("OPERATOR", value); }
+	}
+
+	public string DeptName
+	{
+		get => GetColumnValue("OPD_DEPT") is { Length: > 0 } v ? v : _deptName;
+		set { _deptName = value; SetColumnValue("OPD_DEPT", value); }
+	}
+
+	public string CreatedAtText
+	{
+		get => GetColumnValue("CREATED_AT") is { Length: > 0 } v ? v : _createdAtText;
+		set { _createdAtText = value; SetColumnValue("CREATED_AT", value); }
+	}
+
+	public string StopTimeText
+	{
+		get => GetColumnValue("STOP_TIME") is { Length: > 0 } v ? v : _stopTimeText;
+		set { _stopTimeText = value; SetColumnValue("STOP_TIME", value); }
+	}
+
+	public string StopDoctor
+	{
+		get => GetColumnValue("STOP_DOCTOR") is { Length: > 0 } v ? v : _stopDoctor;
+		set { _stopDoctor = value; SetColumnValue("STOP_DOCTOR", value); }
+	}
+
+	public bool IsSelected
+	{
+		get => _isSelected;
+		set => SetField(ref _isSelected, value, nameof(IsSelected));
+	}
+
+	public string StatusAlertIcon => IsBlocked ? "❌" : (SkinTestStatus.Contains("需") || SkinTestStatus.Contains("阳") || SkinTest.Contains("需") || SkinTest.Contains("阳") ? "⚠" : (string.IsNullOrWhiteSpace(AuditStatus) ? "✓" : "🛡"));
+
 	// 临时行仅存在于编辑界面；只有服务端返回主键后才允许更新、删除或提交处方。
 	public bool IsPersisted { get; set; }
 
@@ -386,6 +573,30 @@ public class PrescriptionItemModel : ClientModelBase
 			"AMOUNT" => "Amount", 
 			"SKIN_TEST_STATUS" => "SkinTestStatus", 
 			"AUDIT_STATUS" => "AuditStatus", 
+			"ORDER_TYPE" => "OrderType",
+			"GROUP_NO" => "GroupNo",
+			"SKIN_TEST" => "SkinTest",
+			"TOTAL_QTY" => "TotalQuantity",
+			"TOTAL_UNIT" => "TotalUnit",
+			"SINGLE_DOSE" => "SingleDose",
+			"DOSE_UNIT" => "DoseUnit",
+			"PKG_RATIO" => "PackageRatio",
+			"PAYMENT_COUNT" => "PaymentCount",
+			"FREQ_CODE" => "FrequencyCode",
+			"ROUTE_NAME" => "RouteName",
+			"HOSP_INJECT_CNT" => "HospitalInjectionCount",
+			"DOCTOR_NAME" => "DoctorName",
+			"EXEC_DEPT" => "ExecDeptName",
+			"IS_URGENT" => "IsUrgent",
+			"EXAM_PART" => "ExamBodyPart",
+			"SPECIMEN_TYPE" => "SpecimenType",
+			"DEDUCT_DEPT" => "DeductStockDept",
+			"MEDICATION_NOTE" => "MedicationNote",
+			"OPERATOR" => "OperatorName",
+			"OPD_DEPT" => "DeptName",
+			"CREATED_AT" => "CreatedAtText",
+			"STOP_TIME" => "StopTimeText",
+			"STOP_DOCTOR" => "StopDoctor",
 			_ => string.Empty, 
 		};
 		propertyName = text2;

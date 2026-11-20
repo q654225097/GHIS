@@ -13,6 +13,8 @@ using HIS.Client.UrsaShell.ViewModels;
 
 namespace HIS.Client.UrsaShell.Stations.OpdDoctor;
 
+public sealed record QuickDiagnosisItem(string Code, string Name, string Category);
+
 public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
 {
     private readonly ShellViewModel? _shell;
@@ -20,6 +22,7 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
     private string _drugSearchQuery = string.Empty;
     private bool _isDrugDropdownOpen;
     private int _selectedCatalogIndex;
+    private string _selectedDiagnosisCategory = "全部";
 
     public OpdDoctorViewModel(WorkbenchModel workbench, ShellViewModel? shell = null)
     {
@@ -33,6 +36,7 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
             if (param is PatientQueueItemModel patient)
             {
                 Workbench.SelectedPatient = patient;
+                Workbench.SelectedOpdTabIndex = 0;
             }
         });
 
@@ -43,6 +47,100 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         });
 
         SignEmrCommand = new AsyncRelayCommand(SignCurrentEmrAsync, () => Workbench.CanSignEmr && Workbench.HasSelectedPatient);
+
+        DiagnosisCategories.Add("全部");
+        DiagnosisCategories.Add("心脑血管");
+        DiagnosisCategories.Add("呼吸内科");
+        DiagnosisCategories.Add("消化系统");
+        DiagnosisCategories.Add("内分泌/代谢");
+        DiagnosisCategories.Add("神经/其他");
+
+        QuickDiagnoses.Add(new QuickDiagnosisItem("I10.x00", "原发性高血压", "心脑血管"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("I20.900", "心绞痛", "心脑血管"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("I25.101", "冠心病", "心脑血管"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("I49.900", "心律失常", "心脑血管"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("I50.900", "心力衰竭", "心脑血管"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("J06.900", "急性上呼吸道感染", "呼吸内科"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("J20.900", "急性支气管炎", "呼吸内科"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("J45.900", "支气管哮喘", "呼吸内科"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("J18.900", "社区获得性肺炎", "呼吸内科"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("J44.900", "慢性阻塞性肺疾病", "呼吸内科"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("K29.700", "慢性胃炎", "消化系统"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("K21.900", "胃食管反流病", "消化系统"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("K25.900", "消化性溃疡", "消化系统"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("K52.900", "急性胃肠炎", "消化系统"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("K76.000", "非酒精性脂肪肝", "消化系统"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("E11.900", "2型糖尿病", "内分泌/代谢"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("E78.500", "高脂血症", "内分泌/代谢"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("E79.000", "高尿酸血症", "内分泌/代谢"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("E03.900", "甲状腺功能减退症", "内分泌/代谢"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("G43.900", "偏头痛", "神经/其他"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("G47.000", "失眠症", "神经/其他"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("J30.400", "过敏性鼻炎", "神经/其他"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("M19.900", "骨关节炎", "神经/其他"));
+        QuickDiagnoses.Add(new QuickDiagnosisItem("M54.500", "腰痛症", "神经/其他"));
+
+        RefreshFilteredQuickDiagnoses();
+
+        SelectQuickDiagnosisCommand = new RelayCommand(param =>
+        {
+            if (param is QuickDiagnosisItem item)
+            {
+                Workbench.SetDiagnosis(item.Code, item.Name);
+                NotifyToast($"已确立诊断: [{item.Code}] {item.Name}", "Success");
+                RefreshAllWorkflowState();
+            }
+        });
+
+        FilterDiagnosisCategoryCommand = new RelayCommand(param =>
+        {
+            if (param is string cat)
+            {
+                SelectedDiagnosisCategory = cat;
+            }
+        });
+
+        SaveDiagnosisCommand = new AsyncRelayCommand(async () =>
+        {
+            var name = Workbench.DiagnosisName ?? Workbench.EmrWorkspace.Diagnosis;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                NotifyToast("请先选择或输入初步诊断", "Warning");
+                return;
+            }
+            var outcome = await Workbench.SaveOpdDiagnosisAsync(name);
+            NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Warning");
+            RefreshAllWorkflowState();
+        }, () => Workbench.CanEditDiagnosis);
+
+        SaveDiagnosisAndNextCommand = new AsyncRelayCommand(async () =>
+        {
+            var name = Workbench.DiagnosisName ?? Workbench.EmrWorkspace.Diagnosis;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                NotifyToast("请先选择或输入初步诊断后再进入处方开立", "Warning");
+                return;
+            }
+            var outcome = await Workbench.SaveOpdDiagnosisAsync(name);
+            NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Warning");
+            if (outcome.Succeeded)
+            {
+                Workbench.SelectedOpdTabIndex = 1;
+                RefreshDrugSearchResults();
+                _focusDrugSearchCallback?.Invoke();
+            }
+            RefreshAllWorkflowState();
+        }, () => Workbench.CanEditDiagnosis);
+
+        GoToDiagnosisCommand = new RelayCommand(() => Workbench.SelectedOpdTabIndex = 0);
+        GoToPrescriptionCommand = new RelayCommand(() =>
+        {
+            Workbench.SelectedOpdTabIndex = 1;
+            RefreshDrugSearchResults();
+            _focusDrugSearchCallback?.Invoke();
+        });
+        GoToMedTechCommand = new RelayCommand(() => Workbench.SelectedOpdTabIndex = 2);
+        GoToEmrCommand = new RelayCommand(() => Workbench.SelectedOpdTabIndex = 3);
 
         AddDrugCatalogItemCommand = new RelayCommand(param =>
         {
@@ -91,6 +189,55 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         PreCheckPrescriptionCommand = new AsyncRelayCommand(PreCheckPrescriptionAsync, () => Workbench.CanEditOpdPrescription);
         SubmitPrescriptionCommand = new AsyncRelayCommand(SubmitPrescriptionAsync, () => Workbench.CanEditOpdPrescription);
 
+        OpenEmrTemplatePickerCommand = new RelayCommand(OpenTemplatePickerDrawer);
+        SelectEmrTemplateCommand = new AsyncRelayCommand(async param =>
+        {
+            if (param is OpdEmrTemplateModel tmpl)
+            {
+                await ApplyTemplateAsync(tmpl);
+            }
+        });
+        NewEmrDocumentCommand = new AsyncRelayCommand(async () =>
+        {
+            if (Workbench.SelectedOpdEmrTemplate != null)
+            {
+                var outcome = await Workbench.CreateNewOpdEmrDocumentAsync(Workbench.SelectedOpdEmrTemplate);
+                NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Warning");
+                RefreshAllWorkflowState();
+            }
+            else
+            {
+                OpenTemplatePickerDrawer();
+            }
+        });
+        SaveEmrDraftCommand = new AsyncRelayCommand(async () =>
+        {
+            var outcome = await Workbench.SaveOpdEmrDraftAsync();
+            NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Warning");
+            RefreshAllWorkflowState();
+        }, () => Workbench.HasSelectedPatient && Workbench.IsOpdVisitActive);
+
+        OpenSaveAsUserTemplateCommand = new RelayCommand(OpenSaveAsUserTemplateDrawer);
+        ApplyUserTemplateCommand = new AsyncRelayCommand(async param =>
+        {
+            if (param is EmrUserTemplateModel tpl)
+            {
+                var outcome = await Workbench.ApplyOpdUserTemplateAsync(tpl);
+                NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Warning");
+                RefreshAllWorkflowState();
+                OnPropertyChanged(nameof(HasSelectedEmrTemplate));
+                OnPropertyChanged(nameof(SelectedEmrTemplateName));
+            }
+        });
+        DeleteUserTemplateCommand = new AsyncRelayCommand(async param =>
+        {
+            if (param is EmrUserTemplateModel tpl)
+            {
+                var outcome = await Workbench.DeleteOpdUserTemplateAsync(tpl.Id);
+                NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Warning");
+            }
+        });
+
         AddMedTechOrderCommand = new RelayCommand(AddSampleMedTechOrder);
         OpenWhoSurgeryDrawerCommand = new RelayCommand(OpenWhoSurgeryDrawer);
         OpenRefundProofDrawerCommand = new RelayCommand(OpenRefundProofDrawer);
@@ -99,17 +246,80 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
             OpenFinishVisitChecklistDrawer,
             () => Workbench.CanFinishOpdVisit || Workbench.CanCompleteOpdWithNoPrescription);
 
+        AddQuickOrderCommand = new RelayCommand(AddQuickOrder);
+        GroupSelectedOrdersCommand = new RelayCommand(GroupSelectedOrders);
+        UngroupSelectedOrdersCommand = new RelayCommand(UngroupSelectedOrders);
+        QuickSetSkinTestCommand = new RelayCommand(param =>
+        {
+            if (param is string status) SetSkinTestStatus(status);
+        });
+        ToggleUrgentCommand = new RelayCommand(ToggleUrgent);
+        SelectAllOrdersCommand = new RelayCommand(param =>
+        {
+            if (param is bool b) SelectAllOrders(b);
+            else SelectAllOrders(true);
+        });
+
         RefreshDrugSearchResults();
         RefreshSteps();
+        _ = Workbench.EnsureOpdEmrTemplatesAsync();
     }
 
     public WorkbenchModel Workbench { get; }
     public ObservableCollection<DrugCatalogItemModel> FilteredDrugCatalog { get; } = new();
     public ObservableCollection<FlowStepItem> WorkflowSteps { get; } = new();
+    public ObservableCollection<QuickDiagnosisItem> QuickDiagnoses { get; } = new();
+    public ObservableCollection<QuickDiagnosisItem> FilteredQuickDiagnoses { get; } = new();
+    public ObservableCollection<string> DiagnosisCategories { get; } = new();
+
+    public bool HasSelectedEmrTemplate => Workbench.HasSelectedOpdEmrTemplate;
+    public string SelectedEmrTemplateName => Workbench.SelectedOpdEmrTemplate?.TemplateName ?? "尚未选取门诊文书模板";
+
+    public ICommand OpenEmrTemplatePickerCommand { get; }
+    public ICommand SelectEmrTemplateCommand { get; }
+    public ICommand NewEmrDocumentCommand { get; }
+    public ICommand SaveEmrDraftCommand { get; }
+    public ICommand OpenSaveAsUserTemplateCommand { get; }
+    public ICommand ApplyUserTemplateCommand { get; }
+    public ICommand DeleteUserTemplateCommand { get; }
+
+    public string SelectedDiagnosisCategory
+    {
+        get => _selectedDiagnosisCategory;
+        set
+        {
+            if (SetField(ref _selectedDiagnosisCategory, value, nameof(SelectedDiagnosisCategory)))
+            {
+                RefreshFilteredQuickDiagnoses();
+            }
+        }
+    }
+
+    public void RefreshFilteredQuickDiagnoses()
+    {
+        FilteredQuickDiagnoses.Clear();
+        var selected = SelectedDiagnosisCategory;
+        foreach (var item in QuickDiagnoses)
+        {
+            if (string.Equals(selected, "全部", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.Category, selected, StringComparison.OrdinalIgnoreCase))
+            {
+                FilteredQuickDiagnoses.Add(item);
+            }
+        }
+    }
 
     public ICommand CallNextCommand { get; }
     public ICommand SelectPatientCommand { get; }
     public ICommand SelectStepTabCommand { get; }
+    public ICommand SelectQuickDiagnosisCommand { get; }
+    public ICommand FilterDiagnosisCategoryCommand { get; }
+    public ICommand SaveDiagnosisCommand { get; }
+    public ICommand SaveDiagnosisAndNextCommand { get; }
+    public ICommand GoToDiagnosisCommand { get; }
+    public ICommand GoToPrescriptionCommand { get; }
+    public ICommand GoToEmrCommand { get; }
+    public ICommand GoToMedTechCommand { get; }
     public ICommand SignEmrCommand { get; }
     public ICommand AddDrugCatalogItemCommand { get; }
     public ICommand FilterPrescriptionsCommand { get; }
@@ -125,6 +335,180 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
     public ICommand OpenRefundProofDrawerCommand { get; }
     public ICommand OpenBorrowBedDrawerCommand { get; }
     public ICommand RequestFinishVisitCommand { get; }
+    public ICommand AddQuickOrderCommand { get; }
+    public ICommand GroupSelectedOrdersCommand { get; }
+    public ICommand UngroupSelectedOrdersCommand { get; }
+    public ICommand QuickSetSkinTestCommand { get; }
+    public ICommand ToggleUrgentCommand { get; }
+    public ICommand SelectAllOrdersCommand { get; }
+
+    public ObservableCollection<string> OrderTypeOptions { get; } = new()
+    {
+        "全部", "西药", "中成药", "草药", "检验", "检查", "治疗", "材料"
+    };
+
+    private string _selectedOrderType = "西药";
+    public string SelectedOrderType
+    {
+        get => _selectedOrderType;
+        set
+        {
+            if (SetField(ref _selectedOrderType, value, nameof(SelectedOrderType)))
+            {
+                RefreshDrugSearchResults();
+            }
+        }
+    }
+
+    private string _quickSearchCode = string.Empty;
+    public string QuickSearchCode
+    {
+        get => _quickSearchCode;
+        set
+        {
+            if (SetField(ref _quickSearchCode, value, nameof(QuickSearchCode)))
+            {
+                DrugSearchQuery = value;
+            }
+        }
+    }
+
+    private int _orderQuantityInput = 1;
+    public int OrderQuantityInput
+    {
+        get => _orderQuantityInput;
+        set => SetField(ref _orderQuantityInput, Math.Max(1, value), nameof(OrderQuantityInput));
+    }
+
+    public ObservableCollection<string> TotalUnitOptions { get; } = new()
+    {
+        "盒", "瓶", "支", "袋", "片", "粒", "付", "次"
+    };
+
+    private string _selectedTotalUnit = "盒";
+    public string SelectedTotalUnit
+    {
+        get => _selectedTotalUnit;
+        set => SetField(ref _selectedTotalUnit, value, nameof(SelectedTotalUnit));
+    }
+
+    private bool _isUrgentInput = false;
+    public bool IsUrgentInput
+    {
+        get => _isUrgentInput;
+        set => SetField(ref _isUrgentInput, value, nameof(IsUrgentInput));
+    }
+
+    private decimal _singleDoseInput = 1m;
+    public decimal SingleDoseInput
+    {
+        get => _singleDoseInput;
+        set => SetField(ref _singleDoseInput, value, nameof(SingleDoseInput));
+    }
+
+    public ObservableCollection<string> DoseUnitOptions { get; } = new()
+    {
+        "片", "粒", "g", "mg", "ml", "支", "袋", "次"
+    };
+
+    private string _selectedDoseUnit = "片";
+    public string SelectedDoseUnit
+    {
+        get => _selectedDoseUnit;
+        set => SetField(ref _selectedDoseUnit, value, nameof(SelectedDoseUnit));
+    }
+
+    private decimal _packageRatioAmount = 0.250m;
+    public decimal PackageRatioAmount
+    {
+        get => _packageRatioAmount;
+        set => SetField(ref _packageRatioAmount, value, nameof(PackageRatioAmount));
+    }
+
+    private string _packageRatioUnit = "g";
+    public string PackageRatioUnit
+    {
+        get => _packageRatioUnit;
+        set => SetField(ref _packageRatioUnit, value, nameof(PackageRatioUnit));
+    }
+
+    public ObservableCollection<string> RouteOptions { get; } = new()
+    {
+        "口服", "静脉滴注", "肌肉注射", "皮下注射", "外用", "雾化吸入", "含服", "直肠给药"
+    };
+
+    private string _selectedRoute = "口服";
+    public string SelectedRoute
+    {
+        get => _selectedRoute;
+        set => SetField(ref _selectedRoute, value, nameof(SelectedRoute));
+    }
+
+    public ObservableCollection<string> FrequencyOptions { get; } = new()
+    {
+        "qd", "bid", "tid", "qid", "q8h", "q12h", "st", "prn"
+    };
+
+    private string _selectedFrequency = "tid";
+    public string SelectedFrequency
+    {
+        get => _selectedFrequency;
+        set => SetField(ref _selectedFrequency, value, nameof(SelectedFrequency));
+    }
+
+    private int _daysInput = 3;
+    public int DaysInput
+    {
+        get => _daysInput;
+        set => SetField(ref _daysInput, Math.Max(1, value), nameof(DaysInput));
+    }
+
+    private int _paymentCountInput = 1;
+    public int PaymentCountInput
+    {
+        get => _paymentCountInput;
+        set => SetField(ref _paymentCountInput, Math.Max(1, value), nameof(PaymentCountInput));
+    }
+
+    private string _remarkInput = string.Empty;
+    public string RemarkInput
+    {
+        get => _remarkInput;
+        set => SetField(ref _remarkInput, value, nameof(RemarkInput));
+    }
+
+    public ObservableCollection<string> DeductDeptOptions { get; } = new()
+    {
+        "门诊西药房", "门诊中药房", "急诊药房", "门诊注射室", "静配中心 (PIVAS)", "耗材库"
+    };
+
+    private string _selectedDeductDept = "门诊西药房";
+    public string SelectedDeductDept
+    {
+        get => _selectedDeductDept;
+        set => SetField(ref _selectedDeductDept, value, nameof(SelectedDeductDept));
+    }
+
+    private int _hospitalInjectionCountInput = 0;
+    public int HospitalInjectionCountInput
+    {
+        get => _hospitalInjectionCountInput;
+        set => SetField(ref _hospitalInjectionCountInput, Math.Max(0, value), nameof(HospitalInjectionCountInput));
+    }
+
+    private string _examBodyPartInput = string.Empty;
+    public string ExamBodyPartInput
+    {
+        get => _examBodyPartInput;
+        set => SetField(ref _examBodyPartInput, value, nameof(ExamBodyPartInput));
+    }
+
+    private string _specimenTypeInput = string.Empty;
+    public string SpecimenTypeInput
+    {
+        get => _specimenTypeInput;
+        set => SetField(ref _specimenTypeInput, value, nameof(SpecimenTypeInput));
+    }
 
     public void AttachFocusDrugSearch(Action focusCallback)
     {
@@ -167,8 +551,9 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
             if (Workbench.SelectedPatient == null) return "请先选择或叫号一位门诊患者";
             if (Workbench.SelectedPatient.IsCompleted) return "该患者本次就诊已完成";
             if (!Workbench.IsOpdVisitActive) return "请点击“叫号下一位 (F2)”开启患者接诊";
-            if (!Workbench.IsOpdEmrSigned) return "待完成步骤②：请填写初步诊断后点击“保存并提交审签 (Ctrl+S)”";
-            if (!Workbench.IsOpdOrdersPushed) return "待完成步骤③：请开立处方并提交药师审方 (Ctrl+Enter)";
+            if (!Workbench.HasDiagnosis) return "待完成步骤 1：请先在“诊断录入”确立初步诊断";
+            if (!Workbench.IsOpdOrdersPushed && Workbench.Prescriptions.Any(x => !x.IsDeleted)) return "待完成步骤 2：请开立处方并提交药师审方 (Ctrl+Enter)";
+            if (!Workbench.IsOpdEmrSigned) return "待完成步骤 4：请书写门诊病历并点击“保存并提交审签 (Ctrl+S)”";
             return string.Empty;
         }
     }
@@ -180,8 +565,8 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
                 ? "需先选中接诊患者后方可开立处方"
                 : !Workbench.IsOpdVisitActive
                     ? "需先叫号接诊患者"
-                    : string.IsNullOrWhiteSpace(Workbench.EmrWorkspace.Diagnosis)
-                        ? "请先在“门诊病历”页填写初步诊断后再开立处方"
+                    : !Workbench.HasDiagnosis
+                        ? "请先在“诊断录入”确立初步诊断后再开立处方"
                         : "当前处方已锁定推送，仅可在药师驳回后继续修改");
 
     public string SignEmrBlockedReason =>
@@ -200,6 +585,19 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
     {
         switch (keyGesture)
         {
+            case "1":
+            case "F1":
+                Workbench.SelectedOpdTabIndex = 0;
+                return true;
+            case "2":
+                Workbench.SelectedOpdTabIndex = 1;
+                return true;
+            case "3":
+                Workbench.SelectedOpdTabIndex = 2;
+                return true;
+            case "4":
+                Workbench.SelectedOpdTabIndex = 3;
+                return true;
             case "F2":
                 _ = CallNextPatientAsync();
                 return true;
@@ -312,6 +710,189 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         }
     }
 
+    public void AddQuickOrder()
+    {
+        if (!Workbench.HasSelectedPatient)
+        {
+            NotifyToast("需先选择并接诊患者后方可开立医嘱", "Warning");
+            return;
+        }
+        if (!Workbench.IsOpdVisitActive)
+        {
+            NotifyToast("请先点击“叫号下一位 (F2)”进入接诊状态", "Warning");
+            return;
+        }
+        if (!Workbench.HasDiagnosis)
+        {
+            NotifyToast("国家医保合规要求：必须先在第 1 步确立初步诊断后方可开立处方医嘱", "Warning");
+            return;
+        }
+
+        string orderName = (DrugSearchQuery ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(orderName))
+        {
+            NotifyToast("请输入医嘱/药品名称或从目录检索选择", "Warning");
+            return;
+        }
+
+        var drug = Workbench.AvailableDrugsCatalog.FirstOrDefault(d =>
+            string.Equals(d.DrugName, orderName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(d.DrugCode, orderName, StringComparison.OrdinalIgnoreCase));
+
+        int nextSeq = Workbench.Prescriptions.Count(x => !x.IsDeleted) + 1;
+        var item = new PrescriptionItemModel
+        {
+            Seq = nextSeq,
+            DrugId = drug?.DrugId ?? Guid.NewGuid().ToString("N"),
+            DrugName = orderName,
+            Spec = drug?.Spec ?? $"{SingleDoseInput}{SelectedDoseUnit}",
+            OrderType = SelectedOrderType == "全部" ? (drug != null ? "西药" : "治疗") : SelectedOrderType,
+            Quantity = OrderQuantityInput.ToString(),
+            QuantityValue = OrderQuantityInput,
+            TotalUnit = SelectedTotalUnit,
+            SingleDose = SingleDoseInput.ToString(),
+            Dose = SingleDoseInput.ToString(),
+            DoseUnit = SelectedDoseUnit,
+            PackageRatio = $"{PackageRatioAmount:0.000} {PackageRatioUnit}",
+            PaymentCount = PaymentCountInput,
+            Freq = SelectedFrequency,
+            FrequencyCode = SelectedFrequency,
+            Route = SelectedRoute,
+            RouteName = SelectedRoute,
+            Days = DaysInput,
+            DaysValue = DaysInput,
+            HospitalInjectionCount = HospitalInjectionCountInput,
+            DoctorName = Workbench.SelectedPatient?.DoctorName ?? SessionContext.Current.DisplayName ?? SessionContext.Current.UserId ?? "接诊医师",
+            ExecDeptName = SelectedDeductDept,
+            IsUrgent = IsUrgentInput,
+            ExamBodyPart = ExamBodyPartInput,
+            SpecimenType = SpecimenTypeInput,
+            DeductStockDept = SelectedDeductDept,
+            MedicationNote = RemarkInput,
+            OperatorName = SessionContext.Current.DisplayName ?? SessionContext.Current.UserId ?? "接诊医师",
+            DeptName = Workbench.SelectedPatient?.OpdDeptName ?? "普通门诊",
+            CreatedAtText = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            StopTimeText = "--",
+            StopDoctor = "--",
+            SkinTest = (drug?.IsSkinTestRequired == true ? "需皮试" : "免试"),
+            SkinTestStatus = (drug?.IsSkinTestRequired == true ? "待皮试" : "免试"),
+            SkinTestClass = (drug?.IsSkinTestRequired == true ? "Warning" : "Info"),
+            Amount = drug != null ? drug.UnitPrice : "¥0.00",
+            AuditStatus = "待审方",
+            AuditClass = "Info",
+            IsPersisted = true,
+            IsBlocked = false
+        };
+
+        if (Workbench.SelectedPatient?.AllergyTags?.Contains(orderName) == true ||
+            (drug != null && drug.IsSkinTestRequired && Workbench.SelectedPatient?.AllergyTags?.Contains("青霉素") == true && drug.DrugName.Contains("青霉素")))
+        {
+            item.IsBlocked = true;
+            item.AuditStatus = "已拦截 (过敏史冲突)";
+            item.AuditClass = "Danger";
+            item.SkinTestStatus = "❌ 皮试阳性 (强阻断)";
+            item.SkinTestClass = "Danger";
+            Workbench.SystemNotice = $"⚠ 用药安全拦截：药品 [{orderName}] 与患者过敏史冲突，不允许提交！";
+        }
+
+        Workbench.Prescriptions.Add(item);
+        Workbench.RefreshPrescriptionMetrics();
+        IsDrugDropdownOpen = false;
+        DrugSearchQuery = string.Empty;
+        RemarkInput = string.Empty;
+        IsUrgentInput = false;
+        QuickSearchCode = string.Empty;
+
+        NotifyToast($"已开立门诊医嘱 [{orderName}] (数量: {OrderQuantityInput}{SelectedTotalUnit})", item.IsBlocked ? "Danger" : "Success");
+        RefreshAllWorkflowState();
+        _focusDrugSearchCallback?.Invoke();
+    }
+
+    public void GroupSelectedOrders()
+    {
+        var selected = Workbench.Prescriptions.Where(x => !x.IsDeleted && x.IsSelected).ToList();
+        if (selected.Count < 2)
+        {
+            NotifyToast("请在下方医嘱列表中至少勾选 2 条医嘱进行成组", "Warning");
+            return;
+        }
+
+        int maxGroup = 0;
+        foreach (var item in Workbench.Prescriptions)
+        {
+            if (int.TryParse(item.GroupNo, out int g) && g > maxGroup) maxGroup = g;
+        }
+        int nextGroup = maxGroup + 1;
+
+        for (int i = 0; i < selected.Count; i++)
+        {
+            var item = selected[i];
+            item.GroupNo = nextGroup.ToString();
+            if (i == 0) item.GroupNoText = $"┓ 组{nextGroup}";
+            else if (i == selected.Count - 1) item.GroupNoText = $"┛ 组{nextGroup}";
+            else item.GroupNoText = $"┃ 组{nextGroup}";
+            item.IsSelected = false;
+        }
+        NotifyToast($"已将选中的 {selected.Count} 条医嘱合并为第 {nextGroup} 输液组", "Success");
+        RefreshAllWorkflowState();
+    }
+
+    public void UngroupSelectedOrders()
+    {
+        var selected = Workbench.Prescriptions.Where(x => !x.IsDeleted && x.IsSelected).ToList();
+        if (selected.Count == 0) selected = Workbench.Prescriptions.Where(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.GroupNo)).ToList();
+        foreach (var item in selected)
+        {
+            item.GroupNo = string.Empty;
+            item.GroupNoText = "-";
+            item.IsSelected = false;
+        }
+        NotifyToast("已解除所选医嘱的成组标记", "Success");
+        RefreshAllWorkflowState();
+    }
+
+    public void SetSkinTestStatus(string status)
+    {
+        var selected = Workbench.Prescriptions.Where(x => !x.IsDeleted && x.IsSelected).ToList();
+        if (selected.Count == 0)
+        {
+            NotifyToast("请先在下方列表中勾选需要修改皮试状态的医嘱", "Warning");
+            return;
+        }
+        foreach (var item in selected)
+        {
+            item.SkinTest = status;
+            item.SkinTestStatus = status;
+            item.SkinTestClass = status.Contains("阳") ? "Danger" : (status.Contains("需") || status.Contains("待") ? "Warning" : "Success");
+        }
+        NotifyToast($"已将勾选医嘱皮试状态标记为 [{status}]", "Success");
+        RefreshAllWorkflowState();
+    }
+
+    public void ToggleUrgent()
+    {
+        var selected = Workbench.Prescriptions.Where(x => !x.IsDeleted && x.IsSelected).ToList();
+        if (selected.Count == 0)
+        {
+            NotifyToast("请先在列表中勾选医嘱", "Warning");
+            return;
+        }
+        foreach (var item in selected)
+        {
+            item.IsUrgent = !item.IsUrgent;
+        }
+        NotifyToast("已批量切换所选医嘱的加急状态", "Success");
+        RefreshAllWorkflowState();
+    }
+
+    public void SelectAllOrders(bool select)
+    {
+        foreach (var item in Workbench.FilteredPrescriptions)
+        {
+            item.IsSelected = select;
+        }
+    }
+
     private void AutoReplaceBlockedDrug()
     {
         var blocked = Workbench.Prescriptions.FirstOrDefault(x => x.IsBlocked && !x.IsDeleted);
@@ -365,10 +946,6 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
     {
         var outcome = await Workbench.SaveAndSignOpdEmrAsync();
         NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Danger");
-        if (outcome.Succeeded)
-        {
-            Workbench.SelectedOpdTabIndex = 1;
-        }
         RefreshAllWorkflowState();
     }
 
@@ -387,6 +964,7 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
             IsFeeLocked = false
         });
         Workbench.SystemNotice = "医技检查申请: 已新增 [心脏高分辨三维彩超 (UCG)]";
+        RefreshAllWorkflowState();
     }
 
     private void OpenFinishVisitChecklistDrawer()
@@ -402,10 +980,11 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
             TextWrapping = Avalonia.Media.TextWrapping.Wrap
         });
 
-        panel.Children.Add(CreateChecklistRow("① 患者接诊状态", Workbench.IsOpdVisitActive ? "✓ 已接诊" : "未接诊"));
-        panel.Children.Add(CreateChecklistRow("② 门诊病历审签", Workbench.IsOpdEmrSigned ? "✓ 已保存并审签" : "未审签"));
-        panel.Children.Add(CreateChecklistRow("③ 处方与医技", Workbench.IsOpdOrdersPushed ? "✓ 已提交药师/医技" : "未推送"));
-        panel.Children.Add(CreateChecklistRow("④ 用药安全检查", Workbench.HasBlockedPrescription ? "⚠ 存在过敏拦截项" : "✓ 无冲突"));
+        panel.Children.Add(CreateChecklistRow("1. 诊断录入状态", Workbench.HasDiagnosis ? "✓ 已确立初步诊断" : "未录入诊断"));
+        panel.Children.Add(CreateChecklistRow("2. 处方开立与审方", Workbench.IsOpdOrdersPushed ? "✓ 已提交药师审方" : (!Workbench.Prescriptions.Any(x => !x.IsDeleted) ? "✓ 本次无处方" : "未推送")));
+        panel.Children.Add(CreateChecklistRow("3. 检查检验开单", Workbench.MedTechOrders.Count > 0 ? "✓ 已开立医技申请" : "本次无医技检查"));
+        panel.Children.Add(CreateChecklistRow("4. 门诊病历审签", Workbench.IsOpdEmrSigned ? "✓ 已审签归档 (OFD)" : "未审签"));
+        panel.Children.Add(CreateChecklistRow("5. 用药安全检查", Workbench.HasBlockedPrescription ? "⚠ 存在过敏拦截项" : "✓ 无冲突"));
 
         var noPrescriptionCheck = new CheckBox
         {
@@ -551,40 +1130,643 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         _shell?.OpenDrawer("跨病区借床入科", "主管科室负责诊疗 · 借住病区负责护理", panel, 480);
     }
 
+    private void OpenTemplatePickerDrawer()
+    {
+        _ = Workbench.EnsureOpdEmrTemplatesAsync();
+        _ = Workbench.EnsureOpdUserTemplatesAsync();
+        var panel = new StackPanel { Spacing = 10 };
+
+        var intro = new TextBlock
+        {
+            Text = "门诊文书库由【文书设计器】统一规范。医生可直接选用系统主模板建立空白病历，或选用科室/个人模板一键填充预定义的常用语书写内容。",
+            FontSize = 12,
+            Foreground = Avalonia.Media.Brushes.DimGray,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        };
+        panel.Children.Add(intro);
+
+        // Scope Category Filter Row
+        var categoryPanel = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 6
+        };
+
+        string currentCategory = "ALL"; // ALL, BASE, DEPT, PERSONAL
+
+        var btnAll = new Button { Content = "全部模板", Height = 28, Padding = new Avalonia.Thickness(12, 0), FontSize = 12 };
+        btnAll.Classes.Add("Primary");
+
+        var btnBase = new Button { Content = "系统主模板", Height = 28, Padding = new Avalonia.Thickness(12, 0), FontSize = 12 };
+        btnBase.Classes.Add("Tertiary");
+
+        var btnDept = new Button { Content = "科室常用模板", Height = 28, Padding = new Avalonia.Thickness(12, 0), FontSize = 12 };
+        btnDept.Classes.Add("Tertiary");
+
+        var btnPersonal = new Button { Content = "个人常用模板", Height = 28, Padding = new Avalonia.Thickness(12, 0), FontSize = 12 };
+        btnPersonal.Classes.Add("Tertiary");
+
+        categoryPanel.Children.Add(btnAll);
+        categoryPanel.Children.Add(btnBase);
+        categoryPanel.Children.Add(btnDept);
+        categoryPanel.Children.Add(btnPersonal);
+        panel.Children.Add(categoryPanel);
+
+        var searchBox = new TextBox
+        {
+            PlaceholderText = "输入模板名称、科室、基底模板或常用语关键字筛选...",
+            Height = 34,
+            Text = Workbench.OpdTemplateSearch
+        };
+        panel.Children.Add(searchBox);
+
+        var cardsPanel = new StackPanel { Spacing = 8 };
+        var cardsScrollViewer = new ScrollViewer
+        {
+            Content = cardsPanel,
+            MaxHeight = 460
+        };
+
+        void UpdateFilterStyles()
+        {
+            void SetBtnStyle(Button btn, bool active)
+            {
+                btn.Classes.Clear();
+                btn.Classes.Add(active ? "Primary" : "Tertiary");
+            }
+            SetBtnStyle(btnAll, currentCategory == "ALL");
+            SetBtnStyle(btnBase, currentCategory == "BASE");
+            SetBtnStyle(btnDept, currentCategory == "DEPT");
+            SetBtnStyle(btnPersonal, currentCategory == "PERSONAL");
+        }
+
+        void RepopulateCards()
+        {
+            cardsPanel.Children.Clear();
+
+            bool showBase = currentCategory == "ALL" || currentCategory == "BASE";
+            bool showUser = currentCategory == "ALL" || currentCategory == "DEPT" || currentCategory == "PERSONAL";
+
+            var baseTemplates = showBase ? Workbench.FilteredOpdEmrTemplates : new ObservableCollection<OpdEmrTemplateModel>();
+            var userTemplates = showUser ? Workbench.FilteredOpdUserTemplates.Where(t =>
+            {
+                if (currentCategory == "DEPT") return t.IsSharedDept;
+                if (currentCategory == "PERSONAL") return !t.IsSharedDept;
+                return true;
+            }).ToList() : new List<EmrUserTemplateModel>();
+
+            if (baseTemplates.Count == 0 && userTemplates.Count == 0)
+            {
+                cardsPanel.Children.Add(new TextBlock
+                {
+                    Text = "未找到匹配的门诊病历模板或常用模板",
+                    Margin = new Avalonia.Thickness(0, 20, 0, 0),
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    Foreground = Avalonia.Media.Brushes.Gray,
+                    FontSize = 12
+                });
+                return;
+            }
+
+            // 1. Render User Templates First (Predefined common phrases are most frequently needed during OPD visits)
+            if (userTemplates.Count > 0)
+            {
+                if (showBase && baseTemplates.Count > 0)
+                {
+                    cardsPanel.Children.Add(new TextBlock
+                    {
+                        Text = "⭐ 常用语书写模板（科室共享与个人专属）",
+                        FontWeight = Avalonia.Media.FontWeight.Bold,
+                        FontSize = 12,
+                        Foreground = Avalonia.Media.Brushes.DarkSlateGray,
+                        Margin = new Avalonia.Thickness(0, 4, 0, 2)
+                    });
+                }
+
+                foreach (var tpl in userTemplates)
+                {
+                    var card = new Border
+                    {
+                        Background = Avalonia.Media.Brushes.Transparent,
+                        BorderBrush = Avalonia.Media.Brushes.LightGray,
+                        BorderThickness = new Avalonia.Thickness(1),
+                        CornerRadius = new Avalonia.CornerRadius(6),
+                        Padding = new Avalonia.Thickness(12, 10),
+                        Margin = new Avalonia.Thickness(0, 2)
+                    };
+
+                    var grid = new Grid
+                    {
+                        ColumnDefinitions = new ColumnDefinitions("*,Auto")
+                    };
+
+                    var infoStack = new StackPanel { Spacing = 4 };
+
+                    var titleStack = new StackPanel
+                    {
+                        Orientation = Avalonia.Layout.Orientation.Horizontal,
+                        Spacing = 8
+                    };
+
+                    titleStack.Children.Add(new TextBlock
+                    {
+                        Text = tpl.TemplateName,
+                        FontWeight = Avalonia.Media.FontWeight.Bold,
+                        FontSize = 13,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+                    });
+
+                    // Badge: Dept shared vs Personal
+                    var scopeBadge = new Border
+                    {
+                        CornerRadius = new Avalonia.CornerRadius(4),
+                        Padding = new Avalonia.Thickness(6, 1),
+                        Background = tpl.IsSharedDept
+                            ? Avalonia.Media.Brush.Parse("#E3F2FD")
+                            : Avalonia.Media.Brush.Parse("#E8F5E9"),
+                        Child = new TextBlock
+                        {
+                            Text = tpl.ScopeBadgeText,
+                            FontSize = 11,
+                            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+                            Foreground = Avalonia.Media.Brush.Parse(tpl.ScopeBrush)
+                        }
+                    };
+                    titleStack.Children.Add(scopeBadge);
+
+                    // Base template name badge
+                    if (!string.IsNullOrWhiteSpace(tpl.BaseTemplateName))
+                    {
+                        var baseBadge = new Border
+                        {
+                            CornerRadius = new Avalonia.CornerRadius(4),
+                            Padding = new Avalonia.Thickness(6, 1),
+                            Background = Avalonia.Media.Brush.Parse("#F5F5F5"),
+                            Child = new TextBlock
+                            {
+                                Text = $"基底: 《{tpl.BaseTemplateName}》",
+                                FontSize = 11,
+                                Foreground = Avalonia.Media.Brush.Parse("#616161")
+                            }
+                        };
+                        titleStack.Children.Add(baseBadge);
+                    }
+                    infoStack.Children.Add(titleStack);
+
+                    // Creator and Dept info
+                    var authorText = new TextBlock
+                    {
+                        Text = $"创建人: {tpl.UserName} · 科室: {tpl.DeptName ?? "心血管内科门诊"}",
+                        FontSize = 11,
+                        Foreground = Avalonia.Media.Brushes.Gray
+                    };
+                    infoStack.Children.Add(authorText);
+
+                    // Predefined Common Phrases Preview Box
+                    var previewBox = new Border
+                    {
+                        Background = Avalonia.Media.Brush.Parse("#FAFAFA"),
+                        BorderBrush = Avalonia.Media.Brush.Parse("#EEEEEE"),
+                        BorderThickness = new Avalonia.Thickness(1),
+                        CornerRadius = new Avalonia.CornerRadius(4),
+                        Padding = new Avalonia.Thickness(8, 4),
+                        Margin = new Avalonia.Thickness(0, 2, 0, 0),
+                        Child = new TextBlock
+                        {
+                            Text = $"💬 预设常用语: {tpl.PreviewSummary}",
+                            FontSize = 11,
+                            Foreground = Avalonia.Media.Brush.Parse("#424242"),
+                            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+                        }
+                    };
+                    infoStack.Children.Add(previewBox);
+
+                    grid.Children.Add(infoStack);
+
+                    var btnStack = new StackPanel
+                    {
+                        Orientation = Avalonia.Layout.Orientation.Horizontal,
+                        Spacing = 6,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+                    };
+
+                    if (!tpl.IsSharedDept)
+                    {
+                        var delBtn = new Button
+                        {
+                            Content = "删除",
+                            Height = 28,
+                            Padding = new Avalonia.Thickness(8, 0),
+                            FontSize = 11,
+                            Foreground = Avalonia.Media.Brushes.Crimson,
+                            Command = new AsyncRelayCommand(async () =>
+                            {
+                                var delRes = await Workbench.DeleteOpdUserTemplateAsync(tpl.Id);
+                                NotifyToast(delRes.Message, delRes.Succeeded ? "Success" : "Warning");
+                                RepopulateCards();
+                            })
+                        };
+                        delBtn.Classes.Add("Tertiary");
+                        btnStack.Children.Add(delBtn);
+                    }
+
+                    var applyBtn = new Button
+                    {
+                        Content = "选用并填入常用语",
+                        Height = 30,
+                        Padding = new Avalonia.Thickness(12, 0),
+                        FontSize = 12,
+                        FontWeight = Avalonia.Media.FontWeight.Bold,
+                        Command = new AsyncRelayCommand(async () =>
+                        {
+                            var applyRes = await Workbench.ApplyOpdUserTemplateAsync(tpl);
+                            NotifyToast(applyRes.Message, applyRes.Succeeded ? "Success" : "Warning");
+                            RefreshAllWorkflowState();
+                            OnPropertyChanged(nameof(HasSelectedEmrTemplate));
+                            OnPropertyChanged(nameof(SelectedEmrTemplateName));
+                            _shell?.CloseDrawer();
+                        })
+                    };
+                    applyBtn.Classes.Add("Primary");
+                    btnStack.Children.Add(applyBtn);
+
+                    Grid.SetColumn(btnStack, 1);
+                    grid.Children.Add(btnStack);
+
+                    card.Child = grid;
+                    cardsPanel.Children.Add(card);
+                }
+            }
+
+            // 2. Render Base Templates
+            if (baseTemplates.Count > 0)
+            {
+                if (showUser && userTemplates.Count > 0)
+                {
+                    cardsPanel.Children.Add(new TextBlock
+                    {
+                        Text = "📐 系统主模板（文书设计器发布基础结构）",
+                        FontWeight = Avalonia.Media.FontWeight.Bold,
+                        FontSize = 12,
+                        Foreground = Avalonia.Media.Brushes.DarkSlateGray,
+                        Margin = new Avalonia.Thickness(0, 10, 0, 2)
+                    });
+                }
+
+                foreach (var tpl in baseTemplates)
+                {
+                    var card = new Border
+                    {
+                        Background = Avalonia.Media.Brushes.Transparent,
+                        BorderBrush = Avalonia.Media.Brushes.LightGray,
+                        BorderThickness = new Avalonia.Thickness(1),
+                        CornerRadius = new Avalonia.CornerRadius(6),
+                        Padding = new Avalonia.Thickness(12, 10),
+                        Margin = new Avalonia.Thickness(0, 2)
+                    };
+
+                    var grid = new Grid
+                    {
+                        ColumnDefinitions = new ColumnDefinitions("*,Auto")
+                    };
+
+                    var infoStack = new StackPanel { Spacing = 4 };
+                    var titleStack = new StackPanel
+                    {
+                        Orientation = Avalonia.Layout.Orientation.Horizontal,
+                        Spacing = 8
+                    };
+                    titleStack.Children.Add(new TextBlock
+                    {
+                        Text = tpl.TemplateName,
+                        FontWeight = Avalonia.Media.FontWeight.Bold,
+                        FontSize = 13,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+                    });
+
+                    var mainBadge = new Border
+                    {
+                        CornerRadius = new Avalonia.CornerRadius(4),
+                        Padding = new Avalonia.Thickness(6, 1),
+                        Background = Avalonia.Media.Brush.Parse("#EDE7F6"),
+                        Child = new TextBlock
+                        {
+                            Text = "系统主模板",
+                            FontSize = 11,
+                            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+                            Foreground = Avalonia.Media.Brush.Parse("#4A148C")
+                        }
+                    };
+                    titleStack.Children.Add(mainBadge);
+
+                    if (!string.IsNullOrWhiteSpace(tpl.DeptCategory))
+                    {
+                        var catTag = new Border
+                        {
+                            CornerRadius = new Avalonia.CornerRadius(4),
+                            Padding = new Avalonia.Thickness(5, 1),
+                            Background = Avalonia.Media.Brush.Parse("#E0F7FA"),
+                            Child = new TextBlock
+                            {
+                                Text = tpl.DeptCategory,
+                                FontSize = 11,
+                                Foreground = Avalonia.Media.Brush.Parse("#006064")
+                            }
+                        };
+                        titleStack.Children.Add(catTag);
+                    }
+                    infoStack.Children.Add(titleStack);
+
+                    var descText = new TextBlock
+                    {
+                        Text = $"{tpl.TemplateCode} · {tpl.SectionCount} 个章节 · 需 {tpl.RequiredSignLevels} 级审签 · {tpl.PageSizeCode} 版式 · 文书设计器统一定义",
+                        FontSize = 11,
+                        Foreground = Avalonia.Media.Brushes.Gray
+                    };
+                    infoStack.Children.Add(descText);
+                    grid.Children.Add(infoStack);
+
+                    var selectBtn = new Button
+                    {
+                        Content = "选用空白模板并新建",
+                        Height = 30,
+                        Padding = new Avalonia.Thickness(12, 0),
+                        FontSize = 12,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                        Command = new AsyncRelayCommand(async () =>
+                        {
+                            await ApplyTemplateAsync(tpl);
+                            _shell?.CloseDrawer();
+                        })
+                    };
+                    selectBtn.Classes.Add("Secondary");
+                    Grid.SetColumn(selectBtn, 1);
+                    grid.Children.Add(selectBtn);
+
+                    card.Child = grid;
+                    cardsPanel.Children.Add(card);
+                }
+            }
+        }
+
+        btnAll.Click += (s, e) => { currentCategory = "ALL"; UpdateFilterStyles(); RepopulateCards(); };
+        btnBase.Click += (s, e) => { currentCategory = "BASE"; UpdateFilterStyles(); RepopulateCards(); };
+        btnDept.Click += (s, e) => { currentCategory = "DEPT"; UpdateFilterStyles(); RepopulateCards(); };
+        btnPersonal.Click += (s, e) => { currentCategory = "PERSONAL"; UpdateFilterStyles(); RepopulateCards(); };
+
+        searchBox.PropertyChanged += (s, e) =>
+        {
+            if (e.Property.Name == nameof(TextBox.Text))
+            {
+                Workbench.OpdTemplateSearch = searchBox.Text ?? string.Empty;
+                RepopulateCards();
+            }
+        };
+
+        RepopulateCards();
+        panel.Children.Add(cardsScrollViewer);
+
+        _shell?.OpenDrawer("门诊文书模板库", "选取系统主模板或科室/个人预定义常用语模板", panel, 580);
+    }
+
+    private void OpenSaveAsUserTemplateDrawer()
+    {
+        if (Workbench.SelectedOpdEmrTemplate == null)
+        {
+            NotifyToast("请先在门诊病历中选取主模板后再存为常用模板", "Warning");
+            return;
+        }
+
+        var elements = Workbench.CollectOpdEmrElements();
+        bool hasContent = elements.Values.Any(v => !string.IsNullOrWhiteSpace(v));
+        if (!hasContent)
+        {
+            NotifyToast("当前门诊病历各字段均为空，请录入常用语内容后再存为模板", "Warning");
+            return;
+        }
+
+        var panel = new StackPanel { Spacing = 14 };
+
+        var intro = new TextBlock
+        {
+            Text = "将当前门诊病历中已书写的常用语内容（主诉、现病史、既往史、查体、诊断、处置等）另存为常用模板。科室共享模板供本科室医生选用，个人模板仅供您本人使用。",
+            FontSize = 12,
+            Foreground = Avalonia.Media.Brushes.DimGray,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        };
+        panel.Children.Add(intro);
+
+        // Base Template info
+        var baseCard = new Border
+        {
+            Background = Avalonia.Media.Brush.Parse("#F5F5F5"),
+            BorderBrush = Avalonia.Media.Brush.Parse("#E0E0E0"),
+            BorderThickness = new Avalonia.Thickness(1),
+            CornerRadius = new Avalonia.CornerRadius(6),
+            Padding = new Avalonia.Thickness(12, 8)
+        };
+        var baseStack = new StackPanel { Spacing = 2 };
+        baseStack.Children.Add(new TextBlock
+        {
+            Text = $"基底主模板: 《{Workbench.SelectedOpdEmrTemplate.TemplateName}》",
+            FontWeight = Avalonia.Media.FontWeight.Bold,
+            FontSize = 13,
+            Foreground = Avalonia.Media.Brush.Parse("#333333")
+        });
+        baseStack.Children.Add(new TextBlock
+        {
+            Text = $"文书编码: {Workbench.SelectedOpdEmrTemplate.TemplateCode} · 类型: {Workbench.SelectedOpdEmrTemplate.DocTypeCode} · 版式: {Workbench.SelectedOpdEmrTemplate.PageSizeCode}",
+            FontSize = 11,
+            Foreground = Avalonia.Media.Brushes.Gray
+        });
+        baseCard.Child = baseStack;
+        panel.Children.Add(baseCard);
+
+        // Template name
+        var nameLabel = new TextBlock
+        {
+            Text = "常用模板名称 (*):",
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            FontSize = 12
+        };
+        panel.Children.Add(nameLabel);
+
+        string defaultName = $"{Workbench.CurrentOperatorName}-常用病历模板 ({DateTime.Now:MM-dd HH:mm})";
+        var nameBox = new TextBox
+        {
+            Text = defaultName,
+            Height = 34
+        };
+        panel.Children.Add(nameBox);
+
+        // Scope options
+        var scopeLabel = new TextBlock
+        {
+            Text = "模板共享范围 (*):",
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            FontSize = 12
+        };
+        panel.Children.Add(scopeLabel);
+
+        var rbDept = new RadioButton
+        {
+            Content = "科室共享模板 (心血管内科门诊全体医生共享)",
+            IsChecked = true,
+            GroupName = "UserTplScope"
+        };
+        var rbPersonal = new RadioButton
+        {
+            Content = "个人专属模板 (仅我自己可见)",
+            GroupName = "UserTplScope"
+        };
+        panel.Children.Add(rbDept);
+        panel.Children.Add(rbPersonal);
+
+        // Captured Phrases Preview
+        var previewLabel = new TextBlock
+        {
+            Text = "当前捕获的预定义常用语内容预览:",
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            FontSize = 12
+        };
+        panel.Children.Add(previewLabel);
+
+        var phrasesListPanel = new StackPanel { Spacing = 4 };
+        foreach (var field in Workbench.EmrWorkspace.Fields.Where(x => !string.IsNullOrWhiteSpace(x.Value)))
+        {
+            var itemText = new TextBlock
+            {
+                Text = $"• {field.ElementName}: {field.Value?.Trim()}",
+                FontSize = 11,
+                Foreground = Avalonia.Media.Brush.Parse("#424242"),
+                TextWrapping = Avalonia.Media.TextWrapping.Wrap
+            };
+            phrasesListPanel.Children.Add(itemText);
+        }
+
+        var phrasesScroll = new ScrollViewer
+        {
+            Content = phrasesListPanel,
+            MaxHeight = 160
+        };
+        var phrasesBorder = new Border
+        {
+            Background = Avalonia.Media.Brush.Parse("#FAFAFA"),
+            BorderBrush = Avalonia.Media.Brush.Parse("#E0E0E0"),
+            BorderThickness = new Avalonia.Thickness(1),
+            CornerRadius = new Avalonia.CornerRadius(6),
+            Padding = new Avalonia.Thickness(10, 8),
+            Child = phrasesScroll
+        };
+        panel.Children.Add(phrasesBorder);
+
+        // Action buttons
+        var btnGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            Margin = new Avalonia.Thickness(0, 8, 0, 0)
+        };
+
+        var cancelBtn = new Button
+        {
+            Content = "取消",
+            Height = 34,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Margin = new Avalonia.Thickness(0, 0, 4, 0)
+        };
+        cancelBtn.Classes.Add("Tertiary");
+        cancelBtn.Click += (s, e) => _shell?.CloseDrawer();
+        Grid.SetColumn(cancelBtn, 0);
+        btnGrid.Children.Add(cancelBtn);
+
+        var saveBtn = new Button
+        {
+            Content = "确认保存为常用模板",
+            Height = 34,
+            FontWeight = Avalonia.Media.FontWeight.Bold,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Margin = new Avalonia.Thickness(4, 0, 0, 0)
+        };
+        saveBtn.Classes.Add("Primary");
+        saveBtn.Click += async (s, e) =>
+        {
+            string name = nameBox.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                NotifyToast("模板名称不能为空", "Warning");
+                return;
+            }
+            bool isShared = rbDept.IsChecked == true;
+            var outcome = await Workbench.SaveAsOpdUserTemplateAsync(name, isShared);
+            NotifyToast(outcome.Message, outcome.Succeeded ? "Success" : "Warning");
+            if (outcome.Succeeded)
+            {
+                _shell?.CloseDrawer();
+            }
+        };
+        Grid.SetColumn(saveBtn, 1);
+        btnGrid.Children.Add(saveBtn);
+
+        panel.Children.Add(btnGrid);
+
+        _shell?.OpenDrawer("存为门诊常用病历模板", "基于主模板保存预定义常用语书写内容", panel, 500);
+    }
+
+    private async Task ApplyTemplateAsync(OpdEmrTemplateModel template)
+    {
+        var outcome = await Workbench.CreateNewOpdEmrDocumentAsync(template);
+        NotifyToast($"已成功选用门诊文书模板：【{template.TemplateName}】", outcome.Succeeded ? "Success" : "Warning");
+        RefreshAllWorkflowState();
+        OnPropertyChanged(nameof(HasSelectedEmrTemplate));
+        OnPropertyChanged(nameof(SelectedEmrTemplateName));
+    }
+
     private void RefreshSteps()
     {
         WorkflowSteps.Clear();
         var active = Workbench.IsOpdVisitActive;
-        var emrDone = Workbench.IsOpdEmrSigned;
+        var hasDiag = Workbench.HasDiagnosis;
         var rxDone = Workbench.IsOpdOrdersPushed;
+        var emrDone = Workbench.IsOpdEmrSigned;
         var completed = Workbench.SelectedPatient?.IsCompleted == true;
 
         WorkflowSteps.Add(new FlowStepItem
         {
             Index = 1,
-            Title = "接诊叫号",
-            State = (active || completed) ? FlowStepState.Completed : FlowStepState.Active,
-            Tooltip = "点击选中待诊患者或按 F2 叫号下一位"
+            Title = "诊断录入",
+            State = (hasDiag || completed) ? FlowStepState.Completed : (active ? FlowStepState.Active : FlowStepState.Pending),
+            Tooltip = "确立并录入初步诊断 (ICD-10) 推进就诊",
+            Command = GoToDiagnosisCommand
         });
         WorkflowSteps.Add(new FlowStepItem
         {
             Index = 2,
-            Title = "病历审签",
-            State = (emrDone || completed) ? FlowStepState.Completed : (active ? FlowStepState.Active : FlowStepState.Pending),
-            Tooltip = "填写主诉、现病史与初步诊断并审签 (Ctrl+S)",
-            Command = new RelayCommand(() => Workbench.SelectedOpdTabIndex = 0)
+            Title = "处方开立",
+            State = (rxDone || completed) ? FlowStepState.Completed : ((active && hasDiag) ? FlowStepState.Active : FlowStepState.Pending),
+            Tooltip = "行内检索加药开立处方并提交药师审方 (Ctrl+Enter)",
+            Command = GoToPrescriptionCommand
         });
         WorkflowSteps.Add(new FlowStepItem
         {
             Index = 3,
-            Title = "处方与检查",
-            State = (rxDone || completed) ? FlowStepState.Completed : (emrDone ? FlowStepState.Active : FlowStepState.Pending),
-            Tooltip = "行内检索加药开立处方或检查申请并推送 (Ctrl+Enter)",
-            Command = new RelayCommand(() => Workbench.SelectedOpdTabIndex = 1)
+            Title = "检查检验",
+            State = (Workbench.MedTechOrders.Count > 0 || completed) ? FlowStepState.Completed : ((active && hasDiag) ? FlowStepState.Active : FlowStepState.Pending),
+            Tooltip = "医技项目开单、采样与执行路由",
+            Command = GoToMedTechCommand
         });
         WorkflowSteps.Add(new FlowStepItem
         {
             Index = 4,
+            Title = "门诊病历",
+            State = (emrDone || completed) ? FlowStepState.Completed : ((active && hasDiag) ? FlowStepState.Active : FlowStepState.Pending),
+            Tooltip = "书写主诉现病史并完成病历审签 (Ctrl+S)",
+            Command = GoToEmrCommand
+        });
+        WorkflowSteps.Add(new FlowStepItem
+        {
+            Index = 5,
             Title = "完成诊疗",
             IsLast = true,
             State = completed ? FlowStepState.Completed
@@ -606,7 +1788,12 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         OnPropertyChanged(nameof(IsFilterAll));
         OnPropertyChanged(nameof(IsFilterNormal));
         OnPropertyChanged(nameof(IsFilterAlert));
+        OnPropertyChanged(nameof(HasSelectedEmrTemplate));
+        OnPropertyChanged(nameof(SelectedEmrTemplateName));
+        (SaveDiagnosisCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (SaveDiagnosisAndNextCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (SignEmrCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (SaveEmrDraftCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (PreCheckPrescriptionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (SubmitPrescriptionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (RequestFinishVisitCommand as RelayCommand)?.RaiseCanExecuteChanged();
@@ -616,13 +1803,18 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
     {
         if (e.PropertyName is nameof(WorkbenchModel.SelectedPatient)
             or nameof(WorkbenchModel.IsOpdVisitActive)
+            or nameof(WorkbenchModel.HasDiagnosis)
+            or nameof(WorkbenchModel.DiagnosisCode)
+            or nameof(WorkbenchModel.DiagnosisName)
             or nameof(WorkbenchModel.IsOpdEmrSigned)
             or nameof(WorkbenchModel.IsOpdOrdersPushed)
             or nameof(WorkbenchModel.CanFinishOpdVisit)
             or nameof(WorkbenchModel.CanCompleteOpdWithNoPrescription)
             or nameof(WorkbenchModel.CanEditOpdPrescription)
             or nameof(WorkbenchModel.SelectedPrescriptionFilter)
-            or nameof(WorkbenchModel.HasBlockedPrescription))
+            or nameof(WorkbenchModel.HasBlockedPrescription)
+            or nameof(WorkbenchModel.SelectedOpdEmrTemplate)
+            or nameof(WorkbenchModel.HasSelectedOpdEmrTemplate))
         {
             RefreshAllWorkflowState();
         }

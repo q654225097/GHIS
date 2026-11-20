@@ -79,10 +79,16 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
                     <Button Content="等保审计存证链" Classes="Tertiary" Height="30"
                             Command="{Binding SwitchSubTabCommand}" CommandParameter="0"/>
-                    <Button Content="集中入侵防范与告警 (M-019)" Classes="Tertiary" Height="30"
+                    <Button Content="集中入侵防范与告警" Classes="Tertiary" Height="30"
                             Command="{Binding SwitchSubTabCommand}" CommandParameter="1"/>
-                    <Button Content="KMS 密钥全生命周期 (M-021)" Classes="Tertiary" Height="30"
+                    <Button Content="KMS 密钥全生命周期" Classes="Tertiary" Height="30"
                             Command="{Binding SwitchSubTabCommand}" CommandParameter="2"/>
+                    <Button Content="病历读审计与SM3链 (09.03)" Classes="Tertiary" Height="30"
+                            Command="{Binding SwitchSubTabCommand}" CommandParameter="3"/>
+                    <Button Content="过程级电子签名验真 (09.02)" Classes="Tertiary" Height="30"
+                            Command="{Binding SwitchSubTabCommand}" CommandParameter="4"/>
+                    <Button Content="限时细粒度访问授权" Classes="Tertiary" Height="30"
+                            Command="{Binding SwitchSubTabCommand}" CommandParameter="5"/>
                 </StackPanel>
 
                 <!-- 当前标签快捷操作 -->
@@ -263,6 +269,217 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- ============================================== -->
+            <!-- 面板 3: 病历全量读审计与SM3链式验真 (09.03) -->
+            <!-- ============================================== -->
+            <Border Grid.Row="0" CornerRadius="8" Padding="14"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    IsVisible="{Binding SelectedSubTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=3}">
+                <Grid RowDefinitions="Auto,Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,140,Auto,140,Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+                        <TextBlock Text="患者编号:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                        <TextBox Grid.Column="1" Text="{Binding ReadAuditPatientIdFilter, Mode=TwoWay}" Height="30" FontSize="12"/>
+                        <TextBlock Grid.Column="2" Text="访问人工号:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                        <TextBox Grid.Column="3" Text="{Binding ReadAuditUserIdFilter, Mode=TwoWay}" Height="30" FontSize="12"/>
+                        <Button Grid.Column="4" Content="查询读审计流水" Classes="Primary" Height="30" Command="{Binding QueryReadAuditsCommand}"/>
+                        <Button Grid.Column="6" Content="🔗 校验SM3读审计链完整性" Classes="Warning" Height="30" Command="{Binding VerifyReadAuditChainCommand}"/>
+                    </Grid>
+
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="10,6" Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="审计链完整性状态:" FontWeight="SemiBold" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBlock Text="{Binding ReadAuditChainStatus}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid Grid.Row="2" RowDefinitions="Auto,*">
+                        <Grid Grid.Row="0" ColumnDefinitions="140,110,80,100,120,80,90,*,*" Margin="8,0,8,8">
+                            <TextBlock Grid.Column="0" Text="查阅时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="访问人" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="类型" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="3" Text="患者" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="4" Text="资源类型" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="5" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="6" Text="判定决策" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="7" Text="前序哈希 (Prev SM3)" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="8" Text="当前记录哈希 (Curr SM3)" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1">
+                            <ItemsControl ItemsSource="{Binding ReadAudits}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:EmrReadAuditItemModel">
+                                        <Border Margin="0,2" Padding="8,8" Background="{DynamicResource SemiColorBackground0}" CornerRadius="4">
+                                            <Grid ColumnDefinitions="140,110,80,100,120,80,90,*,*">
+                                                <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="11" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding AccessUserName}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding IsExternal, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=true, StringFormat='{}外院'}"
+                                                           Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding PatientId}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding ResourceType}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding ActionType}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="6" Text="{Binding Decision}" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorSuccess}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="7" Text="{Binding PrevHash}" FontFamily="Consolas" FontSize="10" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="8" Text="{Binding CurrHash}" FontFamily="Consolas" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- ============================================== -->
+            <!-- 面板 4: 临床过程数字签名与RFC 3161时间戳验真 (09.02) -->
+            <!-- ============================================== -->
+            <Border Grid.Row="0" CornerRadius="8" Padding="14"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    IsVisible="{Binding SelectedSubTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=4}">
+                <Grid RowDefinitions="Auto,Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,140,Auto,200,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
+                        <TextBlock Text="实体类型:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                        <ComboBox Grid.Column="1" SelectedItem="{Binding SigEntityType, Mode=TwoWay}" Height="30" FontSize="12">
+                            <x:String>EMR_DOC</x:String>
+                            <x:String>ORDER</x:String>
+                            <x:String>PRESCRIPTION</x:String>
+                            <x:String>MEDTECH_REQUEST</x:String>
+                            <x:String>BLOOD_APPLY</x:String>
+                            <x:String>SURGERY_RECORD</x:String>
+                        </ComboBox>
+                        <TextBlock Grid.Column="2" Text="实体编号 (ID):" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                        <TextBox Grid.Column="3" Text="{Binding SigEntityId, Mode=TwoWay}" Height="30" FontSize="12" PlaceholderText="如 DOC-xxx / ORD-xxx"/>
+                        <Button Grid.Column="4" Content="检索数字签名" Classes="Primary" Height="30" Command="{Binding QuerySignaturesCommand}"/>
+                    </Grid>
+
+                    <Grid Grid.Row="1" ColumnDefinitions="140,100,100,100,140,*,120" Margin="8,0,8,8">
+                        <TextBlock Grid.Column="0" Text="签署时间" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="1" Text="签署医师" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="2" Text="角色" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="3" Text="国密算法" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="4" Text="证书指纹" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="5" Text="第三方时间戳 Token (RFC 3161)" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Grid.Column="6" Text="验真操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="2">
+                        <ItemsControl ItemsSource="{Binding DigitalSignatures}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:DigitalSignatureItemModel">
+                                    <Border Margin="0,3" Padding="8,8" Background="{DynamicResource SemiColorBackground0}" CornerRadius="4">
+                                        <Grid ColumnDefinitions="140,100,100,100,140,*,120">
+                                            <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding SignerName}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding SignerRole}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding SignatureAlgorithm}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding CertFingerprint}" FontFamily="Consolas" FontSize="10" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="5" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Text="{Binding TimestampToken}" FontFamily="Consolas" FontSize="10" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding VerifyMessage}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" IsVisible="{Binding IsVerified, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="6" Content="🔍 验签与TSA验真" Classes="Secondary" Height="28" FontSize="11"
+                                                    Command="{Binding $parent[UserControl].((local:AuditLogStationViewModel)DataContext).VerifySignatureCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- ============================================== -->
+            <!-- 面板 5: 细粒度病历限时访问授权与外院换票 (09.03) -->
+            <!-- ============================================== -->
+            <Border Grid.Row="0" CornerRadius="8" Padding="14"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    IsVisible="{Binding SelectedSubTabIndex, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=5}">
+                <Grid ColumnDefinitions="*,400" ColumnSpacing="14">
+                    <!-- 左侧：授权记录一览 -->
+                    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,120,Auto,120,Auto,*" ColumnSpacing="8" Margin="0,0,0,10">
+                            <TextBlock Text="患者编号:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBox Grid.Column="1" Text="{Binding GrantPatientId, Mode=TwoWay}" Height="30" FontSize="12"/>
+                            <TextBlock Grid.Column="2" Text="授权医师:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBox Grid.Column="3" Text="{Binding GranteeUserId, Mode=TwoWay}" Height="30" FontSize="12"/>
+                            <Button Grid.Column="4" Content="查询授权" Classes="Primary" Height="30" Command="{Binding QueryAccessGrantsCommand}"/>
+                        </Grid>
+
+                        <Grid Grid.Row="1" ColumnDefinitions="100,100,80,140,*,80,80" Margin="8,0,8,8">
+                            <TextBlock Grid.Column="0" Text="患者编号" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="1" Text="被授权人" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="2" Text="授权类型" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="3" Text="有效期起止" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="4" Text="授权事由" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="5" Text="状态" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                            <TextBlock Grid.Column="6" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="2">
+                            <ItemsControl ItemsSource="{Binding AccessGrants}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:EmrAccessGrantItemModel">
+                                        <Border Margin="0,3" Padding="8,8" Background="{DynamicResource SemiColorBackground0}" CornerRadius="4">
+                                            <Grid ColumnDefinitions="100,100,80,140,*,80,80">
+                                                <TextBlock Grid.Column="0" Text="{Binding PatientId}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding GranteeUserId}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding IsExternalGrant, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=true, StringFormat='{}外院授权'}"
+                                                           Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding ValidRangeText}" FontSize="11" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding GrantReason}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding StatusText}" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SemiColorSuccess}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="6" Content="立即回收" Classes="Danger" Height="26" FontSize="11"
+                                                        Command="{Binding $parent[UserControl].((local:AuditLogStationViewModel)DataContext).RevokeAccessGrantCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- 右侧：颁发限时细粒度授权 -->
+                    <Border Grid.Column="1" CornerRadius="8" Padding="14"
+                            Background="{DynamicResource SemiColorBackground0}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <ScrollViewer>
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="颁发病历细粒度限时访问凭证" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <TextBlock Text="支持跨机构外院经授权医师限时换票访问，严格绑定患者知情同意与权限分块。" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+
+                                <TextBlock Text="患者编号 (Patient ID):" FontSize="12"/>
+                                <TextBox Text="{Binding GrantPatientId, Mode=TwoWay}" PlaceholderText="输入患者编号"/>
+
+                                <TextBlock Text="被授权医师工号/账号:" FontSize="12"/>
+                                <TextBox Text="{Binding GranteeUserId, Mode=TwoWay}" PlaceholderText="输入医师工号"/>
+
+                                <TextBlock Text="授权有效时长 (小时):" FontSize="12"/>
+                                <TextBox Text="{Binding GrantValidHours, Mode=TwoWay}"/>
+
+                                <CheckBox Content="标记为医联体/跨院外院经授权医师访问" IsChecked="{Binding GrantIsExternal, Mode=TwoWay}"/>
+
+                                <TextBlock Text="授权调阅范围 (逗号分隔):" FontSize="12"/>
+                                <TextBox Text="{Binding GrantAllowedScopes, Mode=TwoWay}" PlaceholderText="EMR,LAB,PACS"/>
+
+                                <TextBlock Text="授权事由依据:" FontSize="12"/>
+                                <TextBox Text="{Binding GrantReason, Mode=TwoWay}" Height="60" AcceptsReturn="True" TextWrapping="Wrap"/>
+
+                                <Button Content="颁发经审批限时访问授权" Classes="Primary" HorizontalAlignment="Stretch" Height="34"
+                                        Command="{Binding CreateAccessGrantCommand}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
                 </Grid>
             </Border>
         </Grid>

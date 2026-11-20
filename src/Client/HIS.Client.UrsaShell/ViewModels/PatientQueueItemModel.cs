@@ -36,6 +36,8 @@ public class PatientQueueItemModel : ClientModelBase
 
 	public string OpdDeptName { get; set; } = string.Empty;
 
+	public string DeptName => OpdDeptName;
+
 	public string DoctorId { get; set; } = string.Empty;
 
 	public string DoctorName { get; set; } = string.Empty;

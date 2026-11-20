@@ -60,6 +60,10 @@ public class CsmRequisition : BaseEntity
     public string? ApprovedBy { get; set; }
     public string? IssuedBy { get; set; }
     public string? Remark { get; set; }
+    public string ApprovalStatus { get; set; } = "DRAFT";
+    public string? WorkflowInstanceId { get; set; }
+    public long? SubmittedAtMs { get; set; }
+    public long? ApprovedAtMs { get; set; }
 }
 
 public class CsmRequisitionLine : BaseEntity

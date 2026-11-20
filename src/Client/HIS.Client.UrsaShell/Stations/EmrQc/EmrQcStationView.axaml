@@ -1,0 +1,239 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.EmrQc"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.EmrQc.EmrQcStationView"
+             x:DataType="local:EmrQcStationViewModel">
+    <Grid ColumnDefinitions="360,*" Margin="14">
+        <!-- Left: Inpatient List & Auto QC Trigger -->
+        <Border Grid.Column="0" Margin="0,0,10,0" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+            <Grid RowDefinitions="Auto,Auto,Auto,*">
+                <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,10">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="病历质控工作站 (08.01)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <Button Grid.Column="1" Content="刷新" Height="28" Command="{Binding RefreshCommand}"/>
+                    </Grid>
+                    <TextBlock Text="环节质控、书写时限预警、内涵审查与整改闭环" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+
+                <!-- Patient Picker -->
+                <StackPanel Grid.Row="1" Spacing="6" Margin="0,0,0,10">
+                    <TextBlock Text="选择在院待质控患者:" FontSize="12" FontWeight="SemiBold"/>
+                    <ComboBox ItemsSource="{Binding Inpatients}"
+                              SelectedItem="{Binding SelectedInpatient}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:QcInpatientItem">
+                                <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <Button Grid.Row="2" Content="🚀 一键运行全内涵自动质控扫描" Classes="Primary" Height="36" HorizontalAlignment="Stretch" Margin="0,0,0,10" Command="{Binding RunAutoQcCommand}"/>
+
+                <!-- Recent Tasks / Active Inpatients Cards -->
+                <ScrollViewer Grid.Row="3">
+                    <ItemsControl ItemsSource="{Binding Inpatients}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="local:QcInpatientItem">
+                                <Button Classes="Tertiary" HorizontalAlignment="Stretch" Padding="0" Margin="0,3"
+                                        Command="{Binding $parent[UserControl].((local:EmrQcStationViewModel)DataContext).SelectInpatientCommand}"
+                                        CommandParameter="{Binding}">
+                                    <Border Padding="10" CornerRadius="6" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding PatientName}" FontWeight="Bold" FontSize="13"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding BedCode, StringFormat='{}床位: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            </Grid>
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding AdmissionNo, StringFormat='{}住院号: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding DeptName}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- Right: Patient QC Overview, Defect List, Rectification & Cross-Org Tracks -->
+        <Border Grid.Column="1" Padding="16" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8">
+            <ScrollViewer>
+                <StackPanel Spacing="14">
+                    <!-- Patient & Task Banner -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="{Binding SelectedInpatient.DisplayName, FallbackValue='请从左侧选择在院患者'}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <TextBlock Text="{Binding SelectedTask.GradeDisplay, FallbackValue='尚未评级'}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                    <TextBlock Text="{Binding SelectedTask.TotalScore, StringFormat='综合得分: {0:F0} 分', FallbackValue='-'}" FontWeight="Bold" FontSize="13"/>
+                                    <TextBlock Text="{Binding SelectedTask.TaskType, StringFormat='质控类型: {0}', FallbackValue='-'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding SelectedInpatient.AttendingDoctorName, StringFormat='管床医师: {0}', FallbackValue='-'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button Content="➕ 下发人工缺陷" Classes="Secondary" Height="30" Command="{Binding ToggleManualDefectFormCommand}"/>
+                                <Button Content="🌐 跨机构质控调阅" Classes="Tertiary" Height="30" Command="{Binding ToggleCrossOrgFormCommand}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Manual Defect Drawer / Form -->
+                    <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="6" Padding="12" IsVisible="{Binding IsManualDefectFormVisible}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="下发人工质控缺陷通知单" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorWarning}"/>
+                            <Grid ColumnDefinitions="140,*,100,140" Margin="0,4">
+                                <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,6,0">
+                                    <TextBlock Text="质控维度:" FontSize="11"/>
+                                    <ComboBox ItemsSource="{x:Static local:EmrQcStationViewModel.DimensionOptions}"
+                                              SelectedItem="{Binding ManualQcDimension}"
+                                              HorizontalAlignment="Stretch" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2" Margin="6,0">
+                                    <TextBlock Text="缺陷描述 / 扣分理由:" FontSize="11"/>
+                                    <TextBox Text="{Binding ManualDefectDescription, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="2" Margin="6,0">
+                                    <TextBlock Text="扣除分值:" FontSize="11"/>
+                                    <NumericUpDown Value="{Binding ManualDeductPoints, Mode=TwoWay}" Minimum="1" Maximum="50" Increment="1" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="3" Spacing="2" Margin="6,0,0,0">
+                                    <TextBlock Text="责任医师:" FontSize="11"/>
+                                    <TextBox Text="{Binding ManualResponsibleDoctor, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                                <Button Content="取消" Height="28" Command="{Binding ToggleManualDefectFormCommand}"/>
+                                <Button Content="确认下发缺陷" Classes="Primary" Height="28" Command="{Binding SubmitManualDefectCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Cross-Org Track Form -->
+                    <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="12" IsVisible="{Binding IsCrossOrgFormVisible}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="登记跨机构共享病历质控跟踪调阅" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}"/>
+                            <Grid ColumnDefinitions="160,200,*" Margin="0,4">
+                                <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,6,0">
+                                    <TextBlock Text="源机构编码:" FontSize="11"/>
+                                    <TextBox Text="{Binding CrossOrgSourceCode, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2" Margin="6,0">
+                                    <TextBlock Text="外部病历文书ID:" FontSize="11"/>
+                                    <TextBox Text="{Binding CrossOrgDocId, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="2" Margin="6,0,0,0">
+                                    <TextBlock Text="调阅质控意见 / 互认核验:" FontSize="11"/>
+                                    <TextBox Text="{Binding CrossOrgSummary, Mode=TwoWay}" Height="30"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                                <Button Content="取消" Height="28" Command="{Binding ToggleCrossOrgFormCommand}"/>
+                                <Button Content="提交调阅登记" Classes="Primary" Height="28" Command="{Binding SubmitCrossOrgTrackCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Timeliness Alert Strip -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="⏱ 电子病历书写时限预警监控 (7级基本项核心要求)" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}" FontSize="13"/>
+                            <TextBlock Text="• 入院记录：入院 24 小时内完成书写并审签；&#x0a;• 首次病程记录：入院 8 小时内必须完成并提交；&#x0a;• 术后首次病程：术后即刻/24 小时内完成；&#x0a;• 出院记录：出院 24 小时内完成归档；逾期将自动扣分并计入质控缺陷闭环。" FontSize="12" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Defect List -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="10">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="患者质控缺陷清单:" FontWeight="Bold" FontSize="13"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Defects.Count, StringFormat='共 {0} 项缺陷'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding Defects}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:QcDefectItem">
+                                        <Button Classes="Tertiary" HorizontalAlignment="Stretch" Padding="0" Margin="0,3"
+                                                Command="{Binding $parent[UserControl].((local:EmrQcStationViewModel)DataContext).SelectDefectCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Border Padding="10" CornerRadius="6" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="110,*,110,80,120">
+                                                    <TextBlock Grid.Column="0" Text="{Binding QcDimension}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Description}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="6,0"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding DoctorId, StringFormat='{}责任: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding DeductPoints, StringFormat='- {0:F0} 分'}" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
+                                                    <controls:StatusTag Grid.Column="4" Text="{Binding StatusText}" Kind="Warning" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Rectification & Verification Loop -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="缺陷整改闭环处理 (医师整改 ➔ 质控员复核)" FontWeight="Bold" FontSize="13"/>
+                            <TextBlock Text="{Binding SelectedDefect.Description, StringFormat='当前选定缺陷: {0}', FallbackValue='(请先从上方缺陷列表中点击选择一项缺陷)'}" FontSize="12" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="管床医师整改说明 / 补录文书情况:" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBox Text="{Binding DoctorFixReason, Mode=TwoWay}" Height="54" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="录入整改说明，例如：已按规范补齐查房记录与抗感染用药指征..."/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Button Content="📝 医师提交整改说明" Classes="Secondary" Height="36" Command="{Binding RectifyDefectCommand}"/>
+                                <Button Content="✓ 质控员复核通过并关闭缺陷" Classes="Primary" Height="36" FontWeight="Bold" Command="{Binding VerifyPassCommand}"/>
+                                <Button Content="✗ 整改不合格打回" Classes="Tertiary" Height="36" Foreground="{DynamicResource SemiColorDanger}" Command="{Binding VerifyRejectCommand}"/>
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding SelectedDefect.RectificationNote, StringFormat='整改记录: {0}', FallbackValue='-'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Cross-Org EMR QC Tracks List -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" IsVisible="{Binding CrossOrgTracks.Count}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="跨机构病历质控调阅与跟踪记录:" FontWeight="Bold" FontSize="13"/>
+                            <!-- Table Header -->
+                            <Border Background="{DynamicResource SemiColorBackground2}" Padding="8,6" CornerRadius="4">
+                                <Grid ColumnDefinitions="140,120,150,*,100">
+                                    <TextBlock Grid.Column="0" Text="调阅时间" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock Grid.Column="1" Text="源机构编码" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock Grid.Column="2" Text="外部文书ID" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock Grid.Column="3" Text="质控核验意见" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock Grid.Column="4" Text="审核人" FontWeight="SemiBold" FontSize="11"/>
+                                </Grid>
+                            </Border>
+                            <!-- Rows -->
+                            <ItemsControl ItemsSource="{Binding CrossOrgTracks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:QcCrossOrgTrackItem">
+                                        <Border Padding="8,6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                                            <Grid ColumnDefinitions="140,120,150,*,100">
+                                                <TextBlock Grid.Column="0" Text="{Binding CreatedAtText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding SourceOrgCode}" FontSize="11" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding ExternalDocId}" FontSize="11"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding FindingSummary}" FontSize="11" TextWrapping="Wrap"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding QcReviewerId}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

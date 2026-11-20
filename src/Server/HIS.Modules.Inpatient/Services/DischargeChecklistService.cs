@@ -20,7 +20,7 @@ public class DischargeChecklistService
 	public async Task<DischargeCheckResult> PerformSixItemCheckAsync(string encounterId, CancellationToken ct = default(CancellationToken))
 	{
 		List<string> failures = new List<string>();
-		int unstoppedOrders = await QueryCountAsync("SELECT count(*) FROM ord_medical_orders\nWHERE encounter_id = @EncounterId\n  AND ((order_term_type = 1 AND status IN (0, 1, 2))\n    OR (order_term_type != 1 AND status IN (0, 1)))", new
+		int unstoppedOrders = await QueryCountAsync("SELECT count(*) FROM ord_medical_orders\nWHERE encounter_id = @EncounterId\n  AND status IN (0, 1)", new
 		{
 			EncounterId = encounterId
 		}, ct);
@@ -48,7 +48,25 @@ public class DischargeChecklistService
 		{
 			failures.Add($"医技科室存在 {unclosedMedTech} 项未确费、未出报告或未撤销检查/检验单");
 		}
-		int unacknowledgedCriticalValues = await QueryCountAsync("SELECT count(*) FROM mtc_service_requests\nWHERE (source_visit_id = @EncounterId\n    OR source_order_id = @EncounterId\n    OR source_order_id IN (SELECT id FROM ord_medical_orders WHERE encounter_id = @EncounterId))\n  AND is_critical_value = 1 AND status <> 4\n  AND (critical_ack_doc_id IS NULL OR trim(critical_ack_doc_id) = ''\n       OR critical_ack_nurse_id IS NULL OR trim(critical_ack_nurse_id) = ''\n       OR critical_ack_doc_id = critical_ack_nurse_id)", new
+		int unacknowledgedCriticalValues = await QueryCountAsync(@"
+SELECT (
+    SELECT count(*) FROM mtc_service_requests
+    WHERE (source_visit_id = @EncounterId
+        OR source_order_id = @EncounterId
+        OR source_order_id IN (SELECT id FROM ord_medical_orders WHERE encounter_id = @EncounterId))
+      AND is_critical_value = 1 AND status <> 4
+      AND (critical_ack_doc_id IS NULL OR trim(critical_ack_doc_id) = ''
+           OR critical_ack_nurse_id IS NULL OR trim(critical_ack_nurse_id) = ''
+           OR critical_ack_doc_id = critical_ack_nurse_id)
+) + (
+    SELECT count(*) FROM medtech_critical_values
+    WHERE (visit_or_encounter_id = @EncounterId
+        OR patient_id IN (SELECT patient_id FROM ipd_encounters WHERE id = @EncounterId))
+      AND status <> 3
+      AND (doc_acked_by IS NULL OR trim(doc_acked_by) = ''
+           OR nurse_acked_by IS NULL OR trim(nurse_acked_by) = ''
+           OR doc_acked_by = nurse_acked_by)
+)", new
 		{
 			EncounterId = encounterId
 		}, ct);
@@ -56,7 +74,7 @@ public class DischargeChecklistService
 		{
 			failures.Add($"存在 {unacknowledgedCriticalValues} 份危急值报告尚未完成医生与护士双签收闭环");
 		}
-		int unreturnedDrugs = await QueryCountAsync("SELECT count(*) FROM phm_dispense_orders\nWHERE (ward_summary_id = @EncounterId\n    OR prescription_id IN (\n        SELECT id FROM opd_prescriptions WHERE visit_id = @EncounterId))\n  AND (status <> 1 OR drug_return_confirmed <> 1)", new
+		int unreturnedDrugs = await QueryCountAsync("SELECT count(*) FROM phm_dispense_orders\nWHERE (ward_summary_id = @EncounterId\n    OR prescription_id IN (\n        SELECT id FROM opd_prescriptions WHERE visit_id = @EncounterId))\n  AND (status = 0 OR (status = 2 AND drug_return_confirmed <> 1))", new
 		{
 			EncounterId = encounterId
 		}, ct);
@@ -64,10 +82,18 @@ public class DischargeChecklistService
 		{
 			failures.Add($"药品房存在 {unreturnedDrugs} 张待发药或已发药未确认退药的单据，不能关闭住院账目");
 		}
-		if (await QueryCountAsync("SELECT count(*) FROM mtc_surgery_schedules WHERE encounter_id = @EncounterId AND status < 2", new
+		int unclosedSurgeries = await QueryCountAsync(@"
+SELECT (
+    SELECT count(*) FROM mtc_surgery_schedules
+    WHERE encounter_id = @EncounterId AND status < 2
+) + (
+    SELECT count(*) FROM mte_surgery_schedules
+    WHERE encounter_id = @EncounterId AND (status < 2 OR who_sign_out_ok = 0 OR instrument_count_balanced = 0)
+)", new
 		{
 			EncounterId = encounterId
-		}, ct) > 0)
+		}, ct);
+		if (unclosedSurgeries > 0)
 		{
 			failures.Add("手术麻醉记账或安全核查尚未完成");
 		}
