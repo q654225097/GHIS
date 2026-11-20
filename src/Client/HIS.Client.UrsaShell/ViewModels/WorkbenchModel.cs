@@ -4122,8 +4122,9 @@ public partial class WorkbenchModel : ClientModelBase
 			PrepaymentAmount = 0m,
 			ActualSelfPay = 23550m
 		};
-		var ord01 = NewOrder("ORD-001", "临时医嘱", "吸氧 (鼻导管)", "2L/min", "吸入", "持续", "执行中", "李华");
+		var ord01 = NewOrder("ORD-001", "临时医嘱", "吸氧 (鼻导管)", "2L/min", "吸入", "持续", "新开", "李华");
 		ord01.ItemCategory = "全部";
+		ord01.IsUrgent = false;
 		ord01.Spec = "持续";
 		ord01.SingleDose = "2";
 		ord01.DoseUnit = "L/min";
@@ -4144,9 +4145,9 @@ public partial class WorkbenchModel : ClientModelBase
 		ord01.SkinTestInfo = "免试";
 		inpatientRecordModel0.Orders.Add(ord01);
 
-		var ord02 = NewOrder("ORD-002", "临时医嘱", "胸部CT平扫", "1次", "检查", "st (立即执行)", "执行中", "李华");
+		var ord02 = NewOrder("ORD-002", "临时医嘱", "胸部CT平扫", "1次", "检查", "st (立即执行)", "已审核", "李华");
 		ord02.ItemCategory = "全部";
-		ord02.IsUrgent = true;
+		ord02.IsUrgent = false;
 		ord02.Spec = "单部位";
 		ord02.SingleDose = "1";
 		ord02.DoseUnit = "次";
@@ -4161,7 +4162,7 @@ public partial class WorkbenchModel : ClientModelBase
 		ord02.UnitPrice = "¥280.00";
 		ord02.TotalPrice = "¥280.00";
 		ord02.Remark = "评估脓肿吸收情况";
-		ord02.SpecialAttr = "加急";
+		ord02.SpecialAttr = "常规";
 		ord02.GroupComboNo = "113170258";
 		ord02.SeqNo = 2;
 		ord02.Specimen = "全血";

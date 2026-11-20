@@ -184,10 +184,23 @@ public class InpatientRecordModel : ClientModelBase
 	public int StayDays { get; set; } = 157;
 	public string PaymentType { get; set; } = "自费";
 	public string HomeAddress { get; set; } = "---";
-	public string ContactPhone { get; set; } = "---";
-	public string IdCard { get; set; } = "310101202506150024";
-	public string HeightText { get; set; } = "75 cm";
-	public string WeightText { get; set; } = "10.5 kg";
+	public string ContactPhone { get; set; } = string.Empty;
+	public string IdCard { get; set; } = string.Empty;
+	public string HeightText { get; set; } = string.Empty;
+	public string WeightText { get; set; } = string.Empty;
+
+	public string TotalCostDisplay => $"[费用总额: {TotalCost:0}]";
+	public string DepositTotalDisplay => $"[押金总额: {DepositTotal:0}]";
+	public string InsuranceCoordinationDisplay => $"[医保统筹: {InsuranceCoordination:0}]";
+	public string AdmissionNoDisplay => $"[住院号: {AdmissionNo}]";
+	public string BedCodeDisplay => $"[床号: {(BedCode.Contains("018") ? "018" : BedCode.Replace("床", ""))}]";
+	public string DiagnosisDisplay => $"[诊断: {Diagnosis}]";
+	public string AdmissionDateDisplay => $"[入院日期: {(AdmissionDate.Length >= 10 ? AdmissionDate[..10] : AdmissionDate)}]";
+	public string HomeAddressDisplay => string.IsNullOrWhiteSpace(HomeAddress) ? "[家庭住址: ---]" : $"[家庭住址: {HomeAddress}]";
+	public string ContactPhoneDisplay => string.IsNullOrWhiteSpace(ContactPhone) || ContactPhone == "---" ? "[电话:]" : $"[电话: {ContactPhone}]";
+	public string IdCardDisplay => string.IsNullOrWhiteSpace(IdCard) || IdCard == "---" ? "[身份证]" : $"[身份证: {IdCard}]";
+	public string HeightDisplay => string.IsNullOrWhiteSpace(HeightText) || HeightText == "---" ? "[身高]" : $"[身高: {HeightText}]";
+	public string WeightDisplay => string.IsNullOrWhiteSpace(WeightText) || WeightText == "---" ? "[体重]" : $"[体重: {WeightText}]";
 
 	public bool IsCritical
 	{

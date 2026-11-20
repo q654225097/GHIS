@@ -158,24 +158,24 @@
                     <StackPanel Spacing="3" IsVisible="{Binding Workbench.SelectedInpatient.IsBannerExpanded, FallbackValue=True}">
                         <!-- Line 2: [费用总额: ...] [押金总额: ...] [医保统筹: ...] [住院号: ...] [床号: ...] [诊断: ...] -->
                         <WrapPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.TotalCost, StringFormat='[费用总额: {0:0}] ', FallbackValue='[费用总额: 23550] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.DepositTotal, StringFormat='[押金总额: {0:0}] ', FallbackValue='[押金总额: 0] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.InsuranceCoordination, StringFormat='[医保统筹: {0:0}] ', FallbackValue='[医保统筹: 0] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionNo, StringFormat='[住院号: {0}] ', FallbackValue='[住院号: 0000000001] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.BedCode, StringFormat='[床号: {0}] ', FallbackValue='[床号: 018] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.Diagnosis, StringFormat='[诊断: {0}]', FallbackValue='[诊断: 胸腺脓肿]'}" FontSize="12" Foreground="#C53030"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.TotalCostDisplay, FallbackValue='[费用总额: 23550]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.DepositTotalDisplay, FallbackValue='[押金总额: 0]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.InsuranceCoordinationDisplay, FallbackValue='[医保统筹: 0]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionNoDisplay, FallbackValue='[住院号: 0000000001]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.BedCodeDisplay, FallbackValue='[床号: 018]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.DiagnosisDisplay, FallbackValue='[诊断: 胸腺脓肿]'}" FontSize="12" Foreground="#C53030"/>
                         </WrapPanel>
                         <!-- Line 3: [入院日期: ...] [家庭住址: ...] [电话: ] -->
                         <WrapPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionDate, StringFormat='[入院日期: {0}] ', FallbackValue='[入院日期: 2026-06-15] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.HomeAddress, StringFormat='[家庭住址: {0}] ', FallbackValue='[家庭住址: ---] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.ContactPhone, StringFormat='[电话: {0}]', FallbackValue='[电话: ]'}" FontSize="12" Foreground="#C53030"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionDateDisplay, FallbackValue='[入院日期: 2026-06-15]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.HomeAddressDisplay, FallbackValue='[家庭住址: ---]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.ContactPhoneDisplay, FallbackValue='[电话:]'}" FontSize="12" Foreground="#C53030"/>
                         </WrapPanel>
-                        <!-- Line 4: [身份证: ] [身高: ] [体重: ] -->
+                        <!-- Line 4: [身份证] [身高] [体重] -->
                         <WrapPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.IdCard, StringFormat='[身份证: {0}] ', FallbackValue='[身份证: ] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.HeightText, StringFormat='[身高: {0}] ', FallbackValue='[身高: ] '}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.WeightText, StringFormat='[体重: {0}]', FallbackValue='[体重: ]'}" FontSize="12" Foreground="#C53030"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.IdCardDisplay, FallbackValue='[身份证]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.HeightDisplay, FallbackValue='[身高]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.WeightDisplay, FallbackValue='[体重]'}" FontSize="12" Foreground="#C53030"/>
                         </WrapPanel>
                     </StackPanel>
                 </StackPanel>
@@ -485,98 +485,154 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                                     <StackPanel HorizontalAlignment="Left">
                                         <!-- Table Header Strip strictly matching screenshot -->
-                                        <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="0,7" Margin="0,0,0,4">
+                                        <Border Background="#E5E7EB" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="2" Padding="0,2" Margin="0,0,0,2">
                                             <StackPanel Orientation="Horizontal">
-                                                <!-- 0. 行首状态字 (新/审/执/停 严格对照截图2/3) -->
-                                                <Border Width="26" Padding="2,0"><TextBlock Text="!" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
-                                                <!-- 1. 选 -->
-                                                <Border Width="34" Padding="4,0"><CheckBox Command="{Binding SelectAllOrdersCommand}" CommandParameter="True" HorizontalAlignment="Center"/></Border>
-                                                <!-- 2. 医嘱类型 -->
-                                                <Border Width="75" Padding="6,0"><TextBlock Text="医嘱类型" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 3. 项目类别 -->
-                                                <Border Width="75" Padding="6,0"><TextBlock Text="项目类别" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 4. 加急 (严格对照截图2/3带复选框) -->
-                                                <Border Width="50" Padding="2,0">
-                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="2">
-                                                        <TextBlock Text="加急" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                                        <CheckBox Command="{Binding ToggleUrgentCommand}" VerticalAlignment="Center"/>
-                                                    </StackPanel>
+                                                <!-- 1. 设 (行首状态简字 新/审/执/停 严格对照截图2/3) -->
+                                                <Border Width="28" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="设" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
-                                                <!-- 5. 开立时间 -->
-                                                <Border Width="120" Padding="6,0"><TextBlock Text="开立时间" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 6. 项目 -->
-                                                <Border Width="200" Padding="6,0"><TextBlock Text="项目" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 7. 组 -->
-                                                <Border Width="45" Padding="4,0"><TextBlock Text="组" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
-                                                <!-- 8. 规格 -->
-                                                <Border Width="110" Padding="6,0"><TextBlock Text="规格" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 9. 每次量 -->
-                                                <Border Width="65" Padding="6,0"><TextBlock Text="每次量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
-                                                <!-- 10. 剂量单位 (严格对照截图双行紧凑布局) -->
-                                                <Border Width="60" Padding="2,0">
-                                                    <StackPanel HorizontalAlignment="Center">
-                                                        <TextBlock Text="剂量" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
-                                                        <TextBlock Text="单位" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                                                <!-- 2. [ ] 复选框 -->
+                                                <Border Width="30" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <CheckBox Command="{Binding SelectAllOrdersCommand}" CommandParameter="True" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 3. 医嘱类型 -->
+                                                <Border Width="72" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="医嘱类型" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 4. 项目类别 -->
+                                                <Border Width="72" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="项目类别" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 5. 加 (严格对照截图2/3带有加急复选框) -->
+                                                <Border Width="36" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="加" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 6. 开立时间 -->
+                                                <Border Width="115" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="开立时间" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 7. 项目 -->
+                                                <Border Width="190" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="项目" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 8. 组 -->
+                                                <Border Width="40" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="组" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 9. 规格 -->
+                                                <Border Width="100" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="规格" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 10. 每次量 -->
+                                                <Border Width="55" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="每次量" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 11. 剂量/单位 (严格对照截图2上下双行紧凑布局) -->
+                                                <Border Width="55" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,1">
+                                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <TextBlock Text="剂量" FontWeight="Bold" FontSize="10" Foreground="#374151" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="单位" FontWeight="Bold" FontSize="10" Foreground="#374151" HorizontalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Border>
                                                 <!-- 12. 用量 -->
-                                                <Border Width="55" Padding="6,0"><TextBlock Text="用量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
+                                                <Border Width="50" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="用量" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
                                                 <!-- 13. 单位 -->
-                                                <Border Width="50" Padding="6,0"><TextBlock Text="单位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
+                                                <Border Width="45" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="单位" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
                                                 <!-- 14. 大数 -->
-                                                <Border Width="50" Padding="6,0"><TextBlock Text="大数" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
+                                                <Border Width="45" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="大数" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
                                                 <!-- 15. 数量 -->
-                                                <Border Width="55" Padding="6,0"><TextBlock Text="数量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
+                                                <Border Width="50" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="数量" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
                                                 <!-- 16. 单位 -->
-                                                <Border Width="50" Padding="6,0"><TextBlock Text="单位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
-                                                <!-- 17. 付数 -->
-                                                <Border Width="50" Padding="6,0"><TextBlock Text="付数" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
-                                                <!-- 18. 给药方法 -->
-                                                <Border Width="85" Padding="6,0"><TextBlock Text="给药方法" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 19. 滴速 -->
-                                                <Border Width="75" Padding="6,0"><TextBlock Text="滴速" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 20. 频次 -->
-                                                <Border Width="85" Padding="6,0"><TextBlock Text="频次" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 21. 院注次数 -->
-                                                <Border Width="65" Padding="6,0"><TextBlock Text="院注次数" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
-                                                <!-- 22. 开立医生 -->
-                                                <Border Width="75" Padding="6,0"><TextBlock Text="开立医生" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 23. 执行科室 -->
-                                                <Border Width="110" Padding="6,0"><TextBlock Text="执行科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 24. 单价 -->
-                                                <Border Width="65" Padding="6,0"><TextBlock Text="单价" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 25. 总价 -->
-                                                <Border Width="65" Padding="6,0"><TextBlock Text="总价" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 26. 扣库科室 -->
-                                                <Border Width="95" Padding="6,0"><TextBlock Text="扣库科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 27. 备注 -->
-                                                <Border Width="110" Padding="6,0"><TextBlock Text="备注" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 28. 特殊属性 -->
-                                                <Border Width="85" Padding="6,0"><TextBlock Text="特殊属性" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 29. 开始时间 -->
-                                                <Border Width="120" Padding="6,0"><TextBlock Text="开始时间" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 30. 停止医生 -->
-                                                <Border Width="75" Padding="6,0"><TextBlock Text="停止医生" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 31. 停止原因 -->
-                                                <Border Width="85" Padding="6,0"><TextBlock Text="停止原因" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 32. 标本/部位 -->
-                                                <Border Width="90" Padding="6,0"><TextBlock Text="标本/部位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 33. 检查方法 -->
-                                                <Border Width="85" Padding="6,0"><TextBlock Text="检查方法" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 34. 皮试信息 -->
-                                                <Border Width="85" Padding="6,0"><TextBlock Text="皮试信息" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 35. 停止时间 -->
-                                                <Border Width="120" Padding="6,0"><TextBlock Text="停止时间" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 36. 录入人 -->
-                                                <Border Width="75" Padding="6,0"><TextBlock Text="录入人" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 37. 开立科室 -->
-                                                <Border Width="95" Padding="6,0"><TextBlock Text="开立科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 38. 组合号 -->
-                                                <Border Width="90" Padding="6,0"><TextBlock Text="组合号" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                                <!-- 39. 顺序号 -->
-                                                <Border Width="60" Padding="6,0"><TextBlock Text="顺序号" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
-                                                <!-- 40. 操作 -->
-                                                <Border Width="100" Padding="6,0"><TextBlock Text="操作" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
+                                                <Border Width="45" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="单位" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 17. 给药方法 -->
+                                                <Border Width="80" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="给药方法" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 18. 滴速 -->
+                                                <Border Width="65" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="滴速" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 19. 频次 -->
+                                                <Border Width="75" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="频次" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 20. 执行科室 -->
+                                                <Border Width="100" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="执行科室" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 21. 单价 -->
+                                                <Border Width="60" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="单价" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 22. 总价 -->
+                                                <Border Width="60" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="总价" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 23. 备注 -->
+                                                <Border Width="90" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="备注" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 24. 特殊属性 -->
+                                                <Border Width="75" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="特殊属性" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 25. 开始时间 -->
+                                                <Border Width="115" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="开始时间" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 26. 开立医生 (严格对照截图3位置) -->
+                                                <Border Width="70" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="开立医生" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 27. 停止医生 -->
+                                                <Border Width="70" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="停止医生" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 28. 停止原因 -->
+                                                <Border Width="80" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="停止原因" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 29. 样本/部位 (严格对照截图3上下双行布局) -->
+                                                <Border Width="60" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,1">
+                                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <TextBlock Text="样本" FontWeight="Bold" FontSize="10" Foreground="#374151" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="部位" FontWeight="Bold" FontSize="10" Foreground="#374151" HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <!-- 30. 检查方法 -->
+                                                <Border Width="80" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="检查方法" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 31. 皮试信息 -->
+                                                <Border Width="75" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="皮试信息" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 32. 停止时间 -->
+                                                <Border Width="115" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="停止时间" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 33. 组合号 (严格对照截图3 显示 113170254 等) -->
+                                                <Border Width="85" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="4,2">
+                                                    <TextBlock Text="组合号" FontWeight="Bold" FontSize="11" Foreground="#374151" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 34. 顺序号 (严格对照截图3) -->
+                                                <Border Width="50" BorderBrush="#D1D5DB" BorderThickness="0,0,1,0" Padding="2,2">
+                                                    <TextBlock Text="顺序号" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <!-- 35. 操作 -->
+                                                <Border Width="95" Padding="4,2">
+                                                    <TextBlock Text="操作" FontWeight="Bold" FontSize="11" Foreground="#374151" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
                                             </StackPanel>
                                         </Border>
 
@@ -584,180 +640,158 @@
                                         <ItemsControl ItemsSource="{Binding Workbench.SelectedInpatient.FilteredOrders}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:InpatientOrderModel">
-                                                    <Border Margin="0,2" CornerRadius="4"
-                                                            Background="{DynamicResource SemiColorBackground0}"
-                                                            BorderBrush="{DynamicResource SemiColorBorder}"
-                                                            BorderThickness="1">
-                                                        <StackPanel Orientation="Horizontal" MinHeight="36">
-                                                            <!-- 0. 行首状态字 (新/审/执/停 严格对照截图2/3色彩) -->
-                                                            <Border Width="26" Padding="2,0" VerticalAlignment="Center">
+                                                    <Border Margin="0,1" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="2"
+                                                            Background="#FFFFFF" MinHeight="26">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <!-- 1. 设 (行首状态简字 新/审/执/停 严格对照截图2/3色彩) -->
+                                                            <Border Width="28" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding StatusLegendInitial}" Foreground="{Binding LegendBrush}" ToolTip.Tip="{Binding Status}" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center"/>
                                                             </Border>
-                                                            <!-- 1. 选 -->
-                                                            <Border Width="34" Padding="4,0" VerticalAlignment="Center">
+                                                            <!-- 2. 复选框 -->
+                                                            <Border Width="30" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
                                                                 <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 3. 医嘱类型 -->
-                                                            <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding OrderType}" FontSize="12" Foreground="{Binding LegendBrush}" FontWeight="SemiBold"/>
+                                                            <Border Width="72" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding OrderType}" FontSize="11" Foreground="{Binding LegendBrush}" FontWeight="SemiBold"/>
                                                             </Border>
                                                             <!-- 4. 项目类别 -->
-                                                            <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding ItemCategory}" FontSize="12" Foreground="{Binding LegendBrush}"/>
+                                                            <Border Width="72" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding ItemCategory}" FontSize="11" Foreground="{Binding LegendBrush}"/>
                                                             </Border>
-                                                            <!-- 5. 加急 -->
-                                                            <Border Width="50" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 5. 加 (加急) -->
+                                                            <Border Width="36" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
                                                                 <CheckBox IsChecked="{Binding IsUrgent, Mode=TwoWay}" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 6. 开立时间 -->
-                                                            <Border Width="120" Padding="6,0" VerticalAlignment="Center">
+                                                            <Border Width="115" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding StartTime}" FontSize="11" Foreground="{Binding LegendBrush}"/>
                                                             </Border>
                                                             <!-- 7. 项目 (医嘱名称) -->
-                                                            <Border Width="200" Padding="6,0" VerticalAlignment="Center">
+                                                            <Border Width="190" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <StackPanel Spacing="1">
-                                                                    <TextBlock Text="{Binding Content}" FontWeight="Bold" FontSize="12" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
-                                                                    <TextBlock Text="{Binding Spec}" FontSize="10" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" IsVisible="{Binding Spec, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                                    <TextBlock Text="{Binding Content}" FontWeight="Bold" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
+                                                                    <TextBlock Text="{Binding Spec}" FontSize="10" Foreground="#6B7280" TextTrimming="CharacterEllipsis" IsVisible="{Binding Spec, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                                                 </StackPanel>
                                                             </Border>
                                                             <!-- 8. 组 -->
-                                                            <Border Width="45" Padding="4,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding GroupDisplay}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
+                                                            <Border Width="40" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding GroupDisplay}" FontWeight="Bold" FontSize="12" Foreground="#2563EB" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 9. 规格 -->
-                                                            <Border Width="110" Padding="6,0" VerticalAlignment="Center">
+                                                            <Border Width="100" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
                                                             <!-- 10. 每次量 -->
-                                                            <Border Width="65" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding SingleDose}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
+                                                            <Border Width="55" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding SingleDose}" FontSize="11" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 11. 剂量单位 -->
-                                                            <Border Width="65" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding DoseUnit}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
+                                                            <Border Width="55" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding DoseUnit}" FontSize="11" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 12. 用量 -->
-                                                            <Border Width="55" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding UsageAmount}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
+                                                            <Border Width="50" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding UsageAmount}" FontSize="11" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 13. 单位 -->
-                                                            <Border Width="50" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding UsageUnit}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
+                                                            <Border Width="45" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding UsageUnit}" FontSize="11" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 14. 大数 -->
-                                                            <Border Width="50" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding PackageQuantity}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
+                                                            <Border Width="45" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding PackageQuantity}" FontSize="11" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 15. 数量 -->
-                                                            <Border Width="55" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding Quantity}" FontWeight="Bold" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
+                                                            <Border Width="50" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Quantity}" FontWeight="Bold" FontSize="11" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
                                                             </Border>
                                                             <!-- 16. 单位 -->
-                                                            <Border Width="50" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding Unit}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
+                                                            <Border Width="45" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Unit}" FontSize="11" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
                                                             </Border>
-                                                            <!-- 17. 付数 -->
-                                                            <Border Width="50" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding PrescriptionPacks}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
+                                                            <!-- 17. 给药方法 -->
+                                                            <Border Width="80" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Route}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 18. 给药方法 -->
-                                                            <Border Width="85" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding Route}" FontSize="12" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
-                                                            </Border>
-                                                            <!-- 19. 滴速 -->
-                                                            <Border Width="75" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 18. 滴速 -->
+                                                            <Border Width="65" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding DripRate}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 20. 频次 -->
-                                                            <Border Width="85" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding Frequency}" FontSize="12" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
+                                                            <!-- 19. 频次 -->
+                                                            <Border Width="75" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Frequency}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 21. 院注次数 -->
-                                                            <Border Width="65" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding HospitalInjectionCount}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
-                                                            </Border>
-                                                            <!-- 22. 开立医生 -->
-                                                            <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding DoctorName}" FontSize="12" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
-                                                            </Border>
-                                                            <!-- 23. 执行科室 -->
-                                                            <Border Width="110" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 20. 执行科室 -->
+                                                            <Border Width="100" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding ExecDept}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 24. 单价 -->
-                                                            <Border Width="65" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 21. 单价 -->
+                                                            <Border Width="60" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding UnitPrice}" FontSize="11" Foreground="{Binding LegendBrush}"/>
                                                             </Border>
-                                                            <!-- 25. 总价 -->
-                                                            <Border Width="65" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 22. 总价 -->
+                                                            <Border Width="60" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding TotalPrice}" FontWeight="SemiBold" FontSize="11" Foreground="{Binding LegendBrush}"/>
                                                             </Border>
-                                                            <!-- 26. 扣库科室 -->
-                                                            <Border Width="95" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding DeductDept}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
-                                                            </Border>
-                                                            <!-- 27. 备注 -->
-                                                            <Border Width="110" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 23. 备注 -->
+                                                            <Border Width="90" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding Remark}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Remark}"/>
                                                             </Border>
-                                                            <!-- 28. 特殊属性 -->
-                                                            <Border Width="85" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 24. 特殊属性 -->
+                                                            <Border Width="75" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding SpecialAttr}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 29. 开始时间 -->
-                                                            <Border Width="120" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 25. 开始时间 -->
+                                                            <Border Width="115" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding StartExecTime}" FontSize="11" Foreground="{Binding LegendBrush}"/>
                                                             </Border>
-                                                            <!-- 30. 停止医生 -->
-                                                            <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding StopDoctor}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                            <!-- 26. 开立医生 (严格对照截图3) -->
+                                                            <Border Width="70" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding DoctorName}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 31. 停止原因 -->
-                                                            <Border Width="85" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding StopReason}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                            <!-- 27. 停止医生 -->
+                                                            <Border Width="70" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding StopDoctor}" FontSize="11" Foreground="#6B7280" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 32. 标本/部位 -->
-                                                            <Border Width="90" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 28. 停止原因 -->
+                                                            <Border Width="80" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding StopReason}" FontSize="11" Foreground="#6B7280" TextTrimming="CharacterEllipsis"/>
+                                                            </Border>
+                                                            <!-- 29. 样本/部位 (严格对照截图3) -->
+                                                            <Border Width="60" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding SpecimenBodyPart}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 33. 检查方法 -->
-                                                            <Border Width="85" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 30. 检查方法 -->
+                                                            <Border Width="80" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding ExamMethod}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
                                                             </Border>
-                                                            <!-- 34. 皮试信息 -->
-                                                            <Border Width="85" Padding="6,0" VerticalAlignment="Center">
-                                                                <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="3" Padding="4,1" HorizontalAlignment="Left">
+                                                            <!-- 31. 皮试信息 -->
+                                                            <Border Width="75" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <Border Background="#F3F4F6" CornerRadius="2" Padding="4,1" HorizontalAlignment="Left">
                                                                     <TextBlock Text="{Binding SkinTestInfo}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding LegendBrush}"/>
                                                                 </Border>
                                                             </Border>
-                                                            <!-- 35. 停止时间 -->
-                                                            <Border Width="120" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding StopTime}" FontSize="11" Foreground="{DynamicResource SemiColorText3}"/>
+                                                            <!-- 32. 停止时间 -->
+                                                            <Border Width="115" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding StopTime}" FontSize="11" Foreground="#9CA3AF"/>
                                                             </Border>
-                                                            <!-- 36. 录入人 -->
-                                                            <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding InputOperator}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
+                                                            <!-- 33. 组合号 (严格对照截图3 显示 113170254, 113170258) -->
+                                                            <Border Width="85" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="4,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding GroupComboNo}" FontSize="11" Foreground="#4B5563"/>
                                                             </Border>
-                                                            <!-- 37. 开立科室 -->
-                                                            <Border Width="95" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding OrderDept}" FontSize="11" Foreground="{Binding LegendBrush}" TextTrimming="CharacterEllipsis"/>
+                                                            <!-- 34. 顺序号 -->
+                                                            <Border Width="50" BorderBrush="#E5E7EB" BorderThickness="0,0,1,0" Padding="2,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding SeqNo}" FontSize="11" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
                                                             </Border>
-                                                            <!-- 38. 组合号 -->
-                                                            <Border Width="90" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding GroupComboNo}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                                                            </Border>
-                                                            <!-- 39. 顺序号 -->
-                                                            <Border Width="60" Padding="6,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding SeqNo}" FontSize="12" Foreground="{Binding LegendBrush}" HorizontalAlignment="Center"/>
-                                                            </Border>
-                                                            <!-- 40. 操作 -->
-                                                            <Border Width="100" Padding="6,0" VerticalAlignment="Center">
+                                                            <!-- 35. 操作 -->
+                                                            <Border Width="95" Padding="4,0" VerticalAlignment="Center">
                                                                 <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
-                                                                    <Button Content="停止" Height="24" Padding="6,0" Classes="Secondary" FontSize="11"
+                                                                    <Button Content="停止" Height="22" Padding="6,0" Classes="Secondary" FontSize="11"
                                                                             IsVisible="{Binding CanStop}"
                                                                             Command="{Binding $parent[UserControl].((local:IpdDoctorViewModel)DataContext).StopOrderCommand}"
                                                                             CommandParameter="{Binding}"/>
-                                                                    <Button Content="作废" Height="24" Padding="6,0" Classes="Danger" FontSize="11"
+                                                                    <Button Content="作废" Height="22" Padding="6,0" Classes="Danger" FontSize="11"
                                                                             IsVisible="{Binding CanCancel}"
                                                                             Command="{Binding $parent[UserControl].((local:IpdDoctorViewModel)DataContext).CancelOrderCommand}"
                                                                             CommandParameter="{Binding}"/>
