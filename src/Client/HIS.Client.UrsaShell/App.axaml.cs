@@ -29,7 +29,16 @@ public partial class App : Application
 
     public override void Initialize()
     {
-        AvaloniaXamlLoader.Load(this);
+        try
+        {
+            AvaloniaXamlLoader.Load(this);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[App.Initialize] Fallback loading themes: {ex.Message}");
+            Styles.Add(new Semi.Avalonia.SemiTheme());
+            Styles.Add(new Ursa.Themes.Semi.UrsaSemiTheme());
+        }
     }
 
     public override void OnFrameworkInitializationCompleted()
