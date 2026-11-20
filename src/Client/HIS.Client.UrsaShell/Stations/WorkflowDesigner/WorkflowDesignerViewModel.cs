@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Avalonia;
 using HIS.Client.Core;
 using HIS.Client.UrsaShell.Shell;
 using HIS.Client.UrsaShell.ViewModels;
@@ -198,6 +199,7 @@ public class WorkflowEdgeModel : ClientModelBase
             if (SetField(ref _x1, value))
             {
                 OnPropertyChanged(nameof(MidX));
+                OnPropertyChanged(nameof(StartPoint));
             }
         }
     }
@@ -210,6 +212,7 @@ public class WorkflowEdgeModel : ClientModelBase
             if (SetField(ref _y1, value))
             {
                 OnPropertyChanged(nameof(MidY));
+                OnPropertyChanged(nameof(StartPoint));
             }
         }
     }
@@ -222,6 +225,7 @@ public class WorkflowEdgeModel : ClientModelBase
             if (SetField(ref _x2, value))
             {
                 OnPropertyChanged(nameof(MidX));
+                OnPropertyChanged(nameof(EndPoint));
             }
         }
     }
@@ -234,10 +238,13 @@ public class WorkflowEdgeModel : ClientModelBase
             if (SetField(ref _y2, value))
             {
                 OnPropertyChanged(nameof(MidY));
+                OnPropertyChanged(nameof(EndPoint));
             }
         }
     }
 
+    public Point StartPoint => new Point(X1, Y1);
+    public Point EndPoint => new Point(X2, Y2);
     public double MidX => (X1 + X2) / 2.0;
     public double MidY => (Y1 + Y2) / 2.0;
 

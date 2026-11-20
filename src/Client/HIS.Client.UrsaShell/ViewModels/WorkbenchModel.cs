@@ -8811,12 +8811,12 @@ public partial class WorkbenchModel : ClientModelBase
 						Id = item.TryGetProperty("id", out var p) ? p.GetString() ?? "" : "",
 						KeyName = item.TryGetProperty("keyName", out p) ? p.GetString() ?? "" : "",
 						Algorithm = item.TryGetProperty("algorithm", out p) ? p.GetString() ?? "" : "",
-						Version = item.TryGetProperty("version", out p) && p.TryGetInt32(out var v) ? v : 1,
+						Version = item.TryGetProperty("version", out p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var v) ? v : 1,
 						State = item.TryGetProperty("state", out p) ? p.GetString() ?? "ACTIVE" : "ACTIVE",
-						HsmProtected = item.TryGetProperty("hsmProtected", out p) && p.TryGetInt16(out var hp) ? hp : (short)1,
+						HsmProtected = item.TryGetProperty("hsmProtected", out p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt16(out var hp) ? hp : (short)1,
 						KeyFingerprint = item.TryGetProperty("keyFingerprint", out p) ? p.GetString() ?? "" : "",
-						ExpiresAtMs = item.TryGetProperty("expiresAtMs", out p) && p.TryGetInt64(out var exp) ? exp : 0,
-						RotatedAtMs = item.TryGetProperty("rotatedAtMs", out p) && p.TryGetInt64(out var rot) ? rot : null,
+						ExpiresAtMs = item.TryGetProperty("expiresAtMs", out p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt64(out var exp) ? exp : 0,
+						RotatedAtMs = item.TryGetProperty("rotatedAtMs", out p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt64(out var rot) ? rot : null,
 						Description = item.TryGetProperty("description", out p) ? p.GetString() ?? "" : ""
 					});
 				}

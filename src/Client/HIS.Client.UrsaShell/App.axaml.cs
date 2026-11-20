@@ -234,6 +234,30 @@ public partial class App : Application
                     await Task.Delay(400);
                     Capture("view_15_audit_log.png");
 
+                    // 16. Workflow Designer (业务流程设计器)
+                    shell.NavigateByKey("workflow_designer");
+                    await Task.Delay(500);
+                    if (shell.CurrentStationView is Control { DataContext: HIS.Client.UrsaShell.Stations.WorkflowDesigner.WorkflowDesignerViewModel wfVm })
+                    {
+                        if (wfVm.Definitions.Count > 0)
+                        {
+                            var defToSelect = wfVm.Definitions.FirstOrDefault(d => d.DefKey == "WF_DEF_CSM_REQUISITION") ?? wfVm.Definitions[0];
+                            wfVm.SelectedDefinition = defToSelect;
+                            await Task.Delay(500);
+                        }
+                        Capture("view_16_workflow_designer.png");
+
+                        // 16b. User scenario: New workflow & Add START node
+                        wfVm.NewDefinitionCommand.Execute(null);
+                        wfVm.AddNodeCommand.Execute("START");
+                        await Task.Delay(400);
+                        Capture("view_16b_workflow_new_node.png");
+                    }
+                    else
+                    {
+                        Capture("view_16_workflow_designer.png");
+                    }
+
                     // Done capturing, write success flag and shutdown
                     File.WriteAllText(Path.Combine(outputDir, "capture_done.txt"), DateTime.Now.ToString("o"));
                     await Task.Delay(300);

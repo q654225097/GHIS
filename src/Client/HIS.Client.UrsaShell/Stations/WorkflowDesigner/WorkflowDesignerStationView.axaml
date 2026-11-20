@@ -118,20 +118,20 @@
 
             <!-- Interactive Workflow Canvas -->
             <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                <Canvas x:Name="DesignerCanvas" Width="2000" Height="1500" Background="#F8FAFC">
+                <Panel x:Name="DesignerCanvas" Width="2000" Height="1500" Background="#F8FAFC">
                     <!-- Layer 1: Directed Connection Edges -->
-                    <ItemsControl ItemsSource="{Binding Edges}">
+                    <ItemsControl ItemsSource="{Binding Edges}" Width="2000" Height="1500">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <Canvas/>
+                                <Canvas Width="2000" Height="1500"/>
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="local:WorkflowEdgeModel">
-                                <Canvas>
+                                <Canvas Width="2000" Height="1500">
                                     <!-- Connecting Line with Arrow -->
-                                    <Line StartPoint="{Binding X1, StringFormat='{}{0},{1}', Converter={x:Null}}"
-                                          EndPoint="{Binding X2, StringFormat='{}{0},{1}', Converter={x:Null}}"
+                                    <Line StartPoint="{Binding StartPoint}"
+                                          EndPoint="{Binding EndPoint}"
                                           Stroke="{DynamicResource SemiColorPrimary}"
                                           StrokeThickness="2"/>
                                     <!-- Edge Selection / Label Badge placed at (MidX, MidY) -->
@@ -152,16 +152,25 @@
                     </ItemsControl>
 
                     <!-- Layer 2: Draggable Workflow Nodes -->
-                    <ItemsControl ItemsSource="{Binding Nodes}">
+                    <ItemsControl ItemsSource="{Binding Nodes}" Width="2000" Height="1500">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <Canvas/>
+                                <Canvas Width="2000" Height="1500"/>
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
+                        <ItemsControl.Styles>
+                            <Style Selector="Canvas > ContentPresenter" x:DataType="local:WorkflowNodeModel">
+                                <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                            </Style>
+                            <Style Selector="ItemsControl ContentPresenter" x:DataType="local:WorkflowNodeModel">
+                                <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                            </Style>
+                        </ItemsControl.Styles>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="local:WorkflowNodeModel">
-                                <Border Canvas.Left="{Binding X}" Canvas.Top="{Binding Y}"
-                                        Width="140" MinHeight="65"
+                                <Border Width="140" MinHeight="65"
                                         Background="{DynamicResource SemiColorBackground0}"
                                         BorderBrush="{Binding NodeBrush}"
                                         BorderThickness="2"
@@ -195,7 +204,7 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                </Canvas>
+                </Panel>
             </ScrollViewer>
 
             <!-- Bottom Status Bar -->

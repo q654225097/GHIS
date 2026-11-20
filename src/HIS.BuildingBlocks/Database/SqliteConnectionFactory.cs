@@ -91,6 +91,7 @@ public class SqliteConnectionFactory : IDbConnectionFactory
 
 	static SqliteConnectionFactory()
 	{
+		Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 		CurrentScope = new AsyncLocal<AmbientTransactionScope?>();
 		SqliteTypeHandlers.Initialize();
 	}
