@@ -51,6 +51,7 @@ public class OrderingController : ControllerBase
 	private readonly IClinicalProcessSignatureContract? _signatureContract;
 
 	private readonly IClinicalAlertPublisher? _alertPublisher;
+	private readonly IWorkflowEngineContract? _workflowEngine;
 
 	public OrderingController(
 		IRepository<OrdMedicalOrder> orderRepo,
@@ -63,7 +64,7 @@ public class OrderingController : ControllerBase
 		IDepartmentReadOnlyContract? departmentContract = null,
 		IPharmacyInventoryContract? inventoryContract = null,
 		IClinicalProcessSignatureContract? signatureContract = null,
-		IClinicalAlertPublisher? alertPublisher = null)
+		IClinicalAlertPublisher? alertPublisher = null, IWorkflowEngineContract? workflowEngine = null)
 	{
 		_orderRepo = orderRepo;
 		_planRepo = planRepo;
@@ -76,6 +77,7 @@ public class OrderingController : ControllerBase
 		_inventoryContract = inventoryContract;
 		_signatureContract = signatureContract;
 		_alertPublisher = alertPublisher;
+		_workflowEngine = workflowEngine;
 	}
 
 	[HttpGet("by-encounter/{encounterId}")]
@@ -222,6 +224,28 @@ public class OrderingController : ControllerBase
 			UpdatedBy = doctorId
 		};
 		await _orderRepo.InsertAsync(order);
+		if (_workflowEngine != null && string.Equals(order.ApprovalStatus, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
+		{
+			var wfStart = await _workflowEngine.StartWorkflowAsync("ORD_SPECIAL_DRUG", order.Id, doctorId, encounter.AdmitDeptId, new Dictionary<string, object?>
+			{
+				["orderNo"] = order.OrderNo,
+				["itemCode"] = order.ItemCode,
+				["itemName"] = order.ItemName,
+				["dosage"] = order.Dosage,
+				["antibioticLevel"] = 3
+			});
+			if (wfStart.IsWorkflowTriggered && !string.IsNullOrWhiteSpace(wfStart.InstanceId))
+			{
+				order.WorkflowInstanceId = wfStart.InstanceId;
+				await conn.ExecuteAsync("UPDATE ord_medical_orders SET workflow_instance_id = @WfId, submitted_at_ms = @Now WHERE id = @Id",
+					new { WfId = wfStart.InstanceId, Now = SystemTime.UtcNowMs, Id = order.Id });
+			}
+			else if (!wfStart.IsWorkflowTriggered)
+			{
+				order.ApprovalStatus = "APPROVED";
+				await conn.ExecuteAsync("UPDATE ord_medical_orders SET approval_status = 'APPROVED' WHERE id = @Id", new { Id = order.Id });
+			}
+		}
 		await RecordAuditAsync("ORD_CREATE", order, $"住院医嘱开立：{order.ItemName} {order.Dosage} {order.FrequencyCode}");
 		return ApiResponse<OrdMedicalOrder>.Success(order, "医嘱开立成功，等待病区护士校对");
 	}
@@ -233,6 +257,10 @@ public class OrderingController : ControllerBase
 		if (authError != null)
 			return ApiResponse<OrdMedicalOrder>.Fail(authError.Value.Status, authError.Value.Message);
 		OrdMedicalOrder order = await _orderRepo.GetByIdAsync(orderId);
+		if (order != null && string.Equals(order.ApprovalStatus, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
+			return ApiResponse<OrdMedicalOrder>.Fail(409, $"医嘱 [{order.OrderNo}] 尚未通过特殊药品/越权审批流，禁止护士校对执行");
+		if (order != null && string.Equals(order.ApprovalStatus, "REJECTED", StringComparison.OrdinalIgnoreCase))
+			return ApiResponse<OrdMedicalOrder>.Fail(409, $"医嘱 [{order.OrderNo}] 审批已被驳回，禁止校对执行");
 		if (order == null)
 		{
 			return ApiResponse<OrdMedicalOrder>.Fail(404, "医嘱不存在");

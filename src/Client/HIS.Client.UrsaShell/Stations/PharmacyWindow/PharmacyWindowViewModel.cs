@@ -460,7 +460,7 @@ public sealed class PharmacyWindowViewModel : ClientModelBase, IShortcutTarget
         try
         {
             using var http = AuthenticatedHttpClientFactory.Create();
-            var res = await http.GetFromJsonAsync<ApiResponse<List<MedicationReconciliationModel>>>($"/api/v4/pharmacy/medication-reconciliations/{Uri.EscapeDataString(_reconEncounterId.Trim())}");
+            var res = await http.GetFromJsonAsync<ApiResponse<List<MedicationReconciliationModel>>>($"/api/v4/pharmacy/reconciliations/{Uri.EscapeDataString(_reconEncounterId.Trim())}");
             if (res?.Data != null)
             {
                 Reconciliations.Clear();
@@ -497,7 +497,7 @@ public sealed class PharmacyWindowViewModel : ClientModelBase, IShortcutTarget
                 Decision = _reconDecision,
                 ReconciledBy = SessionContext.Current.UserId ?? "PHARMACIST-01"
             };
-            var res = await http.PostAsJsonAsync("/api/v4/pharmacy/medication-reconciliations", payload);
+            var res = await http.PostAsJsonAsync("/api/v4/pharmacy/reconciliations", payload);
             if (res.IsSuccessStatusCode)
             {
                 _shell?.ShowToast("入院患者既往用药重整记录已入库", "Success");

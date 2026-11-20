@@ -59,7 +59,7 @@ public partial class WorkbenchModel
 				ChargeItems = (object?)null,
 				RequestKey = "CASHIER_" + value
 			};
-			_ = http.PostAsJsonAsync("/api/v4/finance/payments/settle", settleDto);
+			_ = http.PostAsJsonAsync("/api/v4/finance/settle", settleDto);
 		}
 		catch { }
 	}

@@ -65,7 +65,51 @@ public partial class App : Application
 #if DEBUG
     private void RunCaptureAutomation(IClassicDesktopStyleApplicationLifetime desktop)
     {
+        _ = RunCaptureAutomationAsync(desktop);
+    }
+
+    private async Task RunCaptureAutomationAsync(IClassicDesktopStyleApplicationLifetime desktop)
+    {
+        var outputDir = ResolveCaptureOutputDir();
+        try
+        {
+            var loginWin = new LoginWindow();
+            loginWin.Width = 960;
+            loginWin.Height = 600;
+            loginWin.Measure(new Size(960, 600));
+            loginWin.Arrange(new Rect(0, 0, 960, 600));
+            var loginRtb = new RenderTargetBitmap(new PixelSize(960, 600), new Vector(96, 96));
+            loginRtb.Render(loginWin);
+            var loginPath = Path.Combine(outputDir, "view_00_login.png");
+            loginRtb.Save(loginPath);
+            if (Directory.Exists(ArtifactDir))
+            {
+                File.Copy(loginPath, Path.Combine(ArtifactDir, "view_00_login.png"), true);
+            }
+        }
+        catch { }
+
+        // Ensure Admin context with full permissions BEFORE creating MainShellWindow
+        try
+        {
+            var loginModel = new LoginModel();
+            loginModel.SelectedUserName = "admin";
+            loginModel.Password = "123";
+            if (await loginModel.EnsureContextsAsync())
+            {
+                await loginModel.LoginAsync();
+            }
+        }
+        catch { }
+        if (!SessionContext.Current.IsLoggedIn)
+        {
+            SessionContext.Current.IsLoggedIn = true;
+            SessionContext.Current.RoleCode = "ROLE-ADMIN";
+            SessionContext.Current.RoleName = "超级管理员";
+        }
+
         var workbench = new WorkbenchModel();
+        workbench.SyncWithSession();
         var main = new MainShellWindow(workbench);
         var shell = main.ViewModel;
         desktop.MainWindow = main;
@@ -73,27 +117,8 @@ public partial class App : Application
 
         main.Loaded += async (s, e) =>
         {
-            var outputDir = ResolveCaptureOutputDir();
             try
             {
-                try
-                {
-                    var loginWin = new LoginWindow();
-                    loginWin.Width = 960;
-                    loginWin.Height = 600;
-                    loginWin.Measure(new Size(960, 600));
-                    loginWin.Arrange(new Rect(0, 0, 960, 600));
-                    var loginRtb = new RenderTargetBitmap(new PixelSize(960, 600), new Vector(96, 96));
-                    loginRtb.Render(loginWin);
-                    var loginPath = Path.Combine(outputDir, "view_00_login.png");
-                    loginRtb.Save(loginPath);
-                    if (Directory.Exists(ArtifactDir))
-                    {
-                        File.Copy(loginPath, Path.Combine(ArtifactDir, "view_00_login.png"), true);
-                    }
-                }
-                catch { }
-
                 await Task.Delay(1000);
                 if (SessionContext.Current.IsLoggedIn || main.IsLoaded)
                 {
@@ -119,10 +144,6 @@ public partial class App : Application
                         catch { }
                     }
 
-                    // Ensure Admin context with full permissions for comprehensive capture
-                    SessionContext.Current.IsLoggedIn = true;
-                    SessionContext.Current.RoleCode = "ROLE-ADMIN";
-                    SessionContext.Current.RoleName = "超级管理员";
                     workbench.SyncWithSession();
                     shell.RebuildNavigation();
 

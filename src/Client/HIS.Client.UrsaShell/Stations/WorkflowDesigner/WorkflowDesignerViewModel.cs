@@ -23,7 +23,7 @@ public class WorkflowNodeModel : ClientModelBase
     private string _approvalMode = "SINGLE"; // SINGLE, AND_SIGN, OR_SIGN
     private string _assigneeStrategy = "ROLE"; // FIXED_USER, ROLE, DEPT_MANAGER, DIRECT_SUPERVISOR, ESCALATE_N, BO_EXPRESSION
     private string _assigneeConfig = "ROLE-DOCTOR-CHIEF";
-    private string? _fallbackApproverId = "USER-ADMIN";
+    private string? _fallbackApproverId = "USR-ADMIN";
     private int _escalateLevels = 1;
     private bool _isSelected;
 
@@ -337,7 +337,7 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
     private string _defKey = "CUSTOM_WORKFLOW";
     private string _defName = "自定义业务审批流程";
     private string _selectedBoType = "CSM_REQUISITION";
-    private string _fallbackApproverId = "USER-ADMIN";
+    private string _fallbackApproverId = "USR-ADMIN";
 
     public WorkflowDesignerViewModel(WorkbenchModel workbench, ShellViewModel? shell = null)
     {
@@ -762,7 +762,7 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
         {
             if (UsersList.Count == 0)
             {
-                UsersList.Add(new SimpleOptionItem { Value = "USER-ADMIN", DisplayText = "系统管理员 (USER-ADMIN)" });
+                UsersList.Add(new SimpleOptionItem { Value = "USR-ADMIN", DisplayText = "系统管理员 (USR-ADMIN)" });
                 UsersList.Add(new SimpleOptionItem { Value = "DOC-CHIEF-01", DisplayText = "王主任医师 (DOC-CHIEF-01)" });
                 UsersList.Add(new SimpleOptionItem { Value = "DOC-VP-01", DisplayText = "李业务副院长 (DOC-VP-01)" });
             }
@@ -828,7 +828,7 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
         DefKey = def.DefKey;
         DefName = def.DefName;
         SelectedBoType = def.BoType;
-        FallbackApproverId = def.FallbackApproverId ?? "USER-ADMIN";
+        FallbackApproverId = def.FallbackApproverId ?? "USR-ADMIN";
 
         _ = LoadFullDefinitionDetailsAsync(def.Id);
     }

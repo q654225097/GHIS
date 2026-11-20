@@ -27,6 +27,7 @@
     <ProjectReference Include="..\HIS.Modules.EmrQc\HIS.Modules.EmrQc.csproj" />
     <ProjectReference Include="..\HIS.Modules.HieGateway\HIS.Modules.HieGateway.csproj" />
     <ProjectReference Include="..\HIS.Modules.Workflow\HIS.Modules.Workflow.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Hr\HIS.Modules.Hr.csproj" />
   </ItemGroup>
 </Project>
 

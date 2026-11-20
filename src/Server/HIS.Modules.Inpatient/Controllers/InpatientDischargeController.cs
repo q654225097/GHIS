@@ -291,6 +291,12 @@ ORDER BY CASE r.status WHEN 'PENDING' THEN 0 ELSE 1 END, r.requested_at_ms DESC"
         {
             return ApiResponse<IpdDischargeRequestView>.Fail(404, "出院申请不存在");
         }
+        if (!string.IsNullOrWhiteSpace(request.ApprovalStatus) &&
+            (string.Equals(request.ApprovalStatus, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(request.ApprovalStatus, "REJECTED", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ApiResponse<IpdDischargeRequestView>.Fail(409, $"特殊/欠费出院申请 [{request.RequestNo}] 审批状态为 [{request.ApprovalStatus}]，未审批通过禁止办理出院结算！");
+        }
         if (request.Status != "PENDING")
         {
             return ApiResponse<IpdDischargeRequestView>.Fail(409, "该出院申请已处理，不能重复结算");

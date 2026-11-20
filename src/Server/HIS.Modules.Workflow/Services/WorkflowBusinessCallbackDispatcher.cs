@@ -79,9 +79,9 @@ public class WorkflowBusinessCallbackDispatcher : IWorkflowBusinessCallback
             }
             else if (boType.Equals("CSM_REQUISITION", StringComparison.OrdinalIgnoreCase) && finalStatus != "APPROVED")
             {
-                // If rejected or withdrawn, mark cancelled
+                // Keep status = 0 (editable) so requester can revise and resubmit instead of permanent cancellation deadlock
                 await conn.ExecuteAsync(
-                    "UPDATE csm_requisitions SET status = 3 WHERE id = @Id",
+                    "UPDATE csm_requisitions SET status = 0 WHERE id = @Id AND status <> 2",
                     new { Id = businessKey }, tx);
             }
 

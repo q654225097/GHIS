@@ -184,10 +184,10 @@ public class InpatientRecordModel : ClientModelBase
 	public int StayDays { get; set; } = 157;
 	public string PaymentType { get; set; } = "自费";
 	public string HomeAddress { get; set; } = "---";
-	public string ContactPhone { get; set; } = string.Empty;
-	public string IdCard { get; set; } = string.Empty;
-	public string HeightText { get; set; } = string.Empty;
-	public string WeightText { get; set; } = string.Empty;
+	public string ContactPhone { get; set; } = "---";
+	public string IdCard { get; set; } = "---";
+	public string HeightText { get; set; } = "---";
+	public string WeightText { get; set; } = "---";
 
 	public string TotalCostDisplay => $"[费用总额: {TotalCost:0}]";
 	public string DepositTotalDisplay => $"[押金总额: {DepositTotal:0}]";

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
+using HIS.BuildingBlocks.Security;
 using HIS.Contracts;
 using HIS.Modules.Workflow.Models;
 using HIS.Modules.Workflow.Services;
@@ -38,8 +39,9 @@ public class WorkflowController : ControllerBase
         _signatureService = signatureService;
     }
 
-    private string CurrentUserId => _userSession?.UserId ?? "USR-ADMIN";
-    private string CurrentUserName => _userSession?.DisplayName ?? _userSession?.UserName ?? "系统管理员";
+    private string CurrentUserId => _userSession?.UserId?.Trim() ?? string.Empty;
+    private bool IsAuthenticated => !string.IsNullOrWhiteSpace(CurrentUserId);
+    private string CurrentUserName => _userSession?.DisplayName ?? _userSession?.UserName ?? CurrentUserId;
     private string? CurrentDeptId => _userSession?.ActiveDeptId ?? "DEPT-ADMIN";
 
     #region BO Types
@@ -102,6 +104,7 @@ public class WorkflowController : ControllerBase
         string? GraphJson
     );
 
+    [RequireRole("ADMIN", "ROLE-ADMIN")]
     [HttpPost("definitions")]
     public async Task<ActionResult<ApiResponse<WfDefinition>>> SaveDefinition(
         [FromBody] SaveDefinitionDto dto,
@@ -217,6 +220,7 @@ public class WorkflowController : ControllerBase
         return Ok(ApiResponse<WfDefinition>.Success(def, "流程设计已保存为草稿"));
     }
 
+    [RequireRole("ADMIN", "ROLE-ADMIN")]
     [HttpPost("definitions/{id}/publish")]
     public async Task<ActionResult<ApiResponse<WfDefinition>>> PublishDefinition(string id, CancellationToken ct)
     {
@@ -273,6 +277,7 @@ public class WorkflowController : ControllerBase
         [FromBody] StartWorkflowRequestDto req,
         CancellationToken ct)
     {
+        if (!IsAuthenticated) return Unauthorized(ApiResponse<WorkflowStartResultDto>.Fail(401, "请先登录后发起审批流"));
         var vars = req.BoVariables ?? new Dictionary<string, object?>();
         var result = await _runtimeService.StartWorkflowAsync(
             req.BoType, req.BusinessKey, CurrentUserId, CurrentDeptId, vars, ct);
@@ -331,12 +336,39 @@ public class WorkflowController : ControllerBase
         return Ok(ApiResponse<WorkflowInstanceDetailDto>.Success(detail));
     }
 
+
+    [HttpGet("instances/my-initiated")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<WorkflowTaskItemDto>>>> GetMyInitiatedInstances(CancellationToken ct)
+    {
+        if (!IsAuthenticated) return Unauthorized(ApiResponse<IReadOnlyList<WorkflowTaskItemDto>>.Fail(401, "请先登录"));
+        using var conn = _connFactory.CreateConnection();
+        string sql = @"
+            SELECT i.id AS TaskId, i.id AS InstanceId, i.instance_no AS InstanceNo,
+                   i.def_key AS DefKey, i.bo_type AS BoType, i.business_key AS BusinessKey,
+                   COALESCE(i.current_node_ids_json, '') AS NodeId,
+                   CASE i.status WHEN 'RUNNING' THEN '审批流转中' WHEN 'APPROVED' THEN '已通过' WHEN 'REJECTED' THEN '已驳回' WHEN 'WITHDRAWN' THEN '已撤回' ELSE i.status END AS NodeName,
+                   i.initiator_user_id AS AssigneeUserId, COALESCE(u.display_name, i.initiator_user_id) AS AssigneeName,
+                   'SINGLE' AS ApprovalMode, i.status AS Status,
+                   NULL AS Comment, i.finished_at_ms AS ActedAtMs, i.initiator_user_id AS InitiatorUserId,
+                   COALESCE(u.display_name, i.initiator_user_id) AS InitiatorName, i.initiator_dept_id AS InitiatorDeptId,
+                   d.dept_name AS InitiatorDeptName, i.bo_variables_json AS BoVariablesJson,
+                   i.created_at_ms AS CreatedAtMs
+            FROM wf_instances i
+            LEFT JOIN sys_users u ON u.id = i.initiator_user_id
+            LEFT JOIN sys_departments d ON d.id = i.initiator_dept_id
+            WHERE i.initiator_user_id = @UserId
+            ORDER BY i.created_at_ms DESC LIMIT 100";
+        var list = (await conn.QueryAsync<WorkflowTaskItemDto>(sql, new { UserId = CurrentUserId })).ToList();
+        return Ok(ApiResponse<IReadOnlyList<WorkflowTaskItemDto>>.Success(list));
+    }
+
     [HttpPost("instances/{id}/withdraw")]
     public async Task<ActionResult<ApiResponse<WorkflowActionResultDto>>> WithdrawInstance(
         string id,
         [FromBody] WorkflowActionRequestDto? req,
         CancellationToken ct)
     {
+        if (!IsAuthenticated) return Unauthorized(ApiResponse<WorkflowActionResultDto>.Fail(401, "请先登录后撤回审批流"));
         var result = await _runtimeService.WithdrawInstanceAsync(id, CurrentUserId, req?.Comment, ct);
 
         if (_auditTrail != null)
@@ -430,6 +462,7 @@ public class WorkflowController : ControllerBase
         [FromBody] WorkflowActionRequestDto req,
         CancellationToken ct)
     {
+        if (!IsAuthenticated) return Unauthorized(ApiResponse<WorkflowActionResultDto>.Fail(401, "请先登录后执行审批操作"));
         var result = await _runtimeService.ExecuteTaskActionAsync(
             taskId, CurrentUserId, req.ActionType, req.Comment, req.DelegateToUserId, ct);
 
@@ -446,9 +479,12 @@ public class WorkflowController : ControllerBase
                     _userSession,
                     ct);
             }
-            catch
+            catch (Exception sigEx)
             {
-                // Non-blocking signature logging
+                if (_auditTrail != null)
+                {
+                    await _auditTrail.RecordAuditAsync("WORKFLOW_SIGN_ERROR", "wf_tasks", taskId, $"审批电子签章失败: {sigEx.Message}", CurrentUserId, CurrentUserName, CurrentDeptId, ct);
+                }
             }
         }
 

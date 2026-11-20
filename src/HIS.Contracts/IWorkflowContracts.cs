@@ -227,6 +227,7 @@ public class WorkflowConditionGroupDto
     public string LogicalOperator { get => LogicalOp; set => LogicalOp = value; }
     public List<WorkflowConditionRuleDto> Rules { get; set; } = new();
     public List<WorkflowConditionRuleDto> Conditions { get => Rules; set => Rules = value; }
+    public List<WorkflowConditionGroupDto> SubGroups { get; set; } = new();
 }
 
 // Aliases for unified server/client graph serialization

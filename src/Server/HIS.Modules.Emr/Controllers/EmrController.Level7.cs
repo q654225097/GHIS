@@ -105,10 +105,10 @@ public partial class EmrController
         try
         {
             var vitalRows = await conn.QueryAsync(@"
-                SELECT recorded_at_ms, temperature_c, pulse_bpm, respiration_bpm, sys_bp, dia_bp, spo2
-                FROM nur_vitals_signs
+                SELECT measured_at_ms AS recorded_at_ms, temperature_c, pulse_bpm, resp_rate AS respiration_bpm, sys_bp, dia_bp, spo2
+                FROM nur_vital_signs
                 WHERE encounter_id = @Id OR patient_id = @PatId
-                ORDER BY recorded_at_ms DESC LIMIT 30",
+                ORDER BY measured_at_ms DESC LIMIT 30",
                 new { Id = encounterOrVisitId, PatId = patientId });
 
             foreach (var r in vitalRows)
@@ -131,9 +131,13 @@ public partial class EmrController
         try
         {
             var ioRows = await conn.QueryAsync(@"
-                SELECT recorded_at_ms, entry_type AS category, item_name, amount_ml AS volume_ml
-                FROM nur_intake_outputs
-                WHERE encounter_id = @Id OR patient_id = @PatId
+                SELECT measured_at_ms AS recorded_at_ms, '入量' AS category, '总入量' AS item_name, intake_ml AS volume_ml
+                FROM nur_vital_signs
+                WHERE (encounter_id = @Id OR patient_id = @PatId) AND intake_ml IS NOT NULL AND intake_ml > 0
+                UNION ALL
+                SELECT measured_at_ms AS recorded_at_ms, '出量' AS category, '总出量' AS item_name, output_ml AS volume_ml
+                FROM nur_vital_signs
+                WHERE (encounter_id = @Id OR patient_id = @PatId) AND output_ml IS NOT NULL AND output_ml > 0
                 ORDER BY recorded_at_ms DESC LIMIT 30",
                 new { Id = encounterOrVisitId, PatId = patientId });
 

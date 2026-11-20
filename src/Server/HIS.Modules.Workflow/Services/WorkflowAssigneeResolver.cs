@@ -190,12 +190,12 @@ public class WorkflowAssigneeResolver
         if (string.IsNullOrWhiteSpace(expr)) return null;
 
         // Pattern 1: Ternary condition, e.g.: "amount > 100000 ? vpId : deptManagerId"
-        var match = Regex.Match(expr, @"^\s*([a-zA-Z0-9_]+)\s*(>|>=|<|<=|==|!=)\s*([0-9.]+)\s*\?\s*([a-zA-Z0-9_]+)\s*:\s*([a-zA-Z0-9_]+)\s*$");
+        var match = Regex.Match(expr, @"^\s*([a-zA-Z0-9_.]+)\s*(>|>=|<|<=|==|!=)\s*(['""]?[^?]+?['""]?)\s*\?\s*([a-zA-Z0-9_.]+)\s*:\s*([a-zA-Z0-9_.]+)\s*$");
         if (match.Success)
         {
-            string field = match.Groups[1].Value;
+            string field = match.Groups[1].Value.StartsWith("bo.", StringComparison.OrdinalIgnoreCase) ? match.Groups[1].Value.Substring(3) : match.Groups[1].Value;
             string op = match.Groups[2].Value;
-            string thresholdStr = match.Groups[3].Value;
+            string thresholdStr = match.Groups[3].Value.Trim().Trim('\'', '"');
             string trueField = match.Groups[4].Value;
             string falseField = match.Groups[5].Value;
 

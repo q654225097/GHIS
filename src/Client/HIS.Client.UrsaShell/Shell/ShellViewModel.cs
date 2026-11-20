@@ -620,6 +620,7 @@ public sealed class ShellViewModel : ClientModelBase
             {
                 sys.Items.Add(new ShellNavItem { Key = "dynamic_form", LegacyNavIndex = 6, Title = "动态表单配置", Icon = "🧩", Description = "专科扩展字段与表单模板设计" });
             }
+            sys.Items.Add(new ShellNavItem { Key = "hr_management", LegacyNavIndex = -1, Title = "人力资源管理", Icon = "🪪", Description = "入职登记、人事档案修改、调科晋升、证照与合同管理" });
             sys.Items.Add(new ShellNavItem { Key = "user_admin", LegacyNavIndex = 7, Title = "用户账号维护", Icon = "👤", Description = "全院用户账号、科室岗位绑定" });
             sys.Items.Add(new ShellNavItem { Key = "role_admin", LegacyNavIndex = 8, Title = "角色与权限", Icon = "🔐", Description = "角色权限矩阵与数据隔离策略" });
             sys.Items.Add(new ShellNavItem { Key = "audit_log", LegacyNavIndex = 9, Title = "安全审计日志", Icon = "📜", Description = "关键操作不可篡改审计与链校验" });
@@ -718,6 +719,7 @@ public sealed class ShellViewModel : ClientModelBase
             "emr_archive" => new Stations.EmrArchive.EmrArchiveView { DataContext = new Stations.EmrArchive.EmrArchiveViewModel(Workbench, this) },
             "emr_designer" => new Stations.EmrDesigner.EmrDesignerStationView { DataContext = new Stations.EmrDesigner.EmrDesignerStationViewModel(Workbench, this) },
             "dynamic_form" => new Stations.Admin.DynamicFormStationView { DataContext = new Stations.Admin.DynamicFormStationViewModel(Workbench, this) },
+            "hr_management" => new Stations.Hr.HrStationView { DataContext = new Stations.Hr.HrStationViewModel(Workbench, this) },
             "user_admin" => new Stations.Admin.UserAdminStationView { DataContext = new Stations.Admin.UserAdminStationViewModel(Workbench, this) },
             "role_admin" => new Stations.Admin.RoleAdminStationView { DataContext = new Stations.Admin.RoleAdminStationViewModel(Workbench, this) },
             "audit_log" => new Stations.Admin.AuditLogStationView { DataContext = new Stations.Admin.AuditLogStationViewModel(Workbench, this) },

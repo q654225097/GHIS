@@ -93,10 +93,12 @@ public partial class OutpatientController
         string targetDoc = doctorId ?? _userSession?.UserId ?? "";
 
         var feedbacks = await conn.QueryAsync(@"
-            SELECT c.id, c.prescription_id, p.prescription_no, c.doctor_id, c.pharmacist_id, c.comment_category, c.comment_detail, c.doctor_appeal_note, c.appeal_status, c.created_at_ms, c.updated_at_ms
-            FROM pha_prescription_comments c
-            INNER JOIN opd_prescriptions p ON c.prescription_id = p.id
-            WHERE (@DocId = '' OR c.doctor_id = @DocId)
+            SELECT c.id, c.target_id AS prescription_id, COALESCE(p.rx_no, c.target_id) AS prescription_no,
+                   c.doctor_id, c.pharmacist_id, c.error_category AS comment_category, c.comment_text AS comment_detail,
+                   c.doctor_reply AS doctor_appeal_note, c.doctor_ack_status AS appeal_status, c.created_at_ms, c.updated_at_ms
+            FROM phm_prescription_comments c
+            LEFT JOIN opd_prescriptions p ON c.target_id = p.id
+            WHERE c.source_type = 'OPD' AND (@DocId = '' OR c.doctor_id = @DocId)
             ORDER BY c.created_at_ms DESC LIMIT 50",
             new { DocId = targetDoc });
 
@@ -210,8 +212,8 @@ public partial class OutpatientController
         // 2. Insert into nur_vitals_signs
         string vitalId = Guid.NewGuid().ToString();
         await conn.ExecuteAsync(@"
-            INSERT INTO nur_vitals_signs (id, encounter_id, patient_id, temperature_c, pulse_bpm, sys_bp, dia_bp, spo2, weight_kg, recorded_at_ms, recorded_by, schema_version, created_at_ms, updated_at_ms, version_no)
-            VALUES (@Id, @EncId, @PatId, @Temp, @Pulse, @Sys, @Dia, @Spo2, @Weight, @Now, @Nurse, 1, @Now, @Now, 1)",
+            INSERT INTO nur_vital_signs (id, encounter_id, patient_id, measured_at_ms, temperature_c, pulse_bpm, sys_bp, dia_bp, spo2, capture_source, mews_score, is_external, ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+            VALUES (@Id, @EncId, @PatId, @Now, @Temp, @Pulse, @Sys, @Dia, @Spo2, 'OPD_TRIAGE', 0, 0, CASE WHEN @Weight IS NOT NULL THEN '{""weightKg"":' || @Weight || '}' ELSE NULL END, 1, @Now, @Nurse, @Now, @Nurse, 1)",
             new
             {
                 Id = vitalId,

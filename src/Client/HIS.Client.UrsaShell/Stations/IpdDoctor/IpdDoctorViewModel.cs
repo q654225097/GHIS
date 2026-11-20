@@ -875,7 +875,7 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
                 RouteCode = order.Route,
                 OrderDoctorId = Workbench.CurrentOperatorId
             };
-            await http.PostAsJsonAsync("/api/v4/ordering/orders", req);
+            await http.PostAsJsonAsync("/api/v4/orders", req);
         }
         catch { }
     }

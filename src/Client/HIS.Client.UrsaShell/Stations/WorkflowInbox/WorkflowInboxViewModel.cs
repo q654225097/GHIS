@@ -267,7 +267,7 @@ public sealed class WorkflowInboxViewModel : ClientModelBase, IShortcutTarget
                     }
                     break;
                 case 3: // My Initiated
-                    var myDoneRes = await http.GetFromJsonAsync<ClientApiEnvelope<List<WorkflowTaskItemDto>>>("/api/v4/workflow/tasks/my-done");
+                    var myDoneRes = await http.GetFromJsonAsync<ClientApiEnvelope<List<WorkflowTaskItemDto>>>("/api/v4/workflow/instances/my-initiated");
                     if (myDoneRes?.Code == 200 && myDoneRes.Data != null)
                     {
                         MyInitiatedTasks.Clear();

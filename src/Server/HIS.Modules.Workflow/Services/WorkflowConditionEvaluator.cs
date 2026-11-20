@@ -10,35 +10,30 @@ public static class WorkflowConditionEvaluator
 {
     public static bool EvaluateGroup(WorkflowConditionGroupDto? group, IReadOnlyDictionary<string, object?> variables)
     {
-        if (group == null || group.Rules == null || group.Rules.Count == 0)
+        bool hasRules = group?.Rules != null && group.Rules.Count > 0;
+        bool hasSubGroups = group?.SubGroups != null && group.SubGroups.Count > 0;
+        if (!hasRules && !hasSubGroups)
         {
             return true;
         }
 
-        bool isAnd = !string.Equals(group.LogicalOp, "OR", StringComparison.OrdinalIgnoreCase);
-
-        if (isAnd)
+        bool isAnd = !string.Equals(group!.LogicalOp, "OR", StringComparison.OrdinalIgnoreCase);
+        var results = new List<bool>();
+        if (hasRules)
         {
             foreach (var rule in group.Rules)
             {
-                if (!EvaluateRule(rule, variables))
-                {
-                    return false;
-                }
+                results.Add(EvaluateRule(rule, variables));
             }
-            return true;
         }
-        else
+        if (hasSubGroups)
         {
-            foreach (var rule in group.Rules)
+            foreach (var sub in group.SubGroups!)
             {
-                if (EvaluateRule(rule, variables))
-                {
-                    return true;
-                }
+                results.Add(EvaluateGroup(sub, variables));
             }
-            return false;
         }
+        return isAnd ? results.All(r => r) : results.Any(r => r);
     }
 
     public static bool EvaluateRule(WorkflowConditionRuleDto rule, IReadOnlyDictionary<string, object?> variables)

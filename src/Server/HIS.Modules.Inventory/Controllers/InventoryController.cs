@@ -1231,6 +1231,12 @@ ORDER BY created_at_ms DESC LIMIT 100";
 			return ApiResponse<InvStockTake>.Fail(404, "未找到盘点单");
 		if (take.Status != "DRAFT")
 			return ApiResponse<InvStockTake>.Fail(400, "该盘点单已审核或已关闭");
+		if (!string.IsNullOrWhiteSpace(take.ApprovalStatus) &&
+		    !string.Equals(take.ApprovalStatus, "APPROVED", StringComparison.OrdinalIgnoreCase) &&
+		    !string.Equals(take.ApprovalStatus, "DRAFT", StringComparison.OrdinalIgnoreCase))
+		{
+			return ApiResponse<InvStockTake>.Fail(409, $"盘点单 [{take.StockTakeNo}] 审批状态为 [{take.ApprovalStatus}]，未终审通过禁止直接生效入账");
+		}
 
 		string userId = _userSession?.UserId ?? "USER-ADMIN";
 		long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();

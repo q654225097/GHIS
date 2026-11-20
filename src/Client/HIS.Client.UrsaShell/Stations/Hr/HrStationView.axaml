@@ -1,0 +1,527 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Hr"
+             x:Class="HIS.Client.UrsaShell.Stations.Hr.HrStationView"
+             x:DataType="local:HrStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="16" RowSpacing="12">
+        <!-- 顶部 KPI 概览栏 -->
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="医院人力资源全生命周期管理 (HRIS)" FontSize="17" FontWeight="Bold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <TextBlock Text="{Binding TotalActive, StringFormat=在职 {0} 人}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ResignedCount, StringFormat=离职/退休 {0} 人}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding DoctorCount, StringFormat=医师 {0} 人}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding NurseCount, StringFormat=护理 {0} 人}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding ExpiringCredentialsCount, StringFormat=证照60天预警 {0} 项}" FontSize="12" Foreground="{DynamicResource SemiColorWarning}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ExpiringContractsCount, StringFormat=合同60天预警 {0} 份}" FontSize="12" Foreground="{DynamicResource SemiColorWarning}"/>
+                        <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新全量档案" Classes="Primary" Height="32"
+                        Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Border>
+
+        <!-- 四大业务页签 -->
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+            <!-- Tab 1: 职工花名册与人事信息修改 -->
+            <TabItem Header="职工花名册与信息修改">
+                <Grid ColumnDefinitions="430,*" ColumnSpacing="12" Margin="0,10,0,0">
+                    <!-- 左侧花名册列表 -->
+                    <Border Grid.Column="0" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding SearchKeyword, Mode=TwoWay}"
+                                         PlaceholderText="姓名 / 工号 / 岗位 / 科室"/>
+                                <Button Grid.Column="1" Content="查询" Classes="Secondary" Command="{Binding SearchCommand}"/>
+                            </Grid>
+                            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <ComboBox Grid.Column="0" HorizontalAlignment="Stretch"
+                                          ItemsSource="{Binding StatusFilterOptions}"
+                                          SelectedItem="{Binding FilterStatus, Mode=TwoWay}"/>
+                                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                                          ItemsSource="{Binding CategoryFilterOptions}"
+                                          SelectedItem="{Binding FilterCategory, Mode=TwoWay}"/>
+                            </Grid>
+                            <ListBox Grid.Row="2" ItemsSource="{Binding Employees}"
+                                     SelectedItem="{Binding SelectedEmployee, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:HrEmployeeRow">
+                                        <Border Padding="8,6" Margin="0,2" CornerRadius="6"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="3">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" FontWeight="SemiBold">
+                                                        <Run Text="{Binding FullName}"/>
+                                                        <Run Text=" ("/>
+                                                        <Run Text="{Binding EmployeeNo}"/>
+                                                        <Run Text=")"/>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Column="1" Text="{Binding StatusDisplay}" FontSize="11"
+                                                               Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                </Grid>
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource SemiColorText2}">
+                                                    <Run Text="{Binding DeptDisplay}"/>
+                                                    <Run Text=" · "/>
+                                                    <Run Text="{Binding ProfessionalTitle}"/>
+                                                    <Run Text=" · "/>
+                                                    <Run Text="{Binding StaffCategory}"/>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding AccountDisplay}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧档案详情、修改与异动面板 -->
+                    <Border Grid.Column="1" CornerRadius="8" Padding="14"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <ScrollViewer>
+                            <StackPanel Spacing="12" IsEnabled="{Binding HasSelectedEmployee}">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                    <StackPanel>
+                                        <TextBlock Text="人事档案修改（自动留存变更前后快照并同步系统账号）" FontSize="15" FontWeight="Bold"/>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource SemiColorText2}">
+                                            <Run Text="脱敏证件："/>
+                                            <Run Text="{Binding SelectedEmployee.IdCardMasked}"/>
+                                            <Run Text="  |  脱敏手机："/>
+                                            <Run Text="{Binding SelectedEmployee.PhoneMasked}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="审计解密查看证件" Classes="Tertiary" Command="{Binding DecryptPiiCommand}"/>
+                                    <Button Grid.Column="2" Content="保存人事信息修改" Classes="Primary" Command="{Binding SaveProfileCommand}"/>
+                                </Grid>
+
+                                <TextBlock Text="{Binding DecryptedPiiDisplay}" FontSize="12"
+                                           Foreground="{DynamicResource SemiColorWarning}"
+                                           IsVisible="{Binding DecryptedPiiDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                                <!-- 基础信息网格 -->
+                                <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="姓名" FontSize="12"/>
+                                        <TextBox Text="{Binding EditFullName, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="性别" FontSize="12"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding EditGender, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Spacing="3">
+                                        <TextBlock Text="新手机号（留空不改）" FontSize="12"/>
+                                        <TextBox Text="{Binding EditPhone, Mode=TwoWay}" PlaceholderText="输入新手机号将SM4加密覆盖"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="电子邮箱" FontSize="12"/>
+                                        <TextBox Text="{Binding EditEmail, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="最高学历" FontSize="12"/>
+                                        <TextBox Text="{Binding EditEducation, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="2" Spacing="3">
+                                        <TextBlock Text="毕业院校" FontSize="12"/>
+                                        <TextBox Text="{Binding EditGraduatedSchool, Mode=TwoWay}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="所学专业" FontSize="12"/>
+                                        <TextBox Text="{Binding EditMajorName, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="人员分类" FontSize="12"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding StaffCategoryOptions}" SelectedItem="{Binding EditStaffCategory, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="2" Grid.Column="2" Spacing="3">
+                                        <TextBlock Text="用工性质" FontSize="12"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding EmploymentTypeOptions}" SelectedItem="{Binding EditEmploymentType, Mode=TwoWay}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="3" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="专业技术职称" FontSize="12"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding TitleOptions}" SelectedItem="{Binding EditProfessionalTitle, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="3" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="行政/业务岗位" FontSize="12"/>
+                                        <TextBox Text="{Binding EditJobPosition, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="3" Grid.Column="2" Spacing="3">
+                                        <TextBlock Text="政治面貌" FontSize="12"/>
+                                        <TextBox Text="{Binding EditPoliticalStatus, Mode=TwoWay}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="4" Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="紧急联系人" FontSize="12"/>
+                                        <TextBox Text="{Binding EditEmergencyContactName, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="4" Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="紧急联系电话" FontSize="12"/>
+                                        <TextBox Text="{Binding EditEmergencyContactPhone, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="4" Grid.Column="2" Spacing="3">
+                                        <TextBlock Text="本次修改原因" FontSize="12"/>
+                                        <TextBox Text="{Binding EditChangeReason, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="家庭住址 / 备注" FontSize="12"/>
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                        <TextBox Grid.Column="0" Text="{Binding EditAddress, Mode=TwoWay}" PlaceholderText="常住地址"/>
+                                        <TextBox Grid.Column="1" Text="{Binding EditRemark, Mode=TwoWay}" PlaceholderText="人事备注"/>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- 调科/调岗操作区 -->
+                                <Border Padding="10" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="调科 / 调岗异动（同步更新默认科室岗位并刷新会话权限）" FontWeight="SemiBold"/>
+                                        <Grid ColumnDefinitions="*,*,*,Auto" ColumnSpacing="8">
+                                            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding Departments}" SelectedItem="{Binding TransferTargetDept, Mode=TwoWay}"/>
+                                            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Roles}" SelectedItem="{Binding TransferTargetRole, Mode=TwoWay}"/>
+                                            <TextBox Grid.Column="2" Text="{Binding TransferReason, Mode=TwoWay}" PlaceholderText="调动原因"/>
+                                            <Button Grid.Column="3" Content="执行调科" Classes="Secondary" Command="{Binding TransferCommand}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 职称晋升与临床授权联动区 -->
+                                <Border Padding="10" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="职称晋升与临床分级授权联动（同步更新处方/手术/病历审签/特殊检查等级）" FontWeight="SemiBold"/>
+                                        <Grid ColumnDefinitions="150,80,80,80,80,*,Auto" ColumnSpacing="6">
+                                            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding TitleOptions}" SelectedItem="{Binding PromoteNewTitle, Mode=TwoWay}"/>
+                                            <NumericUpDown Grid.Column="1" Minimum="1" Maximum="4" Value="{Binding PromotePrescribeLevel, Mode=TwoWay}" FormatString="0"/>
+                                            <NumericUpDown Grid.Column="2" Minimum="1" Maximum="4" Value="{Binding PromoteSurgeryLevel, Mode=TwoWay}" FormatString="0"/>
+                                            <NumericUpDown Grid.Column="3" Minimum="1" Maximum="4" Value="{Binding PromoteEmrSignLevel, Mode=TwoWay}" FormatString="0"/>
+                                            <NumericUpDown Grid.Column="4" Minimum="1" Maximum="4" Value="{Binding PromoteSpecialExamLevel, Mode=TwoWay}" FormatString="0"/>
+                                            <TextBox Grid.Column="5" Text="{Binding PromoteReason, Mode=TwoWay}" PlaceholderText="晋升文件号/说明"/>
+                                            <Button Grid.Column="6" Content="确认晋升" Classes="Secondary" Command="{Binding PromoteCommand}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 离职/退休强制停权区 -->
+                                <Border Padding="10" CornerRadius="6" BorderBrush="{DynamicResource SemiColorDanger}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="离职 / 退休办理（强制停用工号、递增 SessionVersion 立即踢下线、回收病历授权）"
+                                                   FontWeight="SemiBold" Foreground="{DynamicResource SemiColorDanger}"/>
+                                        <Grid ColumnDefinitions="150,*,Auto" ColumnSpacing="8">
+                                            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding ResignTypeOptions}" SelectedItem="{Binding ResignType, Mode=TwoWay}"/>
+                                            <TextBox Grid.Column="1" Text="{Binding ResignReason, Mode=TwoWay}" PlaceholderText="离职/退休原因说明"/>
+                                            <Button Grid.Column="2" Content="办理离职停权" Classes="Danger" Command="{Binding ResignCommand}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 新员工入职登记 -->
+            <TabItem Header="新员工入职登记">
+                <Border CornerRadius="8" Padding="16" Margin="0,10,0,0"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <ScrollViewer>
+                        <StackPanel Spacing="14">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel>
+                                    <TextBlock Text="新员工入职登记与一站式工号开通" FontSize="16" FontWeight="Bold"/>
+                                    <TextBlock Text="提交后将校验 18 位身份证号、SM4-GCM 加密敏感信息，并在同一数据库事务内创建职工档案、劳动合同、系统工号及科室岗位授权。"
+                                               FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="确认办理入职" Classes="Primary" Height="34"
+                                        Command="{Binding SubmitOnboardCommand}"/>
+                            </Grid>
+
+                            <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="姓名 *" FontSize="12"/>
+                                    <TextBox Text="{Binding ObFullName, Mode=TwoWay}" PlaceholderText="如：张明华"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="工号（留空自动生成）" FontSize="12"/>
+                                    <TextBox Text="{Binding ObEmployeeNo, Mode=TwoWay}" PlaceholderText="如：EMP2026001"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="2" Spacing="3">
+                                    <TextBlock Text="18位身份证号（自动校验与加密）" FontSize="12"/>
+                                    <TextBox Text="{Binding ObIdCardNo, Mode=TwoWay}" PlaceholderText="18位身份证号"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="性别" FontSize="12"/>
+                                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding ObGender, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="手机号（SM4加密存储）" FontSize="12"/>
+                                    <TextBox Text="{Binding ObPhone, Mode=TwoWay}" PlaceholderText="11位手机号"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="2" Spacing="3">
+                                    <TextBlock Text="电子邮箱" FontSize="12"/>
+                                    <TextBox Text="{Binding ObEmail, Mode=TwoWay}" PlaceholderText="name@hospital.org"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="归属主科室 *" FontSize="12"/>
+                                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Departments}" SelectedItem="{Binding ObSelectedDept, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="人员分类" FontSize="12"/>
+                                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding StaffCategoryOptions}" SelectedItem="{Binding ObStaffCategory, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="2" Spacing="3">
+                                    <TextBlock Text="用工性质" FontSize="12"/>
+                                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding EmploymentTypeOptions}" SelectedItem="{Binding ObEmploymentType, Mode=TwoWay}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="3" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="专业技术职称" FontSize="12"/>
+                                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding TitleOptions}" SelectedItem="{Binding ObProfessionalTitle, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="岗位名称" FontSize="12"/>
+                                    <TextBox Text="{Binding ObJobPosition, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Grid.Column="2" Spacing="3">
+                                    <TextBlock Text="最高学历 / 毕业院校" FontSize="12"/>
+                                    <Grid ColumnDefinitions="90,*" ColumnSpacing="6">
+                                        <TextBox Grid.Column="0" Text="{Binding ObEducation, Mode=TwoWay}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding ObGraduatedSchool, Mode=TwoWay}" PlaceholderText="毕业院校"/>
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="4" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="入职日期 (yyyyMMdd)" FontSize="12"/>
+                                    <TextBox Text="{Binding ObHireDateText, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="首签合同到期日 (yyyyMMdd)" FontSize="12"/>
+                                    <TextBox Text="{Binding ObContractEndDateText, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="2" Spacing="3">
+                                    <TextBlock Text="所学专业" FontSize="12"/>
+                                    <TextBox Text="{Binding ObMajorName, Mode=TwoWay}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- 一键开通 HIS 账号配置 -->
+                            <Border Padding="12" CornerRadius="6" BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1">
+                                <StackPanel Spacing="10">
+                                    <CheckBox Content="入职时同步开通 HIS 登录工号并绑定默认科室与角色（首次登录强制改密）"
+                                              IsChecked="{Binding ObAutoCreateAccount, Mode=TwoWay}" FontWeight="SemiBold"/>
+                                    <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8"
+                                          IsEnabled="{Binding ObAutoCreateAccount}">
+                                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                            <TextBlock Text="登录账号（留空默认用工号小写）" FontSize="12"/>
+                                            <TextBox Text="{Binding ObLoginUserName, Mode=TwoWay}" PlaceholderText="如：dr.zhang"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="初始密码（留空默认 His@2026!）" FontSize="12"/>
+                                            <TextBox Text="{Binding ObInitialPassword, Mode=TwoWay}" PasswordChar="*"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="2" Spacing="3">
+                                            <TextBlock Text="初始岗位角色" FontSize="12"/>
+                                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Roles}" SelectedItem="{Binding ObSelectedRole, Mode=TwoWay}"/>
+                                        </StackPanel>
+
+                                        <Grid Grid.Row="1" Grid.ColumnSpan="3" ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                                            <StackPanel Grid.Column="0" Spacing="3">
+                                                <TextBlock Text="处方权等级 (1-4)" FontSize="12"/>
+                                                <NumericUpDown Minimum="1" Maximum="4" Value="{Binding ObPrescribeLevel, Mode=TwoWay}" FormatString="0"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Spacing="3">
+                                                <TextBlock Text="手术分级权限 (1-4)" FontSize="12"/>
+                                                <NumericUpDown Minimum="1" Maximum="4" Value="{Binding ObSurgeryLevel, Mode=TwoWay}" FormatString="0"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Spacing="3">
+                                                <TextBlock Text="病历审签等级 (1-4)" FontSize="12"/>
+                                                <NumericUpDown Minimum="1" Maximum="4" Value="{Binding ObEmrSignLevel, Mode=TwoWay}" FormatString="0"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3" Spacing="3">
+                                                <TextBlock Text="特殊检查权限 (1-4)" FontSize="12"/>
+                                                <NumericUpDown Minimum="1" Maximum="4" Value="{Binding ObSpecialExamLevel, Mode=TwoWay}" FormatString="0"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- Tab 3: 执业证照与劳动合同 -->
+            <TabItem Header="执业证照与劳动合同">
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12" Margin="0,10,0,0">
+                    <!-- 左侧：当前选中员工的执业证照与登记 -->
+                    <Border Grid.Column="0" CornerRadius="8" Padding="12"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                            <TextBlock Grid.Row="0" FontSize="15" FontWeight="Bold">
+                                <Run Text="执业证照台账 — 当前选中："/>
+                                <Run Text="{Binding SelectedEmployee.FullName}"/>
+                            </TextBlock>
+
+                            <StackPanel Grid.Row="1" Spacing="6" IsEnabled="{Binding HasSelectedEmployee}">
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                    <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding CredentialTypeOptions}" SelectedItem="{Binding CredType, Mode=TwoWay}"/>
+                                    <TextBox Grid.Column="1" Text="{Binding CredNo, Mode=TwoWay}" PlaceholderText="证书编号 *"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*,80" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" Text="{Binding CredScope, Mode=TwoWay}" PlaceholderText="执业范围"/>
+                                    <TextBox Grid.Column="1" Text="{Binding CredExpiryDateText, Mode=TwoWay}" PlaceholderText="到期日 yyyyMMdd"/>
+                                    <NumericUpDown Grid.Column="2" Minimum="1" Maximum="4" Value="{Binding CredPrivilegeLevel, Mode=TwoWay}" FormatString="0"/>
+                                </Grid>
+                                <Button Content="+ 登记执业证照（联动升级临床权限）" Classes="Primary" Command="{Binding AddCredentialCommand}"/>
+                            </StackPanel>
+
+                            <ListBox Grid.Row="2" ItemsSource="{Binding SelectedCredentials}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:HrCredentialRow">
+                                        <Border Padding="8,6" Margin="0,2" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock FontWeight="SemiBold">
+                                                    <Run Text="{Binding CredentialType}"/>
+                                                    <Run Text=" · "/>
+                                                    <Run Text="{Binding CertNo}"/>
+                                                </TextBlock>
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource SemiColorText2}">
+                                                    <Run Text="范围："/>
+                                                    <Run Text="{Binding Remark}"/>
+                                                    <Run Text=" | 到期："/>
+                                                    <Run Text="{Binding ExpiryDateInt}"/>
+                                                    <Run Text=" | 授权级："/>
+                                                    <Run Text="{Binding GrantedLevel}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧：90天到期预警 + 劳动合同管理 -->
+                    <Grid Grid.Column="1" RowDefinitions="*,*" RowSpacing="12">
+                        <Border Grid.Row="0" CornerRadius="8" Padding="12"
+                                Background="{DynamicResource SemiColorBackground1}"
+                                BorderBrush="{DynamicResource SemiColorWarning}" BorderThickness="1">
+                            <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                                <TextBlock Grid.Row="0" Text="全院 90 天内到期执业证照预警" FontSize="14" FontWeight="Bold"
+                                           Foreground="{DynamicResource SemiColorWarning}"/>
+                                <ListBox Grid.Row="1" ItemsSource="{Binding ExpiringCredentials}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="local:HrCredentialRow">
+                                            <TextBlock FontSize="12" Padding="4">
+                                                <Run Text="{Binding FullName}" FontWeight="SemiBold"/>
+                                                <Run Text=" ("/>
+                                                <Run Text="{Binding EmployeeNo}"/>
+                                                <Run Text=") — "/>
+                                                <Run Text="{Binding CredentialType}"/>
+                                                <Run Text=" [到期日 "/>
+                                                <Run Text="{Binding ExpiryDateInt}"/>
+                                                <Run Text="]"/>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="1" CornerRadius="8" Padding="12"
+                                Background="{DynamicResource SemiColorBackground1}"
+                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                                <TextBlock Grid.Row="0" Text="劳动合同签订与续签台账" FontSize="14" FontWeight="Bold"/>
+                                <Grid Grid.Row="1" ColumnDefinitions="130,100,100,*,Auto" ColumnSpacing="6" IsEnabled="{Binding HasSelectedEmployee}">
+                                    <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding ContractTypeOptions}" SelectedItem="{Binding ContractType, Mode=TwoWay}"/>
+                                    <TextBox Grid.Column="1" Text="{Binding ContractStartText, Mode=TwoWay}" PlaceholderText="起日"/>
+                                    <TextBox Grid.Column="2" Text="{Binding ContractEndText, Mode=TwoWay}" PlaceholderText="止日"/>
+                                    <TextBox Grid.Column="3" Text="{Binding ContractRemark, Mode=TwoWay}" PlaceholderText="备注"/>
+                                    <Button Grid.Column="4" Content="+ 签合同" Classes="Secondary" Command="{Binding AddContractCommand}"/>
+                                </Grid>
+                                <ListBox Grid.Row="2" ItemsSource="{Binding SelectedContracts}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="local:HrContractRow">
+                                            <TextBlock FontSize="12" Padding="4">
+                                                <Run Text="{Binding ContractNo}" FontWeight="SemiBold"/>
+                                                <Run Text=" · "/>
+                                                <Run Text="{Binding ContractType}"/>
+                                                <Run Text=" ("/>
+                                                <Run Text="{Binding StartDateInt}"/>
+                                                <Run Text=" ~ "/>
+                                                <Run Text="{Binding EndDateInt}"/>
+                                                <Run Text=") ["/>
+                                                <Run Text="{Binding Status}"/>
+                                                <Run Text="]"/>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: 人事异动与历史轨迹 -->
+            <TabItem Header="人事异动与历史轨迹">
+                <Border CornerRadius="8" Padding="12" Margin="0,10,0,0"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <ListBox ItemsSource="{Binding ChangeRecords}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:HrChangeRow">
+                                <Border Padding="10,8" Margin="0,3" CornerRadius="6"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="4">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding ChangeTypeDisplay}" FontWeight="Bold"
+                                                       Foreground="{DynamicResource SemiColorPrimary}" Margin="0,0,10,0"/>
+                                            <TextBlock Grid.Column="1" FontWeight="SemiBold">
+                                                <Run Text="{Binding EmployeeName}"/>
+                                                <Run Text=" ("/>
+                                                <Run Text="{Binding EmployeeNo}"/>
+                                                <Run Text=") — 单号："/>
+                                                <Run Text="{Binding ChangeNo}"/>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="2" FontSize="12" Foreground="{DynamicResource SemiColorText2}">
+                                                <Run Text="生效日："/>
+                                                <Run Text="{Binding EffectiveDateInt}"/>
+                                                <Run Text=" · 操作人："/>
+                                                <Run Text="{Binding AppliedBy}"/>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap">
+                                            <Run Text="变更前："/>
+                                            <Run Text="{Binding BeforeSnapshotJson}"/>
+                                            <Run Text="   →   变更后："/>
+                                            <Run Text="{Binding AfterSnapshotJson}"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText2}">
+                                            <Run Text="原因："/>
+                                            <Run Text="{Binding Reason}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

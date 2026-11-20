@@ -369,7 +369,7 @@ public partial class WorkbenchModel
 				RouteCode = inpatientOrderModel.Route,
 				OrderDoctorId = CurrentOperatorId
 			};
-			_ = http.PostAsJsonAsync("/api/v4/ordering/orders", createDto);
+			_ = http.PostAsJsonAsync("/api/v4/orders", createDto);
 		}
 		catch { }
 	}
@@ -408,7 +408,7 @@ public partial class WorkbenchModel
 			using HttpClient http = CreateConfigHttpClient();
 			foreach (var item in list)
 			{
-				_ = http.PostAsJsonAsync($"/api/v4/ordering/orders/{item.OrderNo}/verify-and-split", new
+				_ = http.PostAsJsonAsync($"/api/v4/orders/{item.OrderNo}/verify", new
 				{
 					VerifyNurseId = CurrentOperatorId,
 					WardId = "DEPT-WARD-02"
@@ -472,7 +472,7 @@ public partial class WorkbenchModel
 		try
 		{
 			using HttpClient http = CreateConfigHttpClient();
-			_ = http.PostAsync($"/api/v4/ordering/orders/{order.OrderNo}/stop", null);
+			_ = http.PostAsync($"/api/v4/orders/{order.OrderNo}/stop", null);
 		}
 		catch { }
 	}
@@ -497,7 +497,7 @@ public partial class WorkbenchModel
 			try
 			{
 				using HttpClient http = CreateConfigHttpClient();
-				_ = http.PostAsync($"/api/v4/ordering/orders/{order.OrderNo}/discontinue", null);
+				_ = http.PostAsync($"/api/v4/orders/{order.OrderNo}/discontinue", null);
 			}
 			catch { }
 		}

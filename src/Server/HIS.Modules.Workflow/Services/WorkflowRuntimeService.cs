@@ -193,6 +193,35 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
             }
         }
 
+        // Cycle detection for automatic nodes (START/EXCLUSIVE_GATEWAY/CC) to prevent infinite recursion
+        var autoNodeTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "START", "EXCLUSIVE_GATEWAY", "CC" };
+        var autoNodes = graph.Nodes.Where(n => autoNodeTypes.Contains(n.NodeType ?? "")).Select(n => n.Id).ToHashSet();
+        var autoAdj = graph.Edges.Where(e => autoNodes.Contains(e.SourceNodeId) && autoNodes.Contains(e.TargetNodeId))
+            .GroupBy(e => e.SourceNodeId).ToDictionary(g => g.Key, g => g.Select(e => e.TargetNodeId).ToList());
+        var color = new Dictionary<string, int>(); // 0=unvisited, 1=visiting, 2=visited
+        bool HasAutoCycle(string u)
+        {
+            color[u] = 1;
+            if (autoAdj.TryGetValue(u, out var nbrs))
+            {
+                foreach (var v in nbrs)
+                {
+                    int c = color.TryGetValue(v, out var cv) ? cv : 0;
+                    if (c == 1 || (c == 0 && HasAutoCycle(v))) return true;
+                }
+            }
+            color[u] = 2;
+            return false;
+        }
+        foreach (var nid in autoNodes)
+        {
+            if ((color.TryGetValue(nid, out var c) ? c : 0) == 0 && HasAutoCycle(nid))
+            {
+                errors.Add("流程图存在无人工审批节点的自动闭环死循环（条件网关/抄送节点成环），禁止发布。");
+                break;
+            }
+        }
+
         return errors.Count == 0;
     }
     #endregion
@@ -333,6 +362,15 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
     {
         using var conn = _connFactory.CreateConnection();
 
+        // 0. Prevent duplicate RUNNING workflow instance for same (boType, businessKey)
+        var existingRunningId = await conn.ExecuteScalarAsync<string?>(
+            "SELECT id FROM wf_instances WHERE bo_type = @BoType AND business_key = @BusinessKey AND status = 'RUNNING' LIMIT 1",
+            new { BoType = boType, BusinessKey = businessKey });
+        if (!string.IsNullOrWhiteSpace(existingRunningId))
+        {
+            return new WorkflowStartResultDto(true, existingRunningId, "RUNNING", "该单据已存在在途审批流程，请勿重复提交。");
+        }
+
         // 1. Check if a published definition exists for bo_type
         var definition = await conn.QueryFirstOrDefaultAsync<WfDefinition>(@"
             SELECT * FROM wf_definitions 
@@ -420,8 +458,14 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
         IEnumerable<string> fromNodeIds,
         IReadOnlyDictionary<string, object?> boVariables,
         long now,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? lastApproverUserId = null,
+        int hopDepth = 0)
     {
+        if (hopDepth > 50)
+        {
+            throw new InvalidOperationException("流程自动流转超过最大跳数限制(50)，疑似存在闭环死循环，已强制中止。");
+        }
         var targetNodes = new List<WorkflowNodeDto>();
 
         foreach (var fromNodeId in fromNodeIds)
@@ -448,21 +492,21 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
             if (nodeType == "CC")
             {
                 // Handle Carbon Copy node without blocking
-                await HandleCcNodeAsync(conn, instance, node, now, ct);
+                await HandleCcNodeAsync(conn, instance, definition, node, boVariables, now, ct);
 
                 // CC continues to next nodes
-                await DriveWorkflowForwardAsync(conn, instance, definition, graph, new[] { node.Id }, boVariables, now, ct);
+                await DriveWorkflowForwardAsync(conn, instance, definition, graph, new[] { node.Id }, boVariables, now, ct, lastApproverUserId, hopDepth + 1);
             }
             else if (nodeType == "END")
             {
                 // Complete Workflow with APPROVED
-                await CompleteWorkflowInstanceAsync(conn, instance, "APPROVED", null, now, ct);
+                await CompleteWorkflowInstanceAsync(conn, instance, "APPROVED", lastApproverUserId ?? instance.InitiatorUserId, now, ct);
                 return;
             }
             else if (nodeType == "EXCLUSIVE_GATEWAY")
             {
                 // Traverse gateway recursively
-                await DriveWorkflowForwardAsync(conn, instance, definition, graph, new[] { node.Id }, boVariables, now, ct);
+                await DriveWorkflowForwardAsync(conn, instance, definition, graph, new[] { node.Id }, boVariables, now, ct, lastApproverUserId, hopDepth + 1);
             }
             else if (nodeType == "APPROVAL")
             {
@@ -587,9 +631,21 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
         }
     }
 
-    private async Task HandleCcNodeAsync(DbConnection conn, WfInstance instance, WorkflowNodeDto ccNode, long now, CancellationToken ct)
+    private async Task HandleCcNodeAsync(DbConnection conn, WfInstance instance, WfDefinition definition, WorkflowNodeDto ccNode, IReadOnlyDictionary<string, object?> boVariables, long now, CancellationToken ct)
     {
-        var receivers = ccNode.CcReceiverUserIds ?? new List<string>();
+        var receiverSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (ccNode.CcReceiverUserIds != null)
+        {
+            foreach (var uid in ccNode.CcReceiverUserIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+                receiverSet.Add(uid.Trim());
+        }
+        if (ccNode.AssigneeConfig != null && !string.IsNullOrWhiteSpace(ccNode.AssigneeConfig.Strategy))
+        {
+            var resolved = await _assigneeResolver.ResolveAssigneesAsync(ccNode.AssigneeConfig, definition, ccNode, instance.InitiatorUserId, instance.InitiatorDeptId, boVariables, ct);
+            foreach (var r in resolved.Where(x => !string.IsNullOrWhiteSpace(x.UserId)))
+                receiverSet.Add(r.UserId);
+        }
+        var receivers = receiverSet.ToList();
         foreach (var receiverId in receivers)
         {
             string title = $"[抄送] 流程进度通知: {instance.InstanceNo}";
@@ -674,6 +730,12 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
             return new WorkflowActionResultDto(false, task.Status, $"该任务已被处理，当前状态为: {task.Status}。");
         }
 
+        // Security check: only the assigned user may act on this pending task
+        if (!string.Equals(task.AssigneeUserId, operatorUserId, StringComparison.OrdinalIgnoreCase))
+        {
+            return new WorkflowActionResultDto(false, "FORBIDDEN", "无权越权审批：当前登录人不是该待办任务的指派审批人。");
+        }
+
         var instance = await conn.QueryFirstOrDefaultAsync<WfInstance>(
             "SELECT * FROM wf_instances WHERE id = @Id", new { Id = task.InstanceId });
 
@@ -702,11 +764,15 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
                 task.Status = "APPROVED";
                 task.ActedAtMs = now;
                 task.Comment = comment;
-                await conn.ExecuteAsync(@"
+                int affectedApprove = await conn.ExecuteAsync(@"
                     UPDATE wf_tasks 
                     SET status = 'APPROVED', acted_at_ms = @Now, comment = @Comment, updated_at_ms = @Now, version_no = version_no + 1
-                    WHERE id = @Id",
+                    WHERE id = @Id AND status = 'PENDING'",
                     new { Now = now, Comment = comment, Id = task.Id });
+                if (affectedApprove != 1)
+                {
+                    return new WorkflowActionResultDto(false, "CONFLICT", "该审批任务已被并发处理，请刷新列表。");
+                }
 
                 await RecordTrackAsync(conn, instance.Id, task.Id, task.NodeId, task.NodeName, operatorUserId, task.AssigneeName ?? operatorUserId, "APPROVE", comment ?? "同意", null, now);
 
@@ -740,7 +806,7 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
                 if (shouldAdvance)
                 {
                     var boVars = ParseVariables(instance.BoVariablesJson);
-                    await DriveWorkflowForwardAsync(conn, instance, definition, graph, new[] { task.NodeId }, boVars, now, ct);
+                    await DriveWorkflowForwardAsync(conn, instance, definition, graph, new[] { task.NodeId }, boVars, now, ct, operatorUserId, 0);
                 }
 
                 var finalStatus = await conn.ExecuteScalarAsync<string>("SELECT status FROM wf_instances WHERE id = @Id", new { Id = instance.Id });
@@ -770,14 +836,31 @@ public class WorkflowRuntimeService : IWorkflowEngineContract
                 return new WorkflowActionResultDto(true, "REJECTED", "审批已拒绝，流程终止。");
 
             case "RETURN_PREV":
-                // Find previous approval node from tracks
-                var prevTrack = await conn.QueryFirstOrDefaultAsync<WfHistoryTrack>(@"
-                    SELECT * FROM wf_history_tracks 
-                    WHERE instance_id = @InstanceId AND node_id <> @CurrentNodeId AND action_type = 'APPROVE'
-                    ORDER BY occurred_at_ms DESC LIMIT 1",
-                    new { InstanceId = instance.Id, CurrentNodeId = task.NodeId });
-
-                string targetNodeId = prevTrack?.NodeId ?? "START";
+                // Find previous approval node from graph predecessor first, fallback to prior APPROVE track
+                string? graphPrevApprovalId = null;
+                var backQueue = new Queue<string>();
+                var backVisited = new HashSet<string> { task.NodeId };
+                backQueue.Enqueue(task.NodeId);
+                while (backQueue.Count > 0 && graphPrevApprovalId == null)
+                {
+                    var curId = backQueue.Dequeue();
+                    foreach (var inEdge in graph.Edges.Where(e => e.TargetNodeId == curId))
+                    {
+                        if (!backVisited.Add(inEdge.SourceNodeId)) continue;
+                        var srcNode = graph.Nodes.FirstOrDefault(n => n.Id == inEdge.SourceNodeId);
+                        if (srcNode == null) continue;
+                        if (string.Equals(srcNode.NodeType, "APPROVAL", StringComparison.OrdinalIgnoreCase))
+                        {
+                            graphPrevApprovalId = srcNode.Id;
+                            break;
+                        }
+                        if (!string.Equals(srcNode.NodeType, "START", StringComparison.OrdinalIgnoreCase))
+                        {
+                            backQueue.Enqueue(srcNode.Id);
+                        }
+                    }
+                }
+                string targetNodeId = graphPrevApprovalId ?? "START";
 
                 // Cancel current pending tasks
                 await conn.ExecuteAsync(@"

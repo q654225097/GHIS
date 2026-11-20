@@ -62,18 +62,50 @@ public sealed class EmrAccessControlService : IEmrAccessPolicyContract
         }
         else
         {
-            // 院内医务人员默认具有常规经治权限；跨科或特定敏感资源调阅检查授权
-            allowed = true;
-
-            // 检查是否存在限时授权
             var grants = await _grantRepo.QueryAsync(
-                "SELECT * FROM sec_emr_access_grants WHERE grantee_user_id = @UserId AND patient_id = @PatId AND status = 1 AND valid_from_ms <= @Now AND valid_to_ms >= @Now",
+                "SELECT * FROM sec_emr_access_grants WHERE grantee_user_id = @UserId AND (patient_id = @PatId OR patient_id IS NULL OR patient_id = '') AND status = 1 AND valid_from_ms <= @Now AND valid_to_ms >= @Now",
                 new { UserId = request.UserId, PatId = request.PatientId, Now = now });
 
             var matchedGrant = grants.FirstOrDefault(g => ScopeContains(g.AllowedScopesJson, request.ResourceType));
             if (matchedGrant != null)
             {
+                allowed = true;
                 activeGrantId = matchedGrant.Id;
+            }
+            else if (string.IsNullOrWhiteSpace(request.PatientId) ||
+                     string.Equals(request.UserId, "USR-ADMIN", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(request.UserId, "SYSTEM", StringComparison.OrdinalIgnoreCase))
+            {
+                allowed = true;
+            }
+            else
+            {
+                var treatingRows = await _grantRepo.QueryAsync(
+                    @"SELECT id FROM sec_emr_access_grants WHERE 1 = 0
+                      UNION ALL
+                      SELECT e.id FROM ipd_encounters e
+                      INNER JOIN sys_user_dept_posts p ON (p.dept_id = e.admit_dept_id OR p.dept_id = e.admit_ward_id)
+                      WHERE e.patient_id = @PatId AND p.user_id = @UserId
+                      UNION ALL
+                      SELECT v.id FROM opd_visits v
+                      WHERE v.patient_id = @PatId AND v.doctor_id = @UserId
+                      UNION ALL
+                      SELECT u.id FROM sys_users u
+                      INNER JOIN sys_user_dept_posts p ON p.user_id = u.id
+                      INNER JOIN sys_roles r ON r.id = p.role_id
+                      WHERE u.id = @UserId AND r.role_code IN ('ADMIN', 'ROLE-ADMIN', 'QC_REVIEWER', 'MEDTECH', 'PHARMACIST')
+                      LIMIT 1",
+                    new { PatId = request.PatientId, UserId = request.UserId });
+
+                if (treatingRows.Count > 0)
+                {
+                    allowed = true;
+                }
+                else
+                {
+                    allowed = false;
+                    denyReason = "无权跨科查阅非经治患者病历，请先通过审批流申请限时病历访问授权";
+                }
             }
         }
 

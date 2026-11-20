@@ -224,11 +224,12 @@ public class BloodBankController : ControllerBase
         using var conn = _connFactory.CreateConnection();
         var dist = await conn.QueryAsync(
             """
-            SELECT CASE WHEN abo_type IS NULL OR trim(abo_type) = '' THEN 'A型' ELSE abo_type END AS abo_type,
-                   CASE WHEN rh_type IS NULL OR trim(rh_type) = '' THEN 'Rh+' ELSE rh_type END AS rh_type,
-                   count(*) as patient_count
-            FROM pat_encounters
-            WHERE status = 1 OR status = 'ACTIVE'
+            SELECT CASE WHEN b.abo_type IS NULL OR trim(b.abo_type) = '' THEN '未知' ELSE b.abo_type END AS abo_type,
+                   CASE WHEN b.rh_type IS NULL OR trim(b.rh_type) = '' THEN 'POSITIVE' ELSE b.rh_type END AS rh_type,
+                   count(DISTINCT e.patient_id) AS patient_count
+            FROM ipd_encounters e
+            LEFT JOIN mtc_blood_requests b ON b.encounter_id = e.id
+            WHERE e.status = 1
             GROUP BY abo_type, rh_type
             """);
         return Ok(ApiResponse<object>.Success(dist));

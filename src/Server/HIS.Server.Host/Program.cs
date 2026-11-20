@@ -66,6 +66,8 @@ using HIS.Modules.HieGateway.Services;
 using HIS.Modules.Workflow.Controllers;
 using HIS.Modules.Workflow.Models;
 using HIS.Modules.Workflow.Services;
+using HIS.Modules.Hr.Controllers;
+using HIS.Modules.Hr.Models;
 using HIS.Server.Host.Hubs;
 using HIS.Server.Host;
 using Microsoft.AspNetCore.Builder;
@@ -100,7 +102,8 @@ public class Program
 			.AddApplicationPart(typeof(BloodBankController).Assembly)
 			.AddApplicationPart(typeof(EmrQcController).Assembly)
 			.AddApplicationPart(typeof(HieGatewayController).Assembly)
-			.AddApplicationPart(typeof(WorkflowController).Assembly);
+			.AddApplicationPart(typeof(WorkflowController).Assembly)
+			.AddApplicationPart(typeof(HrController).Assembly);
 		builder.Services.AddSignalR();
 		builder.Services.AddSingleton((Func<IServiceProvider, IDbConnectionFactory>)((IServiceProvider sp) => new SqliteConnectionFactory()));
 		RegisterRepo<SysDepartment>(builder.Services, "sys_departments");
@@ -280,6 +283,10 @@ public class Program
 		RegisterRepo<WfHistoryTrack>(builder.Services, "wf_history_tracks");
 		RegisterRepo<WfBusinessBinding>(builder.Services, "wf_business_bindings");
 		RegisterRepo<WfNotification>(builder.Services, "wf_notifications");
+		RegisterRepo<HrEmployee>(builder.Services, "hr_employees");
+		RegisterRepo<HrEmployeeCredential>(builder.Services, "hr_employee_credentials");
+		RegisterRepo<HrChangeRecord>(builder.Services, "hr_change_records");
+		RegisterRepo<HrContract>(builder.Services, "hr_contracts");
 
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);
