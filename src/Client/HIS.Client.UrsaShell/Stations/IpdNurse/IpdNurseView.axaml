@@ -4,6 +4,7 @@
              xmlns:local="using:HIS.Client.UrsaShell.Stations.IpdNurse"
              xmlns:ctrl="using:HIS.Client.UrsaShell.Controls"
              xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
              x:Class="HIS.Client.UrsaShell.Stations.IpdNurse.IpdNurseView"
              x:DataType="local:IpdNurseViewModel">
     <Grid ColumnDefinitions="286,*" Background="{DynamicResource SemiColorBackground0}">
@@ -13,6 +14,7 @@
             <Grid RowDefinitions="Auto,Auto,*">
                 <StackPanel Grid.Row="0" Spacing="3" Margin="2,0,0,12">
                     <TextBlock Text="病区患者" FontSize="17" FontWeight="Bold"/>
+                    <controls:DynamicPrintTriggerBar PageKey="ipd_nurse" TriggerSlot="TOP_TOOLBAR" Compact="True"/>
                     <TextBlock Text="责任护士按床位执行护理任务" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
                     <TextBlock Text="{Binding Workbench.ActiveContextSummary}" FontSize="11" FontWeight="SemiBold"
                                Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>

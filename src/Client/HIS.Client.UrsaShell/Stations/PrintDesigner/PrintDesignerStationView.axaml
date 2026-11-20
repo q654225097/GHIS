@@ -1,0 +1,309 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.PrintDesigner"
+             xmlns:prt="using:HIS.Client.UrsaShell.Printing"
+             x:Class="HIS.Client.UrsaShell.Stations.PrintDesigner.PrintDesignerStationView"
+             x:DataType="local:PrintDesignerViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <!-- 顶部工具栏 -->
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="可视化条码与单据打印模板设计器" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新" Classes="Tertiary" Height="32" Command="{Binding RefreshCommand}"/>
+                <Button Grid.Column="2" Content="+ 新建模板" Classes="Secondary" Height="32" Command="{Binding NewTemplateCommand}"/>
+                <Button Grid.Column="3" Content="🖨️ 样例预览打印" Classes="Secondary" Height="32" Command="{Binding PreviewPrintCommand}"/>
+                <Button Grid.Column="4" Content="保存并发布" Classes="Primary" Height="32" Command="{Binding SaveTemplateCommand}"/>
+                <Button Grid.Column="5" Content="停用模板" Classes="Danger" Height="32" Command="{Binding DeleteTemplateCommand}"/>
+            </Grid>
+        </Border>
+
+        <!-- 主体 Tab：设计器 + 打印审计日志 -->
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+            <TabItem Header="可视化拖拽设计器与触发位配置">
+                <Grid ColumnDefinitions="290,*,330" ColumnSpacing="10" Margin="0,8,0,0">
+                    <!-- 左侧：模板列表 + 当前页面数据源字段库 + 控件箱 -->
+                    <Border Grid.Column="0" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,140,Auto,Auto,*,Auto" RowSpacing="8">
+                            <TextBlock Grid.Row="0" Text="1. 已配置模板" FontWeight="Bold" FontSize="13"/>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding Templates}" SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="prt:PrintTemplateDto">
+                                        <StackPanel Spacing="1" Margin="2">
+                                            <TextBlock Text="{Binding TemplateName}" FontWeight="SemiBold" FontSize="12"/>
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText2}">
+                                                <Run Text="{Binding SizeDisplay}"/>
+                                                <Run Text=" · 页面:"/>
+                                                <Run Text="{Binding PageKey}"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <StackPanel Grid.Row="2" Spacing="4">
+                                <TextBlock Text="2. 绑定业务页面数据源" FontWeight="Bold" FontSize="13"/>
+                                <ComboBox HorizontalAlignment="Stretch"
+                                          ItemsSource="{Binding PageDataSources}"
+                                          SelectedItem="{Binding SelectedPageDataSource, Mode=TwoWay}"/>
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="3" Text="3. 当前页面可用字段（点击添加到画布）" FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{DynamicResource SemiColorPrimary}"/>
+
+                            <ListBox Grid.Row="4" ItemsSource="{Binding CurrentPageFields}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="prt:PrintFieldMetaDto">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4" Margin="0,2">
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding Path}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="+文本" FontSize="10" Padding="6,2" Classes="Tertiary"
+                                                    Command="{Binding $parent[UserControl].((local:PrintDesignerViewModel)DataContext).AddFieldElementCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Grid.Column="2" Content="+条码" FontSize="10" Padding="6,2" Classes="Secondary"
+                                                    Command="{Binding $parent[UserControl].((local:PrintDesignerViewModel)DataContext).AddBarcodeFromFieldCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <WrapPanel Grid.Row="5" Orientation="Horizontal">
+                                <Button Content="+静态文本" FontSize="11" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding AddTextElementCommand}"/>
+                                <Button Content="+一维条码" FontSize="11" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding AddBarcodeElementCommand}"/>
+                                <Button Content="+二维码" FontSize="11" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding AddQrElementCommand}"/>
+                                <Button Content="+横线" FontSize="11" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding AddLineElementCommand}"/>
+                                <Button Content="+方框" FontSize="11" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding AddRectElementCommand}"/>
+                            </WrapPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 中间：毫米级可视化拖拽画布 -->
+                    <Border Grid.Column="1" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="{Binding PaperSizeDisplay}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="直接按住元素在纸张内拖动排版" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                <Slider Grid.Column="2" Width="110" Minimum="1.8" Maximum="7.0" Value="{Binding ZoomScale, Mode=TwoWay}"/>
+                            </Grid>
+
+                            <Border Grid.Row="1" Background="#E5E7EB" CornerRadius="6" Padding="16">
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                    <Border x:Name="PaperCanvasHost"
+                                            Width="{Binding CanvasWidthPx}"
+                                            Height="{Binding CanvasHeightPx}"
+                                            Background="White"
+                                            BorderBrush="#64748B"
+                                            BorderThickness="1"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                        <ItemsControl ItemsSource="{Binding CanvasElements}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Canvas Width="{Binding $parent[Border].Width}"
+                                                            Height="{Binding $parent[Border].Height}"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.Styles>
+                                                <Style Selector="ItemsControl > ContentPresenter" x:DataType="prt:PrintElementModel">
+                                                    <Setter Property="Canvas.Left" Value="{Binding LeftPx}"/>
+                                                    <Setter Property="Canvas.Top" Value="{Binding TopPx}"/>
+                                                </Style>
+                                            </ItemsControl.Styles>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="prt:PrintElementModel">
+                                                    <Border Width="{Binding WidthPx}"
+                                                            Height="{Binding HeightPx}"
+                                                            BorderBrush="{Binding BorderColorHex}"
+                                                            BorderThickness="1"
+                                                            Background="#14165DFF"
+                                                            Cursor="Hand"
+                                                            PointerPressed="OnElementPointerPressed"
+                                                            PointerMoved="OnElementPointerMoved"
+                                                            PointerReleased="OnElementPointerReleased">
+                                                        <TextBlock Text="{Binding DisplayLabel}"
+                                                                   FontSize="{Binding ScaledFontSize}"
+                                                                   Foreground="#0F172A"
+                                                                   TextWrapping="Wrap"
+                                                                   VerticalAlignment="Center"
+                                                                   Margin="2,0"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Border>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧：纸张宽高自定义 + 选中元素属性 + 触发位置配置 -->
+                    <Border Grid.Column="2" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <ScrollViewer>
+                            <StackPanel Spacing="10">
+                                <!-- 纸张尺寸与模板信息 -->
+                                <Border Padding="8" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="纸张尺寸自定义 (单位: mm)" FontWeight="Bold" FontSize="13"/>
+                                        <TextBox Text="{Binding EditTemplateName, Mode=TwoWay}" PlaceholderText="模板名称 *"/>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                            <TextBox Grid.Column="0" Text="{Binding EditTemplateCode, Mode=TwoWay}" PlaceholderText="模板编码"/>
+                                            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding CategoryOptions}" SelectedItem="{Binding EditCategory, Mode=TwoWay}"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="纸张宽度 (mm)" FontSize="11"/>
+                                                <NumericUpDown Minimum="15" Maximum="500" Increment="1" FormatString="0.#" Value="{Binding PaperWidthMm, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="纸张高度 (mm)" FontSize="11"/>
+                                                <NumericUpDown Minimum="15" Maximum="1000" Increment="1" FormatString="0.#" Value="{Binding PaperHeightMm, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding OrientationOptions}" SelectedItem="{Binding Orientation, Mode=TwoWay}"/>
+                                            <NumericUpDown Grid.Column="1" Minimum="0" Maximum="30" Increment="0.5" FormatString="0.#" Value="{Binding MarginMm, Mode=TwoWay}"/>
+                                        </Grid>
+                                        <WrapPanel>
+                                            <Button Content="60×35条码" FontSize="10" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding ApplyPaperPresetCommand}" CommandParameter="60x35"/>
+                                            <Button Content="90×30腕带" FontSize="10" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding ApplyPaperPresetCommand}" CommandParameter="90x30"/>
+                                            <Button Content="80×150小票" FontSize="10" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding ApplyPaperPresetCommand}" CommandParameter="80x150"/>
+                                            <Button Content="A5单据" FontSize="10" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding ApplyPaperPresetCommand}" CommandParameter="148x210"/>
+                                            <Button Content="A4报告" FontSize="10" Margin="0,0,4,4" Classes="Tertiary" Command="{Binding ApplyPaperPresetCommand}" CommandParameter="210x297"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 选中元素属性 -->
+                                <Border Padding="8" CornerRadius="6" BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1"
+                                        IsEnabled="{Binding HasSelectedElement}">
+                                    <StackPanel Spacing="6">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="当前选中元素属性" FontWeight="Bold" FontSize="13"/>
+                                            <Button Grid.Column="1" Content="删除元素" FontSize="11" Classes="Danger" Padding="6,2" Command="{Binding DeleteElementCommand}"/>
+                                        </Grid>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding ElementTypeOptions}" SelectedItem="{Binding SelectedElement.Type, Mode=TwoWay}"/>
+                                        <TextBlock Text="显示内容 / 表达式（支持 {{字段路径}} 混排）" FontSize="11"/>
+                                        <TextBox Text="{Binding SelectedElement.StaticText, Mode=TwoWay}"/>
+                                        <TextBlock Text="主绑定字段路径" FontSize="11"/>
+                                        <TextBox Text="{Binding SelectedElement.BindingPath, Mode=TwoWay}"/>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="X (mm)" FontSize="11"/>
+                                                <NumericUpDown Minimum="0" Maximum="500" Increment="0.5" FormatString="0.#" Value="{Binding SelectedElement.XMm, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Y (mm)" FontSize="11"/>
+                                                <NumericUpDown Minimum="0" Maximum="1000" Increment="0.5" FormatString="0.#" Value="{Binding SelectedElement.YMm, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="宽 (mm)" FontSize="11"/>
+                                                <NumericUpDown Minimum="2" Maximum="500" Increment="1" FormatString="0.#" Value="{Binding SelectedElement.WidthMm, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="高 (mm)" FontSize="11"/>
+                                                <NumericUpDown Minimum="0.5" Maximum="500" Increment="0.5" FormatString="0.#" Value="{Binding SelectedElement.HeightMm, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="6">
+                                            <NumericUpDown Grid.Column="0" Minimum="6" Maximum="36" FormatString="0" Value="{Binding SelectedElement.FontSize, Mode=TwoWay}"/>
+                                            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding TextAlignOptions}" SelectedItem="{Binding SelectedElement.TextAlign, Mode=TwoWay}"/>
+                                            <CheckBox Grid.Column="2" Content="加粗" IsChecked="{Binding SelectedElement.IsBold, Mode=TwoWay}"/>
+                                        </Grid>
+                                        <CheckBox Content="条码下方显示明文编码" IsChecked="{Binding SelectedElement.ShowBarcodeText, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 打印触发位置配置 -->
+                                <Border Padding="8" CornerRadius="6" BorderBrush="{DynamicResource SemiColorSuccess}" BorderThickness="1">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="打印触发位置配置（挂载到具体业务页面）" FontWeight="Bold" FontSize="13"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding PageDataSources}" SelectedItem="{Binding TriggerTargetPage, Mode=TwoWay}"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding CurrentPageSlots}" SelectedItem="{Binding TriggerTargetSlot, Mode=TwoWay}"/>
+                                        <Grid ColumnDefinitions="*,60" ColumnSpacing="6">
+                                            <TextBox Grid.Column="0" Text="{Binding TriggerButtonLabel, Mode=TwoWay}" PlaceholderText="按钮名称，如：打印标本条码"/>
+                                            <TextBox Grid.Column="1" Text="{Binding TriggerButtonIcon, Mode=TwoWay}" PlaceholderText="图标"/>
+                                        </Grid>
+                                        <Button Content="+ 挂载到该页面位置" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding AddTriggerCommand}"/>
+
+                                        <ItemsControl ItemsSource="{Binding TemplateTriggers}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="prt:PrintTriggerItemDto">
+                                                    <Border Padding="6,4" Margin="0,2" CornerRadius="4" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <StackPanel Grid.Column="0">
+                                                                <TextBlock FontSize="12" FontWeight="SemiBold">
+                                                                    <Run Text="{Binding ButtonIcon}"/>
+                                                                    <Run Text=" "/>
+                                                                    <Run Text="{Binding ButtonLabel}"/>
+                                                                </TextBlock>
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource SemiColorText2}">
+                                                                    <Run Text="{Binding PageKey}"/>
+                                                                    <Run Text=" · "/>
+                                                                    <Run Text="{Binding SlotDisplay}"/>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                            <Button Grid.Column="1" Content="移除" FontSize="10" Classes="Danger" Padding="6,2"
+                                                                    Command="{Binding $parent[UserControl].((local:PrintDesignerViewModel)DataContext).DeleteTriggerCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="全院打印审计留痕">
+                <Border CornerRadius="8" Padding="12" Margin="0,8,0,0"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <ListBox ItemsSource="{Binding PrintLogs}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="prt:PrintLogDto">
+                                <Border Padding="8,6" Margin="0,2" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="200,150,150,*,Auto" ColumnSpacing="10">
+                                        <TextBlock Grid.Column="0" Text="{Binding TemplateName}" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding PatientName, StringFormat=患者：{0}}"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding BusinessKey, StringFormat=单号：{0}}"/>
+                                        <TextBlock Grid.Column="3" Foreground="{DynamicResource SemiColorText2}">
+                                            <Run Text="{Binding PageKey}"/>
+                                            <Run Text=" / "/>
+                                            <Run Text="{Binding TriggerSlot}"/>
+                                            <Run Text=" · 份数："/>
+                                            <Run Text="{Binding Copies}"/>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="4" FontSize="11" Foreground="{DynamicResource SemiColorText2}">
+                                            <Run Text="{Binding PrintedByName}"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding TimeText}"/>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

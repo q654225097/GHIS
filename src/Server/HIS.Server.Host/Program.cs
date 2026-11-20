@@ -68,6 +68,10 @@ using HIS.Modules.Workflow.Models;
 using HIS.Modules.Workflow.Services;
 using HIS.Modules.Hr.Controllers;
 using HIS.Modules.Hr.Models;
+using HIS.Modules.Print.Controllers;
+using HIS.Modules.Print.Models;
+using HIS.Modules.Checkup.Controllers;
+using HIS.Modules.Checkup.Models;
 using HIS.Server.Host.Hubs;
 using HIS.Server.Host;
 using Microsoft.AspNetCore.Builder;
@@ -103,7 +107,9 @@ public class Program
 			.AddApplicationPart(typeof(EmrQcController).Assembly)
 			.AddApplicationPart(typeof(HieGatewayController).Assembly)
 			.AddApplicationPart(typeof(WorkflowController).Assembly)
-			.AddApplicationPart(typeof(HrController).Assembly);
+			.AddApplicationPart(typeof(HrController).Assembly)
+			.AddApplicationPart(typeof(PrintController).Assembly)
+			.AddApplicationPart(typeof(CheckupController).Assembly);
 		builder.Services.AddSignalR();
 		builder.Services.AddSingleton((Func<IServiceProvider, IDbConnectionFactory>)((IServiceProvider sp) => new SqliteConnectionFactory()));
 		RegisterRepo<SysDepartment>(builder.Services, "sys_departments");
@@ -287,6 +293,20 @@ public class Program
 		RegisterRepo<HrEmployeeCredential>(builder.Services, "hr_employee_credentials");
 		RegisterRepo<HrChangeRecord>(builder.Services, "hr_change_records");
 		RegisterRepo<HrContract>(builder.Services, "hr_contracts");
+		RegisterRepo<PrtTemplate>(builder.Services, "prt_templates");
+		RegisterRepo<PrtTriggerBinding>(builder.Services, "prt_trigger_bindings");
+		RegisterRepo<PrtPrintLog>(builder.Services, "prt_print_logs");
+		RegisterRepo<CfgOrderBundle>(builder.Services, "cfg_order_bundles");
+		RegisterRepo<CfgOrderBundleItem>(builder.Services, "cfg_order_bundle_items");
+		RegisterRepo<ChkOrder>(builder.Services, "chk_orders");
+		RegisterRepo<ChkOrderItem>(builder.Services, "chk_order_items");
+		RegisterRepo<MtcReportTemplate>(builder.Services, "mtc_report_templates");
+		RegisterRepo<MtcDiagnosticReport>(builder.Services, "mtc_diagnostic_reports");
+		RegisterRepo<IpdPreAdmissionConfig>(builder.Services, "ipd_pre_admission_config");
+		RegisterRepo<IpdPreAdmission>(builder.Services, "ipd_pre_admissions");
+		RegisterRepo<IpdPreAdmissionOrder>(builder.Services, "ipd_pre_admission_orders");
+		RegisterRepo<IpdPreAdmissionEvaluation>(builder.Services, "ipd_pre_admission_evaluations");
+		RegisterRepo<IpdPreAdmissionRule>(builder.Services, "ipd_pre_admission_rules");
 
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);

@@ -1,0 +1,304 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.MedTechReport"
+             x:Class="HIS.Client.UrsaShell.Stations.MedTechReport.MedTechReportStationView"
+             x:DataType="local:MedTechReportViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <!-- 顶部 KPI 概览 -->
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="医技诊断报告书写与双签审核工作站" FontSize="17" FontWeight="Bold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="14">
+                        <TextBlock Text="{Binding PendingWriteCount, StringFormat=待书写/草稿 {0}}" FontSize="12" Foreground="{DynamicResource SemiColorWarning}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding PendingReviewCount, StringFormat=待审签 {0}}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding DeviceAutoPendingCount, StringFormat=仪器直出待审 {0}}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        <TextBlock Text="{Binding SignedCount, StringFormat=已双签发布 {0}}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}"/>
+                        <TextBlock Text="{Binding CriticalCount, StringFormat=危急值 {0}}" FontSize="12" Foreground="{DynamicResource SemiColorDanger}"/>
+                    </StackPanel>
+                </StackPanel>
+                <Button Grid.Column="1" Content="同步全院医技申请单" Classes="Secondary" Height="32" Command="{Binding SyncRequestsCommand}"/>
+                <Button Grid.Column="2" Content="刷新工作站" Classes="Primary" Height="32" Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+            <!-- Tab 1: 报告书写与审签工作台 -->
+            <TabItem Header="1. 待书写与待审签报告工作台">
+                <Grid ColumnDefinitions="390,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <!-- 左侧：队列筛选 + 快速登记/仪器直传 + 报告列表 -->
+                    <Border Grid.Column="0" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding SearchKeyword, Mode=TwoWay}" PlaceholderText="姓名 / 报告号 / 申请单号 / 项目"/>
+                                <Button Grid.Column="1" Content="查询" Classes="Secondary" Command="{Binding SearchQueueCommand}"/>
+                            </Grid>
+                            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding DeptFilterOptions}" SelectedItem="{Binding FilterDeptCode, Mode=TwoWay}"/>
+                                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding StatusFilterOptions}" SelectedItem="{Binding FilterStatus, Mode=TwoWay}"/>
+                            </Grid>
+
+                            <ListBox Grid.Row="2" ItemsSource="{Binding ReportQueue}" SelectedItem="{Binding SelectedReport, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:MtcDiagnosticReportRow">
+                                        <Border Padding="8,6" Margin="0,2" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="2">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" FontWeight="SemiBold">
+                                                        <Run Text="{Binding PatientName}"/>
+                                                        <Run Text=" · "/>
+                                                        <Run Text="{Binding Gender}"/>
+                                                        <Run Text=" "/>
+                                                        <Run Text="{Binding Age}"/>
+                                                        <Run Text="岁"/>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Column="1" Text="{Binding StatusDisplay}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                                                </Grid>
+                                                <TextBlock FontSize="12" Text="{Binding ExamItemName}" TextWrapping="Wrap"/>
+                                                <TextBlock FontSize="10" Foreground="{DynamicResource SemiColorText2}">
+                                                    <Run Text="{Binding MedtechDeptName}"/>
+                                                    <Run Text=" · "/>
+                                                    <Run Text="{Binding ReportNo}"/>
+                                                    <Run Text=" · "/>
+                                                    <Run Text="{Binding SourceBadge}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <!-- 底部：分诊派单（待书写）或 仪器直连出结果（直接待审签） -->
+                            <Border Grid.Row="3" Padding="8" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="新增检查任务 / 仪器直出结果接入" FontSize="12" FontWeight="Bold"/>
+                                    <Grid ColumnDefinitions="*,65,65" ColumnSpacing="4">
+                                        <TextBox Grid.Column="0" Text="{Binding NewPatName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                                        <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding NewPatGender, Mode=TwoWay}"/>
+                                        <NumericUpDown Grid.Column="2" Minimum="0" Maximum="120" FormatString="0" Value="{Binding NewPatAge, Mode=TwoWay}"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="95,*" ColumnSpacing="4">
+                                        <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding DeptCodeOptions}" SelectedItem="{Binding NewDeptCode, Mode=TwoWay}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding NewExamItem, Mode=TwoWay}" PlaceholderText="检查/检验项目名"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                        <Button Grid.Column="0" Content="+ 派单(待书写)" FontSize="11" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding CreateManualTaskCommand}"/>
+                                        <Button Grid.Column="1" Content="⚡仪器直出(直接待审)" FontSize="11" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding DeviceIngestCommand}"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧：按科室模板动态生成的真实可书写报告编辑器与审签栏 -->
+                    <Border Grid.Column="1" CornerRadius="8" Padding="14"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10" IsEnabled="{Binding HasSelectedReport}">
+                            <!-- 报告头部信息与模板切换 -->
+                            <StackPanel Grid.Row="0" Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                    <StackPanel>
+                                        <TextBlock FontSize="15" FontWeight="Bold">
+                                            <Run Text="{Binding SelectedReport.MedtechDeptName}"/>
+                                            <Run Text=" — "/>
+                                            <Run Text="{Binding SelectedReport.ExamItemName}"/>
+                                            <Run Text=" ["/>
+                                            <Run Text="{Binding SelectedReport.StatusDisplay}"/>
+                                            <Run Text="]"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource SemiColorText2}">
+                                            <Run Text="患者："/>
+                                            <Run Text="{Binding SelectedReport.PatientName}"/>
+                                            <Run Text="  |  报告号："/>
+                                            <Run Text="{Binding SelectedReport.ReportNo}"/>
+                                            <Run Text="  |  报告医师："/>
+                                            <Run Text="{Binding SelectedReport.WriterName}"/>
+                                            <Run Text="  |  审签医师："/>
+                                            <Run Text="{Binding SelectedReport.ReviewerName}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" Width="230" ItemsSource="{Binding DeptTemplates}" SelectedItem="{Binding ActiveEditorTemplate, Mode=TwoWay}"/>
+                                    <Button Grid.Column="2" Content="填充模板词条" Classes="Tertiary" Command="{Binding FillDefaultTemplateCommand}" IsEnabled="{Binding CanEditSelectedReport}"/>
+                                </Grid>
+
+                                <TextBlock Text="{Binding SelectedReport.RejectReason, StringFormat=⚠ 退回修改意见：{0}}"
+                                           FontSize="12" Foreground="{DynamicResource SemiColorDanger}"
+                                           IsVisible="{Binding SelectedReport.RejectReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            </StackPanel>
+
+                            <!-- 动态渲染的科室表单字段 -->
+                            <ScrollViewer Grid.Row="1">
+                                <StackPanel Spacing="10" IsEnabled="{Binding CanEditSelectedReport}">
+                                    <ItemsControl ItemsSource="{Binding DynamicFields}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="local:ReportDynamicFieldValue">
+                                                <StackPanel Spacing="4" Margin="0,0,0,10">
+                                                    <TextBlock Text="{Binding DisplayLabel}" FontSize="12" FontWeight="SemiBold"/>
+                                                    <TextBox Text="{Binding Value, Mode=TwoWay}"
+                                                             IsVisible="{Binding IsSingleLine}"/>
+                                                    <TextBox Text="{Binding Value, Mode=TwoWay}"
+                                                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="92"
+                                                             IsVisible="{Binding IsMultiline}"/>
+                                                    <ComboBox HorizontalAlignment="Stretch"
+                                                              ItemsSource="{Binding OptionList}"
+                                                              SelectedItem="{Binding Value, Mode=TwoWay}"
+                                                              IsVisible="{Binding IsSelect}"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <CheckBox Content="标记为临床危急值报告（审签发布时同步预警临床科室）"
+                                              IsChecked="{Binding EditIsCriticalValue, Mode=TwoWay}"
+                                              Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- 底部书写、审签与按科室样式打印操作栏 -->
+                            <Border Grid.Row="2" Padding="10" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" Text="{Binding RejectReasonInput, Mode=TwoWay}" PlaceholderText="如需退回修改，请在此填写驳回意见"/>
+                                    <Button Grid.Column="1" Content="保存草稿" Classes="Secondary" Command="{Binding SaveDraftCommand}" IsEnabled="{Binding CanEditSelectedReport}"/>
+                                    <Button Grid.Column="2" Content="提交审签" Classes="Primary" Command="{Binding SubmitReviewCommand}" IsEnabled="{Binding CanEditSelectedReport}"/>
+                                    <Button Grid.Column="3" Content="驳回退回" Classes="Danger" Command="{Binding RejectCommand}" IsEnabled="{Binding CanApproveSelectedReport}"/>
+                                    <Button Grid.Column="4" Content="✓ 审签发布" Classes="Success" Command="{Binding ApproveSignCommand}" IsEnabled="{Binding CanApproveSelectedReport}"/>
+                                    <Button Grid.Column="5" Content="🖨️ 打印报告" Classes="Secondary" Command="{Binding PrintReportCommand}"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 管理员自定义分科室报告编辑样式与打印样式 -->
+            <TabItem Header="2. 分科室报告编辑与打印模板配置（管理员）">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="各医技科室报告模板" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="+ 新建模板" Classes="Primary" Command="{Binding NewTemplateCommand}"/>
+                            </Grid>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding AllTemplates}" SelectedItem="{Binding SelectedAdminTemplate, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:MtcReportTemplateRow">
+                                        <Border Padding="8,6" Margin="0,2" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding TemplateName}" FontWeight="SemiBold" FontSize="12"/>
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText2}">
+                                                    <Run Text="{Binding MedtechDeptName}"/>
+                                                    <Run Text=" ("/>
+                                                    <Run Text="{Binding MedtechDeptCode}"/>
+                                                    <Run Text=") · 打印纸张:"/>
+                                                    <Run Text="{Binding PaperDisplay}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" CornerRadius="8" Padding="14"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="自定义编辑表单字段与打印纸张/版式样式" FontSize="15" FontWeight="Bold"/>
+                                    <Button Grid.Column="1" Content="保存模板生效" Classes="Primary" Command="{Binding SaveTemplateCommand}"/>
+                                    <Button Grid.Column="2" Content="停用" Classes="Danger" Command="{Binding DisableTemplateCommand}"/>
+                                </Grid>
+
+                                <!-- 基础与打印样式设置 -->
+                                <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="所属医技科室代码" FontSize="11"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding DeptCodeOptions}" SelectedItem="{Binding TplEditDeptCode, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="科室名称" FontSize="11"/>
+                                        <TextBox Text="{Binding TplEditDeptName, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Spacing="2">
+                                        <TextBlock Text="模板名称 *" FontSize="11"/>
+                                        <TextBox Text="{Binding TplEditName, Mode=TwoWay}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="打印纸张宽度 (mm)" FontSize="11"/>
+                                        <NumericUpDown Minimum="40" Maximum="400" FormatString="0.#" Value="{Binding TplPrintW, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="打印纸张高度 (mm)" FontSize="11"/>
+                                        <NumericUpDown Minimum="40" Maximum="500" FormatString="0.#" Value="{Binding TplPrintH, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <CheckBox Grid.Row="1" Grid.Column="2" Content="设为该科室默认模板" VerticalAlignment="Bottom" IsChecked="{Binding TplIsDefault, Mode=TwoWay}"/>
+
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Spacing="2">
+                                        <TextBlock Text="打印抬头主标题" FontSize="11"/>
+                                        <TextBox Text="{Binding TplPrintHeader, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="2" Grid.Column="2" Spacing="2">
+                                        <TextBlock Text="打印副标题" FontSize="11"/>
+                                        <TextBox Text="{Binding TplPrintSubTitle, Mode=TwoWay}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="3" Grid.ColumnSpan="3" Spacing="2">
+                                        <TextBlock Text="打印页脚声明" FontSize="11"/>
+                                        <TextBox Text="{Binding TplPrintFooter, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 新增编辑表单字段 -->
+                                <Border Padding="10" CornerRadius="6" BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="添加自定义编辑字段（将在报告书写页面动态渲染）" FontWeight="SemiBold" FontSize="12"/>
+                                        <Grid ColumnDefinitions="110,130,110,*,Auto" ColumnSpacing="6">
+                                            <TextBox Grid.Column="0" Text="{Binding AddFieldKey, Mode=TwoWay}" PlaceholderText="键名如:body_part"/>
+                                            <TextBox Grid.Column="1" Text="{Binding AddFieldLabel, Mode=TwoWay}" PlaceholderText="标签如:检查部位"/>
+                                            <ComboBox Grid.Column="2" HorizontalAlignment="Stretch" ItemsSource="{Binding FieldTypeOptions}" SelectedItem="{Binding AddFieldType, Mode=TwoWay}"/>
+                                            <TextBox Grid.Column="3" Text="{Binding AddFieldDefault, Mode=TwoWay}" PlaceholderText="默认值 / 下拉选项(|分隔)"/>
+                                            <Button Grid.Column="4" Content="+ 添加字段" Classes="Primary" Command="{Binding AddSchemaFieldCommand}"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                            <TextBox Grid.Column="0" Text="{Binding AddFieldOptions, Mode=TwoWay}" PlaceholderText="若类型为 SELECT，用 | 分隔选项，如：窦性心律|房颤|早搏"/>
+                                            <CheckBox Grid.Column="1" Content="必填字段" IsChecked="{Binding AddFieldRequired, Mode=TwoWay}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 字段列表 -->
+                                <ItemsControl ItemsSource="{Binding EditingSchemaFields}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:ReportFieldSchemaDto">
+                                            <Border Padding="8,5" Margin="0,2" CornerRadius="5" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="110,140,90,*,Auto" ColumnSpacing="8">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Key}" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding FieldType}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding DefaultValue}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                    <Button Grid.Column="4" Content="移除" FontSize="11" Classes="Danger" Padding="6,2"
+                                                            Command="{Binding $parent[UserControl].((local:MedTechReportViewModel)DataContext).RemoveSchemaFieldCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

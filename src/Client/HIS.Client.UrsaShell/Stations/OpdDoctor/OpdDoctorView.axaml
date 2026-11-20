@@ -14,12 +14,15 @@
                 BorderThickness="0,0,1,0"
                 Padding="10">
             <Grid RowDefinitions="Auto,Auto,Auto,*">
-                <TextBox Grid.Row="0"
+                <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,8">
+                    <controls:DynamicPrintTriggerBar PageKey="opd_clinic" TriggerSlot="TOP_TOOLBAR" Compact="True"/>
+                    <TextBox 
                          Text="{Binding Workbench.PatientSearchQuery, Mode=TwoWay}"
                          PlaceholderText="检索候诊患者姓名/病历号..."
                          Height="32"
                          FontSize="12"
-                         Margin="0,0,0,8"/>
+                         />
+                </StackPanel>
 
                 <Grid Grid.Row="1" ColumnDefinitions="*,*,*" Margin="0,0,0,8">
                     <Border Grid.Column="0" Margin="2" Padding="4" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4">

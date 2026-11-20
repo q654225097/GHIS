@@ -625,6 +625,11 @@ public sealed class ShellViewModel : ClientModelBase
             sys.Items.Add(new ShellNavItem { Key = "role_admin", LegacyNavIndex = 8, Title = "角色与权限", Icon = "🔐", Description = "角色权限矩阵与数据隔离策略" });
             sys.Items.Add(new ShellNavItem { Key = "audit_log", LegacyNavIndex = 9, Title = "安全审计日志", Icon = "📜", Description = "关键操作不可篡改审计与链校验" });
             sys.Items.Add(new ShellNavItem { Key = "workflow_designer", LegacyNavIndex = -1, Title = "流程设计器", Icon = "🔀", Description = "低代码可视化状态机审批流设计与发布" });
+            sys.Items.Add(new ShellNavItem { Key = "print_designer", LegacyNavIndex = -1, Title = "打印模板设计", Icon = "🖨️", Description = "自定义纸张长宽、拖拽条码单据排版与页面触发位" });
+            sys.Items.Add(new ShellNavItem { Key = "master_catalog", LegacyNavIndex = -1, Title = "药品耗材与套餐字典", Icon = "📦", Description = "药品字典、耗材字典与医疗组合套餐（如肾功能全套）维护" });
+            sys.Items.Add(new ShellNavItem { Key = "checkup", LegacyNavIndex = -1, Title = "健康体检管理", Icon = "🩺", Description = "个人/团体体检登记、套餐自动拆解、分科录入与主检总检" });
+            sys.Items.Add(new ShellNavItem { Key = "medtech_report", LegacyNavIndex = -1, Title = "医技报告与审签", Icon = "📋", Description = "待书写/待审签队列、机器直出直审与分科室自定义报告模板" });
+            sys.Items.Add(new ShellNavItem { Key = "pre_admission", LegacyNavIndex = -1, Title = "预住院管理中心", Icon = "🏥", Description = "医保预住院登记、P0危急值抢占中断、准入评估与复合费用拆分" });
             NavGroups.Add(sys);
         }
 
@@ -732,6 +737,11 @@ public sealed class ShellViewModel : ClientModelBase
             "blood_bank" => new Stations.BloodBank.BloodBankStationView { DataContext = new Stations.BloodBank.BloodBankStationViewModel(Workbench, this) },
             "emr_qc" => new Stations.EmrQc.EmrQcStationView { DataContext = new Stations.EmrQc.EmrQcStationViewModel(Workbench, this) },
             "workflow_designer" => new Stations.WorkflowDesigner.WorkflowDesignerStationView { DataContext = new Stations.WorkflowDesigner.WorkflowDesignerViewModel(Workbench, this) },
+            "print_designer" => new Stations.PrintDesigner.PrintDesignerStationView { DataContext = new Stations.PrintDesigner.PrintDesignerViewModel(Workbench, this) },
+            "master_catalog" => new Stations.MasterCatalog.MasterCatalogStationView { DataContext = new Stations.MasterCatalog.MasterCatalogViewModel(Workbench, this) },
+            "checkup" => new Stations.Checkup.CheckupStationView { DataContext = new Stations.Checkup.CheckupStationViewModel(Workbench, this) },
+            "medtech_report" => new Stations.MedTechReport.MedTechReportStationView { DataContext = new Stations.MedTechReport.MedTechReportViewModel(Workbench, this) },
+            "pre_admission" => new Stations.PreAdmission.PreAdmissionStationView { DataContext = new Stations.PreAdmission.PreAdmissionViewModel(Workbench, this) },
             "workflow_inbox" => new Stations.WorkflowInbox.WorkflowInboxStationView { DataContext = new Stations.WorkflowInbox.WorkflowInboxViewModel(Workbench, this) },
             _ => new LegacyStationBridgeView(
                 item.Title,

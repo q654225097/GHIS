@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Controls;
 using HIS.Client.Core;
+using HIS.Client.UrsaShell.Printing;
 using HIS.Client.UrsaShell.Shell;
 using HIS.Client.UrsaShell.Shell.Controls;
 using HIS.Client.UrsaShell.ViewModels;
@@ -15,7 +16,7 @@ namespace HIS.Client.UrsaShell.Stations.OpdDoctor;
 
 public sealed record QuickDiagnosisItem(string Code, string Name, string Category);
 
-public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
+public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget, IPrintContextProvider
 {
     private readonly ShellViewModel? _shell;
     private Action? _focusDrugSearchCallback;
@@ -1830,5 +1831,26 @@ public sealed class OpdDoctorViewModel : ClientModelBase, IShortcutTarget
         {
             Workbench.SystemNotice = message;
         }
+    }
+
+    public Dictionary<string, string> BuildPrintContext(object? rowContext = null)
+    {
+        var ctx = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var pat = rowContext as PatientQueueItemModel ?? Workbench.SelectedPatient;
+        if (pat != null)
+        {
+            ctx["patient.fullName"] = pat.PatientName ?? string.Empty;
+            ctx["patient.gender"] = pat.Gender ?? string.Empty;
+            ctx["patient.age"] = pat.Age.ToString();
+            ctx["patient.medicalRecordNo"] = pat.MedicalRecordNo ?? string.Empty;
+            ctx["patient.visitNo"] = pat.VisitNo ?? string.Empty;
+            ctx["patient.queueNo"] = pat.QueueNo ?? string.Empty;
+            ctx["patient.deptName"] = pat.DeptName ?? string.Empty;
+            ctx["patient.doctorName"] = pat.DoctorName ?? string.Empty;
+            ctx["patient.feeType"] = pat.FeeType ?? string.Empty;
+            ctx["patient.chiefComplaint"] = pat.ChiefComplaint ?? string.Empty;
+            ctx["patient.allergyTags"] = pat.AllergyTags ?? string.Empty;
+        }
+        return ctx;
     }
 }

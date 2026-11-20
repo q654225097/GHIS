@@ -1,0 +1,299 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.MasterCatalog"
+             x:Class="HIS.Client.UrsaShell.Stations.MasterCatalog.MasterCatalogStationView"
+             x:DataType="local:MasterCatalogViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="16" RowSpacing="12">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="药品耗材基本字典与现代医疗组合套餐维护" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新全量字典" Classes="Primary" Height="32" Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+            <!-- Tab 1: 药品基本字典维护 -->
+            <TabItem Header="药品基本字典维护">
+                <Grid ColumnDefinitions="420,*" ColumnSpacing="12" Margin="0,10,0,0">
+                    <Border Grid.Column="0" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding DrugSearch, Mode=TwoWay}" PlaceholderText="检索药品编码/名称/规格"/>
+                                <Button Grid.Column="1" Content="查询" Classes="Secondary" Command="{Binding SearchDrugsCommand}"/>
+                                <Button Grid.Column="2" Content="+新增" Classes="Primary" Command="{Binding NewDrugCommand}"/>
+                            </Grid>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding Drugs}" SelectedItem="{Binding SelectedDrug, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:DrugCatalogRow">
+                                        <Border Padding="8,6" Margin="0,2" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock FontWeight="SemiBold">
+                                                    <Run Text="{Binding DrugName}"/>
+                                                    <Run Text=" ("/>
+                                                    <Run Text="{Binding DrugCode}"/>
+                                                    <Run Text=")"/>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{Binding TagSummary}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" CornerRadius="8" Padding="16"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="药品基础属性编辑" FontSize="15" FontWeight="Bold"/>
+                                <Button Grid.Column="1" Content="保存药品字典" Classes="Primary" Command="{Binding SaveDrugCommand}"/>
+                                <Button Grid.Column="2" Content="停用" Classes="Danger" Command="{Binding DisableDrugCommand}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="药品编码 *" FontSize="12"/>
+                                    <TextBox Text="{Binding EditDrugCode, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="药品通用名 *" FontSize="12"/>
+                                    <TextBox Text="{Binding EditDrugName, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="规格型号" FontSize="12"/>
+                                    <TextBox Text="{Binding EditDrugSpec, Mode=TwoWay}" PlaceholderText="如：0.25g×24粒"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="计价单位" FontSize="12"/>
+                                    <TextBox Text="{Binding EditDrugUnit, Mode=TwoWay}" PlaceholderText="盒 / 支 / 瓶"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="零售单价 (元)" FontSize="12"/>
+                                    <NumericUpDown Minimum="0" Maximum="99999" Increment="1" FormatString="0.00" Value="{Binding EditDrugPrice, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="采购进价 (元)" FontSize="12"/>
+                                    <NumericUpDown Minimum="0" Maximum="99999" Increment="1" FormatString="0.00" Value="{Binding EditDrugCostPrice, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="抗菌药物分级 (0非抗菌 1非限制 2限制 3特殊)" FontSize="12"/>
+                                    <NumericUpDown Minimum="0" Maximum="3" FormatString="0" Value="{Binding EditDrugAbxLevel, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Bottom">
+                                    <CheckBox Content="毒麻精放药品" IsChecked="{Binding EditDrugIsNarcotic, Mode=TwoWay}"/>
+                                    <CheckBox Content="使用前必须皮试" IsChecked="{Binding EditDrugIsSkinTest, Mode=TwoWay}"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 医用耗材基本字典维护 -->
+            <TabItem Header="医用耗材字典维护">
+                <Grid ColumnDefinitions="420,*" ColumnSpacing="12" Margin="0,10,0,0">
+                    <Border Grid.Column="0" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding CsmSearch, Mode=TwoWay}" PlaceholderText="检索耗材编码/名称/分类"/>
+                                <Button Grid.Column="1" Content="查询" Classes="Secondary" Command="{Binding SearchConsumablesCommand}"/>
+                                <Button Grid.Column="2" Content="+新增" Classes="Primary" Command="{Binding NewConsumableCommand}"/>
+                            </Grid>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding Consumables}" SelectedItem="{Binding SelectedConsumable, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:ConsumableCatalogRow">
+                                        <Border Padding="8,6" Margin="0,2" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock FontWeight="SemiBold">
+                                                    <Run Text="{Binding Name}"/>
+                                                    <Run Text=" ("/>
+                                                    <Run Text="{Binding Code}"/>
+                                                    <Run Text=")"/>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{Binding TagSummary}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" CornerRadius="8" Padding="16"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="医用耗材基础属性编辑" FontSize="15" FontWeight="Bold"/>
+                                <Button Grid.Column="1" Content="保存耗材字典" Classes="Primary" Command="{Binding SaveConsumableCommand}"/>
+                                <Button Grid.Column="2" Content="停用" Classes="Danger" Command="{Binding DisableConsumableCommand}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="耗材编码 *" FontSize="12"/>
+                                    <TextBox Text="{Binding EditCsmCode, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="耗材名称 *" FontSize="12"/>
+                                    <TextBox Text="{Binding EditCsmName, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="规格型号" FontSize="12"/>
+                                    <TextBox Text="{Binding EditCsmSpec, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="计量单位" FontSize="12"/>
+                                    <TextBox Text="{Binding EditCsmUnit, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="耗材分类" FontSize="12"/>
+                                    <TextBox Text="{Binding EditCsmCategory, Mode=TwoWay}" PlaceholderText="高值植入 / 检验采血 / 手术耗材"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="收费单价 (元)" FontSize="12"/>
+                                    <NumericUpDown Minimum="0" Maximum="999999" Increment="1" FormatString="0.00" Value="{Binding EditCsmPrice, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="20">
+                                    <CheckBox Content="无菌/灭菌管理耗材" IsChecked="{Binding EditCsmIsSterile, Mode=TwoWay}"/>
+                                    <CheckBox Content="高值耗材（需一物一码追溯）" IsChecked="{Binding EditCsmIsHighValue, Mode=TwoWay}"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 医疗组合套餐与医嘱套维护 -->
+            <TabItem Header="医疗组合套餐与医嘱套（如肾功能全套）">
+                <Grid ColumnDefinitions="380,*" ColumnSpacing="12" Margin="0,10,0,0">
+                    <Border Grid.Column="0" CornerRadius="8" Padding="10"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding BundleSearch, Mode=TwoWay}" PlaceholderText="检索套餐名/拼音码"/>
+                                <Button Grid.Column="1" Content="查询" Classes="Secondary" Command="{Binding SearchBundlesCommand}"/>
+                                <Button Grid.Column="2" Content="+新建套餐" Classes="Primary" Command="{Binding NewBundleCommand}"/>
+                            </Grid>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding Bundles}" SelectedItem="{Binding SelectedBundle, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:OrderBundleSummaryRow">
+                                        <Border Padding="8,6" Margin="0,2" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="2">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding BundleName}" FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding CategoryDisplay}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                </Grid>
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText2}">
+                                                    <Run Text="{Binding BundleCode}"/>
+                                                    <Run Text=" · 含 "/>
+                                                    <Run Text="{Binding ItemCount}"/>
+                                                    <Run Text=" 项底层收费 · 套餐价 ¥"/>
+                                                    <Run Text="{Binding PackagePrice, StringFormat=0.00}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" CornerRadius="8" Padding="14"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <ScrollViewer>
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="组合医嘱/体检套餐配置（医生前台开组合，后台自动拆解计费）" FontSize="15" FontWeight="Bold"/>
+                                    <Button Grid.Column="1" Content="模拟前台拆解" Classes="Secondary" Command="{Binding TestExpandBundleCommand}"/>
+                                    <Button Grid.Column="2" Content="保存套餐及明细" Classes="Primary" Command="{Binding SaveBundleCommand}"/>
+                                    <Button Grid.Column="3" Content="停用" Classes="Danger" Command="{Binding DisableBundleCommand}"/>
+                                </Grid>
+
+                                <TextBlock Text="{Binding ExpandPreviewText}" FontSize="12" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource SemiColorSuccess}"
+                                           IsVisible="{Binding ExpandPreviewText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                                <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="套餐编码" FontSize="11"/>
+                                        <TextBox Text="{Binding EditBundleCode, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="套餐名称 *（如：肾功能全套）" FontSize="11"/>
+                                        <TextBox Text="{Binding EditBundleName, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Spacing="2">
+                                        <TextBlock Text="套餐分类" FontSize="11"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding BundleCategoryOptions}" SelectedItem="{Binding EditBundleCategory, Mode=TwoWay}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="适用场景" FontSize="11"/>
+                                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding SceneOptions}" SelectedItem="{Binding EditBundleScene, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="执行科室 / 标本类型" FontSize="11"/>
+                                        <TextBox Text="{Binding EditBundleSpecimen, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="2" Spacing="2">
+                                        <TextBlock Text="{Binding BundleItemsSumPrice, StringFormat=套餐定价（明细原价合计 ¥{0:0.00}）}" FontSize="11"/>
+                                        <NumericUpDown Minimum="0" Maximum="99999" FormatString="0.00" Value="{Binding EditBundlePackagePrice, Mode=TwoWay}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Spacing="2">
+                                        <TextBlock Text="临床说明 / 套餐备注" FontSize="11"/>
+                                        <TextBox Text="{Binding EditBundleRemark, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 添加底层收费子项 -->
+                                <Border Padding="8" CornerRadius="6" BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="*,130,80,Auto" ColumnSpacing="8">
+                                        <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding PriceItems}" SelectedItem="{Binding SelectedPriceItemToAdd, Mode=TwoWay}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding AddItemExecDept, Mode=TwoWay}" PlaceholderText="执行科室"/>
+                                        <NumericUpDown Grid.Column="2" Minimum="1" Maximum="99" FormatString="0" Value="{Binding AddItemQty, Mode=TwoWay}"/>
+                                        <Button Grid.Column="3" Content="+ 加入套餐明细" Classes="Primary" Command="{Binding AddPriceItemToBundleCommand}"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- 明细列表 -->
+                                <ItemsControl ItemsSource="{Binding EditingBundleItems}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:BundleItemRow">
+                                            <Border Padding="8,5" Margin="0,2" CornerRadius="5" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                <Grid ColumnDefinitions="100,*,100,60,80,Auto" ColumnSpacing="8">
+                                                    <TextBlock Grid.Column="0" Text="{Binding ItemCode}" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding ItemName}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding ExecDeptName}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding Quantity, StringFormat=×{0:0.#}}" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="4" Text="{Binding SubtotalAmount, StringFormat=¥{0:0.00}}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <Button Grid.Column="5" Content="移除" FontSize="11" Classes="Danger" Padding="6,2"
+                                                            Command="{Binding $parent[UserControl].((local:MasterCatalogViewModel)DataContext).RemoveBundleItemCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

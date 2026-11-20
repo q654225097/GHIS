@@ -13,7 +13,7 @@
                 <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
                         Background="{DynamicResource SemiColorBackground1}"
                         BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto">
                         <StackPanel Spacing="3">
                             <TextBlock Text="医技检查检验与接口同步工作台" FontSize="17" FontWeight="Bold"/>
                             <StackPanel Orientation="Horizontal" Spacing="12">
@@ -33,8 +33,9 @@
                                 Command="{Binding RefreshCommand}"/>
                         <Button Grid.Column="4" Content="WHO 手术安全核查 (F2)" Classes="Warning" Height="32" Margin="0,0,8,0"
                                 Command="{Binding OpenWhoSurgeryDrawerCommand}"/>
-                        <Button Grid.Column="5" Content="危急值处置" Classes="Danger" Height="32"
+                        <Button Grid.Column="5" Content="危急值处置" Classes="Danger" Height="32" Margin="0,0,8,0"
                                 Command="{Binding OpenCriticalValueCommand}"/>
+                        <controls:DynamicPrintTriggerBar Grid.Column="6" PageKey="medtech" TriggerSlot="TOP_TOOLBAR"/>
                     </Grid>
                 </Border>
 
@@ -98,7 +99,7 @@
                                         <Border Margin="0,3" Padding="10" CornerRadius="6"
                                                 Background="{DynamicResource SemiColorBackground0}"
                                                 BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                            <Grid ColumnDefinitions="130,220,130,*,80,100,260">
+                                            <Grid ColumnDefinitions="130,210,120,*,75,95,330">
                                                 <TextBlock Grid.Column="0" Text="{Binding RequestNo}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                 <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding ItemName}" FontWeight="Bold" TextWrapping="Wrap"/>
@@ -124,6 +125,7 @@
                                                             ToolTip.Tip="已确费项目不可直接撤单，需走主任签章退费冲正"
                                                             Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).CancelOrderCommand}"
                                                             CommandParameter="{Binding}"/>
+                                                    <controls:DynamicPrintTriggerBar PageKey="medtech" TriggerSlot="LIST_ROW" RowContext="{Binding}" Compact="True"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>

@@ -71,6 +71,10 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await EnsureEmrLevel7SchemaAsync(conn);
 		await EnsureWorkflowSchemaAsync(conn);
 		await InitializeHrTablesAsync(conn);
+		await InitializePrintTablesAsync(conn);
+		await InitializeCatalogAndCheckupTablesAsync(conn);
+		await InitializeMedTechReportTablesAsync(conn);
+		await InitializePreAdmissionTablesAsync(conn);
 		await CleanUpDirtyDataAsync(conn);
 	}
 

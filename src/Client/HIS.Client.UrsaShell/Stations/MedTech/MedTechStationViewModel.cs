@@ -13,6 +13,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using HIS.BuildingBlocks.Common;
 using HIS.Client.Core;
+using HIS.Client.UrsaShell.Printing;
 using HIS.Client.UrsaShell.Shell;
 using HIS.Client.UrsaShell.ViewModels;
 
@@ -142,7 +143,7 @@ public class LabHistoryItemModel : ClientModelBase
     public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-";
 }
 
-public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
+public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, IPrintContextProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly ShellViewModel? _shell;
@@ -1266,5 +1267,32 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget
                 }
             }
         };
+    }
+
+    public Dictionary<string, string> BuildPrintContext(object? rowContext = null)
+    {
+        var ctx = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var pat = Workbench.SelectedPatient;
+        if (pat != null)
+        {
+            ctx["patient.fullName"] = pat.PatientName ?? string.Empty;
+            ctx["patient.gender"] = pat.Gender ?? string.Empty;
+            ctx["patient.age"] = pat.Age.ToString();
+            ctx["patient.medicalRecordNo"] = pat.MedicalRecordNo ?? string.Empty;
+            ctx["patient.visitNo"] = pat.VisitNo ?? string.Empty;
+            ctx["patient.deptName"] = pat.DeptName ?? string.Empty;
+            ctx["patient.doctorName"] = pat.DoctorName ?? string.Empty;
+        }
+        var order = rowContext as MedTechOrderItemModel ?? FilteredOrders.FirstOrDefault();
+        if (order != null)
+        {
+            ctx["medtech.requestNo"] = order.RequestNo ?? string.Empty;
+            ctx["medtech.itemName"] = order.ItemName ?? string.Empty;
+            ctx["medtech.deptName"] = order.DeptName ?? string.Empty;
+            ctx["medtech.execLocation"] = order.ExecLocation ?? string.Empty;
+            ctx["medtech.fee"] = order.Fee ?? string.Empty;
+            ctx["medtech.status"] = order.Status ?? string.Empty;
+        }
+        return ctx;
     }
 }

@@ -1,0 +1,199 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Checkup"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Checkup.CheckupStationView"
+             x:DataType="local:CheckupStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="16" RowSpacing="12">
+        <!-- 顶部 KPI 与动态打印触发栏 -->
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="健康体检管理中心（登记 · 分科检查 · 主检总检）" FontSize="17" FontWeight="Bold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="14">
+                        <TextBlock Text="{Binding TotalOrders, StringFormat=累计体检 {0} 人次}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="{Binding InProgressCount, StringFormat=在检 {0}}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        <TextBlock Text="{Binding PendingSummaryCount, StringFormat=待总检 {0}}" FontSize="12" Foreground="{DynamicResource SemiColorWarning}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding CompletedCount, StringFormat=已出报告 {0}}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}"/>
+                        <TextBlock Text="{Binding TotalAbnormalFindings, StringFormat=累计检出异常 {0} 项}" FontSize="12" Foreground="{DynamicResource SemiColorDanger}"/>
+                    </StackPanel>
+                </StackPanel>
+                <controls:DynamicPrintTriggerBar Grid.Column="1" PageKey="checkup" TriggerSlot="TOP_TOOLBAR"/>
+                <Button Grid.Column="2" Content="刷新" Classes="Primary" Height="32" Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="370,*" ColumnSpacing="12">
+            <!-- 左侧：体检登记单列表 -->
+            <Border Grid.Column="0" CornerRadius="8" Padding="10"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                        <TextBox Grid.Column="0" Text="{Binding SearchKeyword, Mode=TwoWay}" PlaceholderText="体检号 / 姓名 / 单位 / 条码"/>
+                        <Button Grid.Column="1" Content="查询" Classes="Secondary" Command="{Binding SearchCommand}"/>
+                    </Grid>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding Orders}" SelectedItem="{Binding SelectedOrder, Mode=TwoWay}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:CheckupOrderRow">
+                                <Border Padding="8,6" Margin="0,2" CornerRadius="6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="2">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" FontWeight="SemiBold">
+                                                <Run Text="{Binding FullName}"/>
+                                                <Run Text=" · "/>
+                                                <Run Text="{Binding Gender}"/>
+                                                <Run Text=" "/>
+                                                <Run Text="{Binding Age}"/>
+                                                <Run Text="岁"/>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="1" Text="{Binding StatusDisplay}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        </Grid>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource SemiColorText2}">
+                                            <Run Text="{Binding PackageName}"/>
+                                            <Run Text=" · ¥"/>
+                                            <Run Text="{Binding TotalAmount, StringFormat=0.00}"/>
+                                            <Run Text=" ["/>
+                                            <Run Text="{Binding PayDisplay}"/>
+                                            <Run Text="]"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="10" Foreground="{DynamicResource SemiColorText2}">
+                                            <Run Text="导检条码:"/>
+                                            <Run Text="{Binding GuideBarcode}"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding TypeDisplay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- 右侧三大体检工作页签 -->
+            <TabControl Grid.Column="1" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+                <!-- Tab 1: 体检登记开单 -->
+                <TabItem Header="1. 体检登记与套餐开单">
+                    <Border CornerRadius="8" Padding="16" Margin="0,8,0,0"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="个人 / 团体体检登记（选定套餐后自动拆解各分科检查项目）" FontSize="15" FontWeight="Bold"/>
+                                <Button Grid.Column="1" Content="确认选中单缴费" Classes="Secondary" Command="{Binding ConfirmPayCommand}"/>
+                                <Button Grid.Column="2" Content="确认登记并拆解开单" Classes="Primary" Command="{Binding RegisterCommand}"/>
+                            </Grid>
+
+                            <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+                                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="体检人姓名 *" FontSize="12"/>
+                                    <TextBox Text="{Binding RegFullName, Mode=TwoWay}" PlaceholderText="如：张三"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="性别" FontSize="12"/>
+                                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding RegGender, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="2" Spacing="2">
+                                    <TextBlock Text="年龄" FontSize="12"/>
+                                    <NumericUpDown Minimum="1" Maximum="120" FormatString="0" Value="{Binding RegAge, Mode=TwoWay}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="身份证号（可选，自动校验脱敏）" FontSize="12"/>
+                                    <TextBox Text="{Binding RegIdCardNo, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="手机号" FontSize="12"/>
+                                    <TextBox Text="{Binding RegPhone, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="2" Spacing="2">
+                                    <TextBlock Text="体检类型" FontSize="12"/>
+                                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding CheckupTypeOptions}" SelectedItem="{Binding RegCheckupType, Mode=TwoWay}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="2" Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="团检单位名称（个人留空）" FontSize="12"/>
+                                    <TextBox Text="{Binding RegCompanyName, Mode=TwoWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Spacing="2">
+                                    <TextBlock Text="选择体检套餐 *" FontSize="12"/>
+                                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Packages}" SelectedItem="{Binding RegSelectedPackage, Mode=TwoWay}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <CheckBox Content="登记同时完成现场缴费确认（自动进入在检状态）" IsChecked="{Binding RegAutoPay, Mode=TwoWay}"/>
+                        </StackPanel>
+                    </Border>
+                </TabItem>
+
+                <!-- Tab 2: 分科检查结果录入 -->
+                <TabItem Header="2. 分科结果录入">
+                    <Border CornerRadius="8" Padding="14" Margin="0,8,0,0"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10" IsEnabled="{Binding HasSelectedOrder}">
+                            <TextBlock Grid.Row="0" FontSize="14" FontWeight="Bold">
+                                <Run Text="分科检查明细 — "/>
+                                <Run Text="{Binding SelectedOrder.FullName}"/>
+                                <Run Text=" ("/>
+                                <Run Text="{Binding SelectedOrder.CheckupNo}"/>
+                                <Run Text=")"/>
+                            </TextBlock>
+
+                            <ListBox Grid.Row="1" ItemsSource="{Binding SelectedOrderItems}" SelectedItem="{Binding SelectedOrderItem, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:CheckupOrderItemRow">
+                                        <Border Padding="8,5" Margin="0,2" CornerRadius="5" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <Grid ColumnDefinitions="90,*,150,110,120" ColumnSpacing="8">
+                                                <TextBlock Grid.Column="0" Text="{Binding DeptName}" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding ItemName}"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding ResultValue, StringFormat=结果:{0}}"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding ReferenceRange, StringFormat=参考:{0}}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <Border Grid.Row="2" Padding="10" CornerRadius="6" BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1">
+                                <Grid ColumnDefinitions="*,140,120,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Text="{Binding EntryResultValue, Mode=TwoWay}" PlaceholderText="输入检查/检验结果值，如：血压122/78mmHg、肌酐72umol/L"/>
+                                    <TextBox Grid.Column="1" Text="{Binding EntryRefRange, Mode=TwoWay}" PlaceholderText="参考范围"/>
+                                    <ComboBox Grid.Column="2" HorizontalAlignment="Stretch" ItemsSource="{Binding AbnormalFlagOptions}" SelectedItem="{Binding EntryAbnormalFlag, Mode=TwoWay}"/>
+                                    <Button Grid.Column="3" Content="保存分科结果" Classes="Primary" Command="{Binding SaveItemResultCommand}"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </TabItem>
+
+                <!-- Tab 3: 主检医生总检报告 -->
+                <TabItem Header="3. 主检总检与报告发布">
+                    <Border CornerRadius="8" Padding="16" Margin="0,8,0,0"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="12" IsEnabled="{Binding HasSelectedOrder}">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="主检医生总检审核与健康干预建议" FontSize="15" FontWeight="Bold"/>
+                                <Button Grid.Column="1" Content="一键汇总异常草稿" Classes="Secondary" Command="{Binding GenerateSummaryDraftCommand}"/>
+                                <Button Grid.Column="2" Content="审核发布总检报告" Classes="Primary" Command="{Binding CompleteSummaryCommand}"/>
+                            </Grid>
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="总检结论 *" FontSize="12" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SummaryConclusion, Mode=TwoWay}" AcceptsReturn="True" Height="150" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="健康干预与随访建议" FontSize="12" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SummaryAdvice, Mode=TwoWay}" AcceptsReturn="True" Height="110" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </TabItem>
+            </TabControl>
+        </Grid>
+    </Grid>
+</UserControl>

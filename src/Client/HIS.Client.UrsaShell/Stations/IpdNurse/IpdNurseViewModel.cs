@@ -12,6 +12,7 @@ using Avalonia.Data;
 using Avalonia.Layout;
 using HIS.BuildingBlocks.Common;
 using HIS.Client.Core;
+using HIS.Client.UrsaShell.Printing;
 using HIS.Client.UrsaShell.Shell;
 using HIS.Client.UrsaShell.ViewModels;
 
@@ -92,7 +93,7 @@ public class IsolationOrderModel : ClientModelBase
     public bool CanEnd => Status == 0;
 }
 
-public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget
+public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget, IPrintContextProvider
 {
     private readonly ShellViewModel? _shell;
     private bool _subscribed;
@@ -1178,4 +1179,25 @@ public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget
         short IsSharedDept,
         int SortOrder
     );
+
+    public Dictionary<string, string> BuildPrintContext(object? rowContext = null)
+    {
+        var ctx = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var rec = rowContext as InpatientRecordModel ?? Workbench.SelectedInpatient;
+        if (rec != null)
+        {
+            ctx["ipd.patientName"] = rec.PatientName ?? string.Empty;
+            ctx["ipd.gender"] = rec.Gender ?? string.Empty;
+            ctx["ipd.age"] = rec.Age.ToString();
+            ctx["ipd.admissionNo"] = rec.AdmissionNo ?? string.Empty;
+            ctx["ipd.medicalRecordNo"] = rec.MedicalRecordNo ?? string.Empty;
+            ctx["ipd.bedCode"] = rec.BedCode ?? string.Empty;
+            ctx["ipd.admittingDept"] = rec.AdmittingDept ?? string.Empty;
+            ctx["ipd.nursingWard"] = rec.NursingWard ?? string.Empty;
+            ctx["ipd.diagnosis"] = rec.Diagnosis ?? string.Empty;
+            ctx["ipd.attendingDoctor"] = rec.AttendingDoctor ?? string.Empty;
+            ctx["ipd.admissionDate"] = rec.AdmissionDate ?? string.Empty;
+        }
+        return ctx;
+    }
 }

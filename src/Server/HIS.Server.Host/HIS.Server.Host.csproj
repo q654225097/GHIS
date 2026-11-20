@@ -28,6 +28,8 @@
     <ProjectReference Include="..\HIS.Modules.HieGateway\HIS.Modules.HieGateway.csproj" />
     <ProjectReference Include="..\HIS.Modules.Workflow\HIS.Modules.Workflow.csproj" />
     <ProjectReference Include="..\HIS.Modules.Hr\HIS.Modules.Hr.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Print\HIS.Modules.Print.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Checkup\HIS.Modules.Checkup.csproj" />
   </ItemGroup>
 </Project>
 
