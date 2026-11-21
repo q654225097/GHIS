@@ -96,6 +96,9 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		}
 		else
 		{
+			var tableCnt = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM sqlite_master WHERE type='table' AND name=@Tbl", new { Tbl = tableName });
+			if (tableCnt == 0) return;
+
 			var cols = await conn.QueryAsync<TableColumnInfo>($"PRAGMA table_info({tableName})");
 			exists = cols.Any(c => string.Equals(c.Name, columnName, StringComparison.OrdinalIgnoreCase));
 		}
