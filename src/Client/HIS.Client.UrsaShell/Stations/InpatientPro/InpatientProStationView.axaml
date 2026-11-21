@@ -1,0 +1,325 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.InpatientPro"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.InpatientPro.InpatientProStationView"
+             x:DataType="local:InpatientProViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="住院临床与病区运营中心 (Pro)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="图形化床位总览/MAR/三测单 · 全院会诊中心(回写EMR) · 每日自动滚费/退药冲正/出院带药 · 产科新生儿/日间手术/陪护证"
+                               FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <controls:DynamicPrintTriggerBar Grid.Column="1" PageKey="ipd_pro" TriggerSlot="TOP_TOOLBAR"/>
+                <Button Grid.Column="2" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: 病区图形化床位看板 + MAR时间轴 + 三测单 -->
+            <TabItem Header="图形化床位看板 · MAR · 三测单">
+                <Grid ColumnDefinitions="*,440" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                                <Button Content="切换选中床位隔离状态" Classes="Warning" Command="{Binding ToggleIsolationCommand}"/>
+                                <TextBlock Text="目标换床：" VerticalAlignment="Center"/>
+                                <ComboBox Width="150" ItemsSource="{Binding Beds}" SelectedItem="{Binding SwapTargetBed, Mode=TwoWay}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="local:BedCardRow">
+                                            <TextBlock Text="{Binding BedCode}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Button Content="一键换床调配" Classes="Primary" Command="{Binding SwapBedsCommand}"/>
+                            </StackPanel>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding Beds}" SelectedItem="{Binding SelectedBed, Mode=TwoWay}">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:BedCardRow">
+                                        <Border Width="185" Padding="10,8" Margin="4" CornerRadius="8"
+                                                Background="{DynamicResource SemiColorBackground1}"
+                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                            <StackPanel Spacing="3">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding BedCode}" FontWeight="Bold" FontSize="14"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding StatusBadge}" FontSize="11"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding PatientDisplay}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding WardName}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{Binding DailyFee, StringFormat=床位费 ¥{0:F1}/日}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*,Auto,180" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="护士时间轴给药单 (MAR)" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="床旁扫码执行" Classes="Success" Command="{Binding ExecuteMarCommand}"/>
+                            </Grid>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding MarPlans}" SelectedItem="{Binding SelectedMarPlan, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="计划时间" Binding="{Binding PlannedTimeText}" Width="95"/>
+                                    <DataGridTextColumn Header="医嘱项目" Binding="{Binding ItemName}" Width="*"/>
+                                    <DataGridTextColumn Header="频次" Binding="{Binding FrequencyCode}" Width="55"/>
+                                    <DataGridTextColumn Header="状态" Binding="{Binding ExecStatusText}" Width="80"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock Grid.Row="2" Text="住院三测单生命体征趋势" FontWeight="Bold"/>
+                            <DataGrid Grid.Row="3" ItemsSource="{Binding VitalsPoints}" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="时间" Binding="{Binding TimeText}" Width="90"/>
+                                    <DataGridTextColumn Header="体温℃" Binding="{Binding TempC}" Width="65"/>
+                                    <DataGridTextColumn Header="脉搏" Binding="{Binding PulseBpm}" Width="55"/>
+                                    <DataGridTextColumn Header="呼吸" Binding="{Binding RespRate}" Width="55"/>
+                                    <DataGridTextColumn Header="收缩压" Binding="{Binding Sbp}" Width="65"/>
+                                    <DataGridTextColumn Header="血氧%" Binding="{Binding Spo2}" Width="65"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 全院会诊中心 -->
+            <TabItem Header="全院会诊中心 (急会诊/普通/MDT)">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="发起全院会诊申请" FontWeight="Bold" FontSize="14"/>
+                            <TextBox Text="{Binding CsPatientName, Mode=TwoWay}" PlaceholderText="住院患者姓名"/>
+                            <TextBox Text="{Binding CsBedCode, Mode=TwoWay}" PlaceholderText="床号（如 12床）"/>
+                            <TextBox Text="{Binding CsRequestDept, Mode=TwoWay}" PlaceholderText="申请科室"/>
+                            <TextBox Text="{Binding CsTargetDept, Mode=TwoWay}" PlaceholderText="被邀会诊科室"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding ConsultTypeOptions}" SelectedItem="{Binding CsType, Mode=TwoWay}"/>
+                            <TextBox Text="{Binding CsPurpose, Mode=TwoWay}" PlaceholderText="会诊目的与病情摘要" AcceptsReturn="True" Height="64"/>
+                            <Button Content="发送会诊申请" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateConsultCommand}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="*,Auto" RowSpacing="8">
+                            <DataGrid Grid.Row="0" ItemsSource="{Binding Consultations}" SelectedItem="{Binding SelectedConsult, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="会诊单号" Binding="{Binding ConsultNo}" Width="140"/>
+                                    <DataGridTextColumn Header="类型" Binding="{Binding TypeDisplay}" Width="125"/>
+                                    <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="85"/>
+                                    <DataGridTextColumn Header="申请科室" Binding="{Binding RequestDeptName}" Width="105"/>
+                                    <DataGridTextColumn Header="被邀科室" Binding="{Binding TargetDeptName}" Width="105"/>
+                                    <DataGridTextColumn Header="截止时间" Binding="{Binding DeadlineText}" Width="100"/>
+                                    <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                                    <DataGridTextColumn Header="EMR回写" Binding="{Binding EmrSyncDisplay}" Width="85"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                <Button Grid.Column="0" Content="签收选中会诊" Classes="Secondary" Command="{Binding AcceptConsultCommand}"/>
+                                <TextBox Grid.Column="1" Text="{Binding CsOpinion, Mode=TwoWay}" PlaceholderText="填写会诊意见（完成后自动写入电子病历 emr_documents）"/>
+                                <Button Grid.Column="2" Content="完成并回写EMR" Classes="Success" Command="{Binding CompleteConsultCommand}"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 每日自动滚费 · 病区退药冲正 · 出院带药 -->
+            <TabItem Header="每日自动滚费 · 退药冲正 · 出院带药">
+                <Grid RowDefinitions="200,*" RowSpacing="10" Margin="0,8,0,0">
+                    <Border Grid.Row="0" Padding="10" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="6">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="住院每日自动滚费 (BackgroundService 凌晨定时 + 手动幂等补滚) 账单日：" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                <NumericUpDown Value="{Binding ManualBillDateInt, Mode=TwoWay}" Minimum="20200101" Maximum="20991231" Width="130" FormatString="0"/>
+                                <Button Content="立即执行幂等日滚费" Classes="Primary" Command="{Binding TriggerDailyBillingCommand}"/>
+                            </StackPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding BillingRuns}" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="账单日" Binding="{Binding BillDateInt}" Width="100"/>
+                                    <DataGridTextColumn Header="触发方式" Binding="{Binding TriggerMode}" Width="140"/>
+                                    <DataGridTextColumn Header="在院人数" Binding="{Binding PatientCount}" Width="85"/>
+                                    <DataGridTextColumn Header="床位费笔数" Binding="{Binding BedFeeCount}" Width="95"/>
+                                    <DataGridTextColumn Header="护理费笔数" Binding="{Binding NursingFeeCount}" Width="95"/>
+                                    <DataGridTextColumn Header="长嘱笔数" Binding="{Binding LongOrderCount}" Width="85"/>
+                                    <DataGridTextColumn Header="滚费总额" Binding="{Binding TotalAmount, StringFormat=¥{0:F2}}" Width="110"/>
+                                    <DataGridTextColumn Header="执行人" Binding="{Binding ExecutedBy}" Width="*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Border Grid.Column="0" Padding="10" CornerRadius="8"
+                                Background="{DynamicResource SemiColorBackground1}"
+                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                                <TextBlock Grid.Row="0" Text="病区退药申请与药房审批冲正" FontWeight="Bold"/>
+                                <WrapPanel Grid.Row="1" Orientation="Horizontal">
+                                    <TextBox Text="{Binding DrPatientName, Mode=TwoWay}" Width="95" Margin="0,0,4,4" PlaceholderText="患者"/>
+                                    <TextBox Text="{Binding DrDrugName, Mode=TwoWay}" Width="130" Margin="0,0,4,4" PlaceholderText="药品名称"/>
+                                    <NumericUpDown Value="{Binding DrRefundAmt, Mode=TwoWay}" Width="95" Margin="0,0,4,4" FormatString="¥0"/>
+                                    <Button Content="提交退药" Classes="Primary" Margin="0,0,4,4" Command="{Binding CreateDrugReturnCommand}"/>
+                                    <Button Content="药房通过冲正" Classes="Success" Margin="0,0,4,4" Command="{Binding ApproveDrugReturnCommand}"/>
+                                    <Button Content="驳回" Classes="Danger" Margin="0,0,4,4" Command="{Binding RejectDrugReturnCommand}"/>
+                                </WrapPanel>
+                                <DataGrid Grid.Row="2" ItemsSource="{Binding DrugReturns}" SelectedItem="{Binding SelectedDrugReturn, Mode=TwoWay}"
+                                          AutoGenerateColumns="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="退药单号" Binding="{Binding ReturnNo}" Width="130"/>
+                                        <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="75"/>
+                                        <DataGridTextColumn Header="药品" Binding="{Binding DrugName}" Width="*"/>
+                                        <DataGridTextColumn Header="冲正额" Binding="{Binding RefundAmount, StringFormat=¥{0:F2}}" Width="80"/>
+                                        <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="85"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="1" Padding="10" CornerRadius="8"
+                                Background="{DynamicResource SemiColorBackground1}"
+                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                                <TextBlock Grid.Row="0" Text="出院带药专单" FontWeight="Bold"/>
+                                <WrapPanel Grid.Row="1" Orientation="Horizontal">
+                                    <TextBox Text="{Binding DmPatientName, Mode=TwoWay}" Width="95" Margin="0,0,4,4" PlaceholderText="患者"/>
+                                    <TextBox Text="{Binding DmSummary, Mode=TwoWay}" Width="180" Margin="0,0,4,4" PlaceholderText="带药明细与用法"/>
+                                    <Button Content="开立带药" Classes="Primary" Margin="0,0,4,4" Command="{Binding CreateDischargeMedCommand}"/>
+                                    <Button Content="发药核对" Classes="Success" Margin="0,0,4,4" Command="{Binding DispenseDischargeMedCommand}"/>
+                                </WrapPanel>
+                                <DataGrid Grid.Row="2" ItemsSource="{Binding DischargeMeds}" SelectedItem="{Binding SelectedDischargeMed, Mode=TwoWay}"
+                                          AutoGenerateColumns="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="单号" Binding="{Binding RxNo}" Width="135"/>
+                                        <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="75"/>
+                                        <DataGridTextColumn Header="带药明细" Binding="{Binding MedicationsSummary}" Width="*"/>
+                                        <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: 专科扩展：产科分娩新生儿 / 日间手术 24h / 陪护证 -->
+            <TabItem Header="专科扩展 (产科新生儿 · 日间手术24h · 陪护证)">
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10" Margin="0,8,0,0">
+                    <!-- 产科分娩与新生儿建档 -->
+                    <Border Grid.Column="0" Padding="10" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                            <TextBlock Grid.Row="0" Text="产科分娩与新生儿关联建档" FontWeight="Bold"/>
+                            <StackPanel Grid.Row="1" Spacing="5">
+                                <TextBox Text="{Binding MatMotherName, Mode=TwoWay}" PlaceholderText="产妇姓名"/>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="4">
+                                    <TextBox Grid.Column="0" Text="{Binding MatWeeks, Mode=TwoWay}" PlaceholderText="孕周"/>
+                                    <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding DeliveryModeOptions}" SelectedItem="{Binding MatMode, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                                    <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding MatGender, Mode=TwoWay}"/>
+                                    <NumericUpDown Grid.Column="1" Value="{Binding MatWeight, Mode=TwoWay}" Minimum="500" Maximum="6000" FormatString="0g"/>
+                                    <TextBox Grid.Column="2" Text="{Binding MatApgar, Mode=TwoWay}" PlaceholderText="Apgar"/>
+                                </Grid>
+                                <Button Content="登记分娩并生成出生证预编号" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateMaternityCommand}"/>
+                            </StackPanel>
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding MaternityRecords}" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="产妇" Binding="{Binding MotherName}" Width="75"/>
+                                    <DataGridTextColumn Header="方式" Binding="{Binding DeliveryMode}" Width="65"/>
+                                    <DataGridTextColumn Header="新生儿" Binding="{Binding NewbornGender}" Width="55"/>
+                                    <DataGridTextColumn Header="体重g" Binding="{Binding BirthWeightG}" Width="60"/>
+                                    <DataGridTextColumn Header="出生证预号" Binding="{Binding BirthCertPreNo}" Width="*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <!-- 日间手术 24h 闭环与 PADSS 离院评估 -->
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                            <TextBlock Grid.Row="0" Text="日间手术 24h 闭环 (PADSS ≥ 9 离院)" FontWeight="Bold"/>
+                            <StackPanel Grid.Row="1" Spacing="5">
+                                <TextBox Text="{Binding DsPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                                <TextBox Text="{Binding DsSurgeryName, Mode=TwoWay}" PlaceholderText="日间手术名称"/>
+                                <Button Content="登记日间手术" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateDaySurgeryCommand}"/>
+                                <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="4">
+                                    <NumericUpDown Grid.Column="0" Value="{Binding DsPadssScore, Mode=TwoWay}" Minimum="0" Maximum="10" Width="95" FormatString="PADSS 0"/>
+                                    <Button Grid.Column="1" Content="达标离院" Classes="Success" HorizontalAlignment="Stretch" Command="{Binding DischargeDaySurgeryCommand}"/>
+                                    <Button Grid.Column="2" Content="转常规住院" Classes="Warning" HorizontalAlignment="Stretch" Command="{Binding ConvertDaySurgeryIpdCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding DaySurgeryCases}" SelectedItem="{Binding SelectedDaySurgery, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="75"/>
+                                    <DataGridTextColumn Header="术式" Binding="{Binding SurgeryName}" Width="*"/>
+                                    <DataGridTextColumn Header="PADSS" Binding="{Binding PadssScore}" Width="60"/>
+                                    <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <!-- 病区陪护 / 探视证管理 -->
+                    <Border Grid.Column="2" Padding="10" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                            <TextBlock Grid.Row="0" Text="病区陪护 / 探视证管理" FontWeight="Bold"/>
+                            <StackPanel Grid.Row="1" Spacing="5">
+                                <Grid ColumnDefinitions="*,80" ColumnSpacing="4">
+                                    <TextBox Grid.Column="0" Text="{Binding VpPatientName, Mode=TwoWay}" PlaceholderText="住院患者姓名"/>
+                                    <TextBox Grid.Column="1" Text="{Binding VpBedCode, Mode=TwoWay}" PlaceholderText="床号"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,80" ColumnSpacing="4">
+                                    <TextBox Grid.Column="0" Text="{Binding VpVisitorName, Mode=TwoWay}" PlaceholderText="陪护人姓名"/>
+                                    <TextBox Grid.Column="1" Text="{Binding VpRelation, Mode=TwoWay}" PlaceholderText="关系"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                                    <TextBox Grid.Column="0" Text="{Binding VpPhone, Mode=TwoWay}" PlaceholderText="手机号(自动脱敏)"/>
+                                    <Button Grid.Column="1" Content="签发" Classes="Primary" Command="{Binding CreateVisitorPassCommand}"/>
+                                    <Button Grid.Column="2" Content="注销" Classes="Danger" Command="{Binding RevokeVisitorPassCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding VisitorPasses}" SelectedItem="{Binding SelectedVisitorPass, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="70"/>
+                                    <DataGridTextColumn Header="陪护人" Binding="{Binding VisitorName}" Width="75"/>
+                                    <DataGridTextColumn Header="手机" Binding="{Binding PhoneMasked}" Width="100"/>
+                                    <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="75"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

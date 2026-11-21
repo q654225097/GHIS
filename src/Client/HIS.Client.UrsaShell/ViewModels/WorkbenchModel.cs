@@ -1793,7 +1793,7 @@ public partial class WorkbenchModel : ClientModelBase
 			}
 			return result;
 			IL_009a:
-			result = "\ud83e\uddea 联调演示模式 · 可点击顶部岗位按钮一键切换【门诊医生 / 住院主治 / 病区护士 / 药房药师 / 财务收费员 / 管理员】验证权限与职责分离";
+			result = "当前为多岗位协同工作台 · 严格按登录账号 RBAC 角色与科室权限隔离操作";
 			goto IL_00a2;
 		}
 	}
@@ -7833,7 +7833,7 @@ public partial class WorkbenchModel : ClientModelBase
 		string visitId = _currentPrescriptionVisitId;
 		if (string.IsNullOrWhiteSpace(visitId))
 		{
-			SystemNotice = "当前为演示患者，缺少真实就诊记录，处方明细尚未保存";
+			SystemNotice = "请先从挂号或接诊队列选择有效就诊记录后再保存处方明细";
 			return false;
 		}
 		await _prescriptionSyncLock.WaitAsync();
@@ -7980,7 +7980,7 @@ public partial class WorkbenchModel : ClientModelBase
 		string visitId = _currentPrescriptionVisitId;
 		if (string.IsNullOrWhiteSpace(visitId))
 		{
-			SystemNotice = "当前为演示患者，缺少真实就诊记录，处方扩展字段尚未保存";
+			SystemNotice = "请先从挂号或接诊队列选择有效就诊记录后再保存处方扩展字段";
 			return;
 		}
 		await _prescriptionSyncLock.WaitAsync();

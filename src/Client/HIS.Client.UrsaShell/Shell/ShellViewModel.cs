@@ -630,6 +630,9 @@ public sealed class ShellViewModel : ClientModelBase
             sys.Items.Add(new ShellNavItem { Key = "checkup", LegacyNavIndex = -1, Title = "健康体检管理", Icon = "🩺", Description = "个人/团体体检登记、套餐自动拆解、分科录入与主检总检" });
             sys.Items.Add(new ShellNavItem { Key = "medtech_report", LegacyNavIndex = -1, Title = "医技报告与审签", Icon = "📋", Description = "待书写/待审签队列、机器直出直审与分科室自定义报告模板" });
             sys.Items.Add(new ShellNavItem { Key = "pre_admission", LegacyNavIndex = -1, Title = "预住院管理中心", Icon = "🏥", Description = "医保预住院登记、P0危急值抢占中断、准入评估与复合费用拆分" });
+            sys.Items.Add(new ShellNavItem { Key = "er_opd_pro", LegacyNavIndex = -1, Title = "急诊分诊与门诊增强", Icon = "🚑", Description = "急诊MEWS五级分诊抢救留观、临床优先级候诊、慢病续方与SM3证明书" });
+            sys.Items.Add(new ShellNavItem { Key = "ipd_pro", LegacyNavIndex = -1, Title = "住院全流程与专科中心", Icon = "🛏️", Description = "图形化床位看板、MAR三测单、全院会诊、每日自动滚费、退药冲正、产科与日间手术" });
+            sys.Items.Add(new ShellNavItem { Key = "mrms", LegacyNavIndex = -1, Title = "病案室与临床编码", Icon = "📚", Description = "出院病案回收、ICD-10/ICD-9编码、DRG预分组、归档封存与借阅复印" });
             NavGroups.Add(sys);
         }
 
@@ -742,6 +745,9 @@ public sealed class ShellViewModel : ClientModelBase
             "checkup" => new Stations.Checkup.CheckupStationView { DataContext = new Stations.Checkup.CheckupStationViewModel(Workbench, this) },
             "medtech_report" => new Stations.MedTechReport.MedTechReportStationView { DataContext = new Stations.MedTechReport.MedTechReportViewModel(Workbench, this) },
             "pre_admission" => new Stations.PreAdmission.PreAdmissionStationView { DataContext = new Stations.PreAdmission.PreAdmissionViewModel(Workbench, this) },
+            "er_opd_pro" => new Stations.Emergency.EmergencyStationView { DataContext = new Stations.Emergency.EmergencyViewModel(Workbench, this) },
+            "ipd_pro" => new Stations.InpatientPro.InpatientProStationView { DataContext = new Stations.InpatientPro.InpatientProViewModel(Workbench, this) },
+            "mrms" => new Stations.Mrms.MrmsStationView { DataContext = new Stations.Mrms.MrmsViewModel(Workbench, this) },
             "workflow_inbox" => new Stations.WorkflowInbox.WorkflowInboxStationView { DataContext = new Stations.WorkflowInbox.WorkflowInboxViewModel(Workbench, this) },
             _ => new LegacyStationBridgeView(
                 item.Title,

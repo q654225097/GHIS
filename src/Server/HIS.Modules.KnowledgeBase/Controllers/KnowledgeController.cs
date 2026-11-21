@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using HIS.BuildingBlocks.Common;
+using Dapper;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
 using HIS.Modules.KnowledgeBase.Models;
@@ -17,6 +18,7 @@ public class KnowledgeController : ControllerBase
     private readonly IClinicalKnowledgeContract _kbService;
     private readonly IRepository<KbDocument> _docRepo;
     private readonly IRepository<KbClinicalRule> _ruleRepo;
+    private readonly IDbConnectionFactory? _connFactory;
 
     public record ExternalKnowledgeQueryResultDto(
         string SourceName,
@@ -52,11 +54,13 @@ public class KnowledgeController : ControllerBase
     public KnowledgeController(
         IClinicalKnowledgeContract kbService,
         IRepository<KbDocument> docRepo,
-        IRepository<KbClinicalRule> ruleRepo)
+        IRepository<KbClinicalRule> ruleRepo,
+        IDbConnectionFactory? connFactory = null)
     {
         _kbService = kbService;
         _docRepo = docRepo;
         _ruleRepo = ruleRepo;
+        _connFactory = connFactory;
     }
 
     [HttpGet("search")]
@@ -81,33 +85,70 @@ public class KnowledgeController : ControllerBase
     }
 
     [HttpGet("external/query")]
-    public ActionResult<ApiResponse<IReadOnlyList<ExternalKnowledgeQueryResultDto>>> QueryExternal(
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<ExternalKnowledgeQueryResultDto>>>> QueryExternal(
         [FromQuery] string? sourceType,
-        [FromQuery] string? keyword)
+        [FromQuery] string? keyword,
+        CancellationToken ct = default)
     {
-        // 模拟调用国家药典/PubMed/ADR联机数据库
-        string kw = keyword ?? "临床用药";
-        var results = new List<ExternalKnowledgeQueryResultDto>
-        {
-            new(
-                SourceName: "国家药典委员会药品说明书联机库 (NMPA-ChP)",
-                SourceType: sourceType ?? "DRUG_DB",
-                Title: $"【国家药典权威指引】{kw} 药理毒理及适应症规范 (2025版)",
-                Snippet: $"{kw} 属于重点监控药物，需严格遵循肝肾功能监测要求，血肌酐清除率低于30ml/min时建议减量50%或停药。",
-                ReferenceUri: "https://db.nmpa.gov.cn/pharmacopoeia/query",
-                IsExternal: true
-            ),
-            new(
-                SourceName: "国家药品不良反应监测中心联机预警网",
-                SourceType: "ADR_DB",
-                Title: $"关于 {kw} 严重过敏反应与联合用药风险警示通报",
-                Snippet: $"国家ADR数据库监测显示，{kw} 与抗凝药合用可能显著延长凝血酶原时间，需加强INR动态监测。",
-                ReferenceUri: "https://adr.cdr-adr.org.cn/alerts",
-                IsExternal: true
-            )
-        };
+        string kw = (keyword ?? string.Empty).Trim();
+        string likeKw = $"%{kw}%";
+        var results = new List<ExternalKnowledgeQueryResultDto>();
 
-        return Ok(ApiResponse<IReadOnlyList<ExternalKnowledgeQueryResultDto>>.Success(results, "外部联机知识库查询成功 (已标注来源机构)"));
+        // 1. 检索院内权威知识文档库 kb_documents
+        var docs = await _docRepo.QueryAsync(
+            "SELECT * FROM kb_documents WHERE title LIKE @Kw OR content_markdown LIKE @Kw ORDER BY updated_at_ms DESC LIMIT 15",
+            new { Kw = likeKw }, ct);
+        foreach (var d in docs)
+        {
+            string snippet = string.IsNullOrWhiteSpace(d.ContentMarkdown)
+                ? d.Title
+                : (d.ContentMarkdown.Length > 180 ? d.ContentMarkdown[..180] + "..." : d.ContentMarkdown);
+            results.Add(new ExternalKnowledgeQueryResultDto(
+                SourceName: string.IsNullOrWhiteSpace(d.SourceOrg) ? "院内临床知识库 (KB)" : d.SourceOrg,
+                SourceType: d.Category,
+                Title: d.Title,
+                Snippet: snippet,
+                ReferenceUri: $"kb://documents/{d.DocCode}",
+                IsExternal: false));
+        }
+
+        // 2. 检索临床决策规则库 kb_clinical_rules
+        var rules = await _ruleRepo.QueryAsync(
+            "SELECT * FROM kb_clinical_rules WHERE is_active = 1 AND (explanation_text LIKE @Kw OR action_suggestion_text LIKE @Kw OR rule_code LIKE @Kw) LIMIT 10",
+            new { Kw = likeKw }, ct);
+        foreach (var r in rules)
+        {
+            results.Add(new ExternalKnowledgeQueryResultDto(
+                SourceName: "临床合理用药与CDSS规则库",
+                SourceType: r.RuleDomain,
+                Title: $"[{r.Severity}] {r.RuleCode}",
+                Snippet: $"{r.ExplanationText} 建议：{r.ActionSuggestionText}",
+                ReferenceUri: $"kb://rules/{r.RuleCode}",
+                IsExternal: false));
+        }
+
+        // 3. 关联检索医院真实药品目录 (inv_drugs) 与 ICD-10 诊断库 (cfg_icd10_diagnoses)
+        if (_connFactory != null && !string.IsNullOrWhiteSpace(kw))
+        {
+            using var conn = _connFactory.CreateConnection();
+            var drugs = await conn.QueryAsync<dynamic>(
+                "SELECT drug_code AS Code, drug_name AS Name, spec AS Spec, price AS Price, antibiotic_level AS AbLevel, is_skin_test_required AS SkinTest FROM inv_drugs WHERE is_active = 1 AND (drug_name LIKE @Kw OR drug_code LIKE @Kw) LIMIT 10",
+                new { Kw = likeKw });
+            foreach (var dr in drugs)
+            {
+                results.Add(new ExternalKnowledgeQueryResultDto(
+                    SourceName: "院内药品目录主数据",
+                    SourceType: "DRUG_CATALOG",
+                    Title: $"{(string)dr.Name} ({(string)dr.Spec})",
+                    Snippet: $"编码 {(string)dr.Code} · 零售价 ¥{Convert.ToDecimal(dr.Price):F2} · 抗菌分级 {Convert.ToInt32(dr.AbLevel)} · 皮试要求 {(Convert.ToInt32(dr.SkinTest) == 1 ? "必做" : "免试")}",
+                    ReferenceUri: $"his://drugs/{(string)dr.Code}",
+                    IsExternal: false));
+            }
+        }
+
+        return Ok(ApiResponse<IReadOnlyList<ExternalKnowledgeQueryResultDto>>.Success(
+            results,
+            results.Count > 0 ? $"检索到 {results.Count} 条真实知识库与药典主数据记录" : "未检索到匹配的知识文档或规则"));
     }
 
     [HttpPost("rules")]

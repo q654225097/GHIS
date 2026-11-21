@@ -6,5 +6,6 @@
     <Application.Styles>
         <semi:SemiTheme Locale="zh-CN" />
         <u-semi:UrsaSemiTheme />
+        <StyleInclude Source="avares://Semi.Avalonia.DataGrid/Index.axaml" />
     </Application.Styles>
 </Application>

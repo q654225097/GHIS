@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:HIS.Client.UrsaShell.Stations.MedTechReport"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
              x:Class="HIS.Client.UrsaShell.Stations.MedTechReport.MedTechReportStationView"
              x:DataType="local:MedTechReportViewModel">
     <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
@@ -156,6 +157,7 @@
                                     <CheckBox Content="标记为临床危急值报告（审签发布时同步预警临床科室）"
                                               IsChecked="{Binding EditIsCriticalValue, Mode=TwoWay}"
                                               Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold"/>
+                                    <controls:BoDynamicFormPanel EntityType="MTC_DIAGNOSTIC_REPORT" EntityId="{Binding SelectedReport.Id}"/>
                                 </StackPanel>
                             </ScrollViewer>
 

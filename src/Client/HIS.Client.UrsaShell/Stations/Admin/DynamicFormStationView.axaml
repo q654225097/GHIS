@@ -110,8 +110,12 @@
                             <StackPanel Spacing="2">
                                 <TextBlock Text="{Binding Workbench.EditingTemplate.Version, StringFormat={}版本 {0}}"
                                            FontSize="12" FontWeight="SemiBold"/>
-                                <TextBlock Text="{Binding Workbench.EditingTemplate.EntityType, StringFormat={}绑定实体 {0}}"
-                                           FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
+                                    <TextBlock Text="绑定业务对象(BO)：" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                    <ComboBox Width="260" Height="28" FontSize="11"
+                                              ItemsSource="{Binding BoTypes}"
+                                              SelectedItem="{Binding SelectedBoType, Mode=TwoWay}"/>
+                                </StackPanel>
                             </StackPanel>
                             <controls:StatusTag Grid.Column="1" Text="{Binding Workbench.EditingTemplate.Status}"
                                                 Kind="Success" Margin="0,0,8,0"/>
@@ -396,7 +400,19 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Border IsVisible="{Binding IsPreviewEmpty}"
+                            <Border Padding="8" CornerRadius="6"
+                                    Background="{DynamicResource SemiColorBackground2}"
+                                    BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="真实 BO 单据联调填报（实时读写业务主表）" FontSize="12" FontWeight="Bold"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding BoRecords}"
+                                              SelectedItem="{Binding SelectedBoRecord, Mode=TwoWay}"/>
+                                    <controls:BoDynamicFormPanel EntityType="{Binding Workbench.EditingTemplate.EntityType}"
+                                                                 EntityId="{Binding SelectedBoRecord.Id}"/>
+                                </StackPanel>
+                            </Border>
+                                                        <Border IsVisible="{Binding IsPreviewEmpty}"
                                     Padding="16" CornerRadius="6"
                                     Background="{DynamicResource SemiColorBackground2}">
                                 <TextBlock Text="当前模板暂无字段。新增字段后，预览会在此实时出现。"

@@ -111,7 +111,10 @@ public class Program
 			.AddApplicationPart(typeof(PrintController).Assembly)
 			.AddApplicationPart(typeof(CheckupController).Assembly);
 		builder.Services.AddSignalR();
-		builder.Services.AddSingleton((Func<IServiceProvider, IDbConnectionFactory>)((IServiceProvider sp) => new SqliteConnectionFactory()));
+		builder.Services.AddSingleton((Func<IServiceProvider, IDbConnectionFactory>)((IServiceProvider sp) =>
+			MultiDbConnectionFactory.FromConfig(
+				builder.Configuration["HIS_DB_PROVIDER"],
+				builder.Configuration["HIS_DB_CONNECTION_STRING"])));
 		RegisterRepo<SysDepartment>(builder.Services, "sys_departments");
 		RegisterRepo<SysDeptWardRelation>(builder.Services, "sys_dept_ward_relations");
 		RegisterRepo<SysMedtechExecRouting>(builder.Services, "sys_medtech_exec_routings");
@@ -307,6 +310,12 @@ public class Program
 		RegisterRepo<IpdPreAdmissionOrder>(builder.Services, "ipd_pre_admission_orders");
 		RegisterRepo<IpdPreAdmissionEvaluation>(builder.Services, "ipd_pre_admission_evaluations");
 		RegisterRepo<IpdPreAdmissionRule>(builder.Services, "ipd_pre_admission_rules");
+		RegisterRepo<ChkAppointment>(builder.Services, "chk_appointments");
+		RegisterRepo<ChkCompany>(builder.Services, "chk_companies");
+		RegisterRepo<ChkGroupOrder>(builder.Services, "chk_group_orders");
+		RegisterRepo<ChkKnowledgeBase>(builder.Services, "chk_knowledge_base");
+		RegisterRepo<ChkFollowup>(builder.Services, "chk_followups");
+		RegisterRepo<ChkOccupationalRecord>(builder.Services, "chk_occupational_records");
 
 		SecurityKeys securityKeys = SecurityKeyConfiguration.Resolve(builder.Configuration, builder.Environment);
 		CryptoHelper.ConfigureKeys(securityKeys.HmacKey, securityKeys.AesMasterKey);
@@ -316,6 +325,7 @@ public class Program
 		builder.Services.AddHostedService<EmrPrefetchBackgroundService>();
 		builder.Services.AddHostedService<EmrQcTimelinessWorker>();
 		builder.Services.AddHostedService<NursingCarePlanReminderWorker>();
+		builder.Services.AddHostedService<InpatientDailyBillingHostedService>();
 		builder.Services.AddHostedService<OutboxBackgroundDispatcher>();
 		builder.Services.AddScoped((Func<IServiceProvider, IUserSession>)((IServiceProvider sp) =>
 		{
@@ -560,6 +570,7 @@ public class Program
 		{
 			IDbConnectionFactory connFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
 			await DbSchemaInitializer.InitializeAsync(connFactory);
+			if (string.Equals(builder.Configuration["HIS_ENABLE_DEMO_SEED"], "true", StringComparison.OrdinalIgnoreCase) || builder.Environment.IsDevelopment())
 			await DbSeedData.SeedAsync(connFactory, builder.Environment.IsDevelopment());
 		}
 		app.Run();

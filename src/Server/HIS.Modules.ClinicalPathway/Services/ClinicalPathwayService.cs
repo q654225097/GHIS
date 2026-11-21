@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Dapper;
 using HIS.BuildingBlocks.Database;
 using HIS.Contracts;
 using HIS.Modules.ClinicalPathway.Models;
@@ -17,19 +18,22 @@ public sealed class ClinicalPathwayService : IClinicalPathwayContract
     private readonly IRepository<CpwStageItem> _itemRepo;
     private readonly IRepository<CpwPatientEnrollment> _enrollmentRepo;
     private readonly IRepository<CpwVariance> _varianceRepo;
+    private readonly IDbConnectionFactory? _connFactory;
 
     public ClinicalPathwayService(
         IRepository<CpwPathway> pathwayRepo,
         IRepository<CpwStage> stageRepo,
         IRepository<CpwStageItem> itemRepo,
         IRepository<CpwPatientEnrollment> enrollmentRepo,
-        IRepository<CpwVariance> varianceRepo)
+        IRepository<CpwVariance> varianceRepo,
+        IDbConnectionFactory? connFactory = null)
     {
         _pathwayRepo = pathwayRepo;
         _stageRepo = stageRepo;
         _itemRepo = itemRepo;
         _enrollmentRepo = enrollmentRepo;
         _varianceRepo = varianceRepo;
+        _connFactory = connFactory;
     }
 
     public async Task<IReadOnlyList<CpwMatchResultDto>> MatchPathwaysAsync(
@@ -133,17 +137,47 @@ public sealed class ClinicalPathwayService : IClinicalPathwayContract
             ? new List<CpwStageItem>()
             : (await _itemRepo.QueryAsync("SELECT * FROM cpw_stage_items WHERE stage_id = @StageId", new { StageId = enrollment.CurrentStageId }, ct)).ToList();
 
-        // 模拟提取必须项与变异候选
-        var missing = stageItems
-            .Where(i => i.IsMandatory == 1)
-            .Select(i => $"【阶段必选未开】{i.ItemName} ({i.ItemCategory})")
-            .Take(2)
-            .ToList();
+        // 真实关联住院医嘱表 ord_medical_orders 逐条核对路径必选执行项与路径外变异医嘱
+        var actualOrders = new List<(string ItemCode, string ItemName, int Status)>();
+        if (_connFactory != null && !string.IsNullOrWhiteSpace(enrollment.EncounterId))
+        {
+            using var conn = _connFactory.CreateConnection();
+            var rows = await conn.QueryAsync<dynamic>(
+                "SELECT item_code AS ItemCode, item_name AS ItemName, status AS Status FROM ord_medical_orders WHERE encounter_id = @EncId AND status >= 0",
+                new { EncId = enrollment.EncounterId });
+            foreach (var r in rows)
+            {
+                actualOrders.Add(((string?)r.ItemCode ?? string.Empty, (string?)r.ItemName ?? string.Empty, Convert.ToInt32(r.Status)));
+            }
+        }
+
+        var missing = new List<string>();
+        int matchedMandatory = 0;
+        int totalMandatory = 0;
+        foreach (var item in stageItems.Where(i => i.IsMandatory == 1))
+        {
+            totalMandatory++;
+            bool executed = actualOrders.Any(o =>
+                (!string.IsNullOrWhiteSpace(item.ItemCode) && string.Equals(o.ItemCode, item.ItemCode, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(item.ItemName) && o.ItemName.Contains(item.ItemName, StringComparison.OrdinalIgnoreCase)));
+            if (executed)
+                matchedMandatory++;
+            else
+                missing.Add($"【必选未开】{item.ItemName} ({item.ItemCategory})");
+        }
 
         var variances = new List<string>();
         if (missing.Count > 0)
         {
-            variances.Add($"存在 {missing.Count} 项临床路径必选项尚未开立");
+            variances.Add($"当前阶段必选项完成 {matchedMandatory}/{totalMandatory}，尚缺 {missing.Count} 项未开立");
+        }
+        // 检测路径外新增变异医嘱
+        var outOfPathway = actualOrders.Where(o => !stageItems.Any(i =>
+            (!string.IsNullOrWhiteSpace(i.ItemCode) && string.Equals(i.ItemCode, o.ItemCode, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrWhiteSpace(i.ItemName) && o.ItemName.Contains(i.ItemName, StringComparison.OrdinalIgnoreCase)))).ToList();
+        foreach (var extra in outOfPathway.Take(5))
+        {
+            variances.Add($"【路径外变异医嘱】{extra.ItemName} ({extra.ItemCode})");
         }
 
         return new CpwOrderComparisonResultDto(missing, variances);

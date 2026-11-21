@@ -75,21 +75,33 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await InitializeCatalogAndCheckupTablesAsync(conn);
 		await InitializeMedTechReportTablesAsync(conn);
 		await InitializePreAdmissionTablesAsync(conn);
+		await InitializeCheckupProTablesAsync(conn);
+		await InitializeClinicalCompleteTablesAsync(conn);
 		await CleanUpDirtyDataAsync(conn);
 	}
 
-	private static async Task EnsureColumnAsync(DbConnection conn, string table, string column, string definition)
+	private static async Task EnsureColumnAsync(DbConnection conn, string tableName, string columnName, string columnDef)
 	{
-		try
+		string connTypeName = conn.GetType().FullName ?? string.Empty;
+		bool exists;
+		if (connTypeName.Contains("DmConnection", StringComparison.OrdinalIgnoreCase))
 		{
-			if (!(await conn.QueryAsync<TableColumnInfo>("PRAGMA table_info(" + table + ")")).Any((TableColumnInfo row) => string.Equals(row.Name, column, StringComparison.OrdinalIgnoreCase)))
-			{
-				await conn.ExecuteAsync($"ALTER TABLE {table} ADD COLUMN {column} {definition}");
-			}
+			int cnt = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM USER_TAB_COLUMNS WHERE UPPER(TABLE_NAME) = UPPER(@Tbl) AND UPPER(COLUMN_NAME) = UPPER(@Col)", new { Tbl = tableName, Col = columnName });
+			exists = cnt > 0;
 		}
-		catch (Exception ex) when (ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+		else if (connTypeName.Contains("NpgsqlConnection", StringComparison.OrdinalIgnoreCase))
 		{
-			// Concurrently added by another thread/test, safe to ignore
+			int cnt = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM information_schema.columns WHERE LOWER(table_name) = LOWER(@Tbl) AND LOWER(column_name) = LOWER(@Col)", new { Tbl = tableName, Col = columnName });
+			exists = cnt > 0;
+		}
+		else
+		{
+			var cols = await conn.QueryAsync<TableColumnInfo>($"PRAGMA table_info({tableName})");
+			exists = cols.Any(c => string.Equals(c.Name, columnName, StringComparison.OrdinalIgnoreCase));
+		}
+		if (!exists)
+		{
+			await conn.ExecuteAsync($"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnDef}");
 		}
 	}
 

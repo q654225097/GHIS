@@ -19,7 +19,7 @@ namespace HIS.Modules.Finance.Controllers;
 [Route("api/v4/finance")]
 public class FinanceController : ControllerBase
 {
-	public sealed record SettlePaymentRequestDto(string Scene, string PatientId, string VisitOrEncounterId, decimal TotalAmount, decimal InsuranceAmount, decimal PrepaymentDeduct, decimal SelfPayAmount, string PaymentChannel, List<FinChargeLedger>? ChargeItems, string? RequestKey = null, string? CashierUserId = null, string? PrepaymentId = null);
+	public sealed record SettlePaymentRequestDto(string Scene, string PatientId, string VisitOrEncounterId, decimal TotalAmount, decimal InsuranceAmount, decimal PrepaymentDeduct, decimal SelfPayAmount, string PaymentChannel, List<FinChargeLedger>? ChargeItems, string? RequestKey = null, string? CashierUserId = null, string? PrepaymentId = null, decimal? CashTendered = null);
 
 	public sealed record ExecuteRefundRequestDto(string PaymentOrderId, decimal RefundAmount, string Reason, string? PharmacistReturnConfirmDocId = null, string? RequestKey = null);
 
@@ -94,6 +94,17 @@ public class FinanceController : ControllerBase
 			return ApiResponse<FinPaymentOrder>.Fail(400, "住院费用请通过住院出院结算流程办理，不能使用门诊收费接口");
 		if (string.IsNullOrWhiteSpace(req.PatientId) || string.IsNullOrWhiteSpace(req.VisitOrEncounterId))
 			return ApiResponse<FinPaymentOrder>.Fail(400, "患者与门诊就诊号不能为空");
+		string normalizedChannel = string.IsNullOrWhiteSpace(req.PaymentChannel) ? "CASH" : req.PaymentChannel.Trim().ToUpperInvariant();
+		if (req.SelfPayAmount > 0m && normalizedChannel != "CASH")
+		{
+			return ApiResponse<FinPaymentOrder>.Fail(400, $"当前版本支付渠道仅开放现金（CASH）实收，不支持渠道 [{normalizedChannel}]");
+		}
+		decimal cashTendered = req.CashTendered ?? req.SelfPayAmount;
+		if (req.SelfPayAmount > 0m && cashTendered < req.SelfPayAmount)
+		{
+			return ApiResponse<FinPaymentOrder>.Fail(400, $"现金实收金额 (¥{cashTendered:0.00}) 小于应收自付金额 (¥{req.SelfPayAmount:0.00})");
+		}
+		decimal changeAmount = req.SelfPayAmount > 0m ? Math.Round(cashTendered - req.SelfPayAmount, 2) : 0m;
 		if (req.InsuranceAmount < 0 || req.PrepaymentDeduct < 0 || req.SelfPayAmount < 0)
 			return ApiResponse<FinPaymentOrder>.Fail(400, "医保、预交和自费金额不能为负数");
 		decimal componentSum = req.InsuranceAmount + req.PrepaymentDeduct + req.SelfPayAmount;
@@ -207,7 +218,8 @@ public class FinanceController : ControllerBase
 				InsuranceAmount = req.InsuranceAmount,
 				PrepaymentDeduct = req.PrepaymentDeduct,
 				SelfPayAmount = req.SelfPayAmount,
-				PaymentChannel = req.PaymentChannel,
+				PaymentChannel = req.SelfPayAmount > 0m ? "CASH" : normalizedChannel,
+			ExtDataJson = JsonSerializer.Serialize(new { cashTendered, changeAmount, paymentMode = "CASH_ONLY" }),
 				PrepaymentId = req.PrepaymentDeduct > 0m ? req.PrepaymentId : null,
 				Status = 1,
 				PaidAtMs = SystemTime.UtcNowMs,
@@ -672,5 +684,70 @@ ORDER BY fee_date_int DESC, created_at_ms DESC";
 			.ToList();
 
 		return ApiResponse<IReadOnlyList<DailyStatementItemDto>>.Success(groups);
+	}
+
+	/// <summary>
+	/// 财务日结标准总账凭证导出（借贷平衡，兼容金蝶/用友标准凭证导入格式）
+	/// </summary>
+	[HttpGet("closings/voucher-export")]
+	public async Task<IActionResult> ExportDailyClosingVoucher([FromQuery] int? closingDateInt = null, [FromQuery] string format = "json")
+	{
+		int targetDate = closingDateInt is > 20000101
+			? closingDateInt.Value
+			: int.Parse(SystemTime.ShanghaiNow.ToString("yyyyMMdd"));
+
+		DateTime dayStartLocal = DateTime.SpecifyKind(
+			new DateTime(targetDate / 10000, (targetDate / 100) % 100, targetDate % 100, 0, 0, 0),
+			DateTimeKind.Unspecified);
+		long startMs = new DateTimeOffset(dayStartLocal, TimeSpan.FromHours(8)).ToUnixTimeMilliseconds();
+		long endMs = startMs + 24L * 3600 * 1000;
+
+		using var conn = _connFactory.CreateConnection();
+		var orders = (await conn.QueryAsync<dynamic>(@"
+			SELECT scene AS Scene,
+			       COALESCE(SUM(self_pay_amount), 0) AS CashTotal,
+			       COALESCE(SUM(prepayment_deduct), 0) AS PrepayTotal,
+			       COALESCE(SUM(insurance_amount), 0) AS InsTotal,
+			       COALESCE(SUM(total_amount), 0) AS GrossTotal
+			FROM fin_payment_orders
+			WHERE status = 1 AND paid_at_ms >= @StartMs AND paid_at_ms < @EndMs
+			GROUP BY scene",
+			new { StartMs = startMs, EndMs = endMs })).ToList();
+
+		decimal cashSum = orders.Sum(o => Convert.ToDecimal(o.CashTotal));
+		decimal prepaySum = orders.Sum(o => Convert.ToDecimal(o.PrepayTotal));
+		decimal insSum = orders.Sum(o => Convert.ToDecimal(o.InsTotal));
+		decimal opdGross = orders.Where(o => string.Equals((string?)o.Scene, "OPD", StringComparison.OrdinalIgnoreCase)).Sum(o => Convert.ToDecimal(o.GrossTotal));
+		decimal ipdGross = orders.Where(o => !string.Equals((string?)o.Scene, "OPD", StringComparison.OrdinalIgnoreCase)).Sum(o => Convert.ToDecimal(o.GrossTotal));
+
+		var lines = new List<object>();
+		if (cashSum > 0m) lines.Add(new { VoucherDate = targetDate, AccountCode = "1001", AccountName = "库存现金", Summary = $"{targetDate} 医院现金收款汇总", Debit = cashSum, Credit = 0m });
+		if (prepaySum > 0m) lines.Add(new { VoucherDate = targetDate, AccountCode = "2203", AccountName = "预收医疗款", Summary = $"{targetDate} 住院预交金冲抵", Debit = prepaySum, Credit = 0m });
+		if (insSum > 0m) lines.Add(new { VoucherDate = targetDate, AccountCode = "1122", AccountName = "应收医保款", Summary = $"{targetDate} 医保统筹记账", Debit = insSum, Credit = 0m });
+		if (opdGross > 0m) lines.Add(new { VoucherDate = targetDate, AccountCode = "4001", AccountName = "医疗收入-门诊", Summary = $"{targetDate} 门诊医疗总收入", Debit = 0m, Credit = opdGross });
+		if (ipdGross > 0m) lines.Add(new { VoucherDate = targetDate, AccountCode = "4002", AccountName = "医疗收入-住院", Summary = $"{targetDate} 住院医疗总收入", Debit = 0m, Credit = ipdGross });
+
+		decimal totalDebit = cashSum + prepaySum + insSum;
+		decimal totalCredit = opdGross + ipdGross;
+
+		if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
+		{
+			var sb = new System.Text.StringBuilder();
+			sb.AppendLine("凭证日期,科目编码,科目名称,摘要,借方金额,贷方金额");
+			foreach (dynamic row in lines)
+			{
+				sb.AppendLine($"{row.VoucherDate},{row.AccountCode},{row.AccountName},{row.Summary},{row.Debit:F2},{row.Credit:F2}");
+			}
+			return File(System.Text.Encoding.UTF8.GetBytes(sb.ToString()), "text/csv; charset=utf-8", $"GL_Voucher_{targetDate}.csv");
+		}
+
+		return Ok(ApiResponse<object>.Success(new
+		{
+			ClosingDateInt = targetDate,
+			Balanced = Math.Abs(totalDebit - totalCredit) <= 0.01m,
+			TotalDebit = totalDebit,
+			TotalCredit = totalCredit,
+			Entries = lines
+		}, $"已生成 {targetDate} 借贷平衡总账凭证（共 {lines.Count} 条分录）"));
 	}
 }

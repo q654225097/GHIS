@@ -70,7 +70,7 @@ public static class PrintEngineService
         ctx.TryAdd("system.printTime", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
         ctx.TryAdd("system.printDate", DateTime.Now.ToString("yyyy-MM-dd"));
         ctx.TryAdd("system.operatorName", string.IsNullOrWhiteSpace(operatorName) ? "当前用户" : operatorName);
-        ctx.TryAdd("system.hospitalName", "GHIS 示范医院");
+        ctx.TryAdd("system.hospitalName", "GHIS 医院信息系统");
     }
 
     /// <summary>

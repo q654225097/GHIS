@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Mrms"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Mrms.MrmsStationView"
+             x:DataType="local:MrmsViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="病案室管理与临床编码工作台 (MRMS)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="出院病案一键同步回收 · ICD-10 / ICD-9-CM-3 编码与 DRG 预分组 · 质控打回 · 上架归档 · 依法封存与借阅复印"
+                               FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <controls:DynamicPrintTriggerBar Grid.Column="1" PageKey="mrms" TriggerSlot="TOP_TOOLBAR"/>
+                <Button Grid.Column="2" Content="同步已出院病案" Classes="Secondary" Height="32" Command="{Binding SyncDischargedCommand}"/>
+                <Button Grid.Column="3" Content="刷新" Classes="Primary" Height="32" Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="病案回收 · ICD编码 · DRG预分组与归档">
+                <Grid ColumnDefinitions="*,380" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                                <TextBox Text="{Binding SearchKeyword, Mode=TwoWay}" Width="220" PlaceholderText="病案号 / 姓名 / 主诊断"/>
+                                <ComboBox Width="160" ItemsSource="{Binding StatusFilterOptions}" SelectedItem="{Binding FilterStatus, Mode=TwoWay}"/>
+                                <Button Content="查询" Classes="Primary" Command="{Binding RefreshCommand}"/>
+                            </StackPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Cases}" SelectedItem="{Binding SelectedCase, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="病案号" Binding="{Binding CaseNo}" Width="140"/>
+                                    <DataGridTextColumn Header="患者姓名" Binding="{Binding PatientName}" Width="90"/>
+                                    <DataGridTextColumn Header="出院科室" Binding="{Binding DischargeDeptName}" Width="110"/>
+                                    <DataGridTextColumn Header="ICD-10" Binding="{Binding PrimaryIcd10Code}" Width="85"/>
+                                    <DataGridTextColumn Header="主要诊断" Binding="{Binding PrimaryIcd10Name}" Width="150"/>
+                                    <DataGridTextColumn Header="DRG预分组" Binding="{Binding DrgGroupCode}" Width="105"/>
+                                    <DataGridTextColumn Header="架位" Binding="{Binding ShelfLocation}" Width="110"/>
+                                    <DataGridTextColumn Header="状态" Binding="{Binding StatusDisplay}" Width="110"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <ScrollViewer>
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="临床编码复核与归档上架" FontWeight="Bold" FontSize="14"/>
+                                <TextBox Text="{Binding EditIcd10Code, Mode=TwoWay}" PlaceholderText="主诊断 ICD-10 编码（如 I21.9）"/>
+                                <TextBox Text="{Binding EditIcd10Name, Mode=TwoWay}" PlaceholderText="主诊断名称"/>
+                                <TextBox Text="{Binding EditIcd9Code, Mode=TwoWay}" PlaceholderText="主手术 ICD-9-CM-3 编码（选填）"/>
+                                <TextBox Text="{Binding EditIcd9Name, Mode=TwoWay}" PlaceholderText="主手术操作名称（选填）"/>
+                                <TextBox Text="{Binding EditDrgCode, Mode=TwoWay}" PlaceholderText="DRG 预分组代码（留空则自动计算）"/>
+                                <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding EditStatusOptions}" SelectedItem="{Binding EditStatus, Mode=TwoWay}"/>
+                                <TextBox Text="{Binding EditShelfLocation, Mode=TwoWay}" PlaceholderText="病案库上架架位"/>
+                                <TextBox Text="{Binding EditQcNote, Mode=TwoWay}" PlaceholderText="终末质控意见 / 打回说明" AcceptsReturn="True" Height="56"/>
+                                <Button Content="保存编码并更新病案状态" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding SaveCodingCommand}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="病案借阅 · 复印 · 依法封存台账">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="对当前选中病案登记借阅/复印/封存" FontWeight="Bold" FontSize="14"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding BorrowActionOptions}" SelectedItem="{Binding BorrowActionType, Mode=TwoWay}"/>
+                            <TextBox Text="{Binding BorrowApplicant, Mode=TwoWay}" PlaceholderText="申请人 / 家属 / 执法机构"/>
+                            <TextBox Text="{Binding BorrowPurpose, Mode=TwoWay}" PlaceholderText="用途说明" AcceptsReturn="True" Height="56"/>
+                            <NumericUpDown Value="{Binding BorrowDueDateInt, Mode=TwoWay}" Minimum="20200101" Maximum="20991231" FormatString="0"/>
+                            <Button Content="确认登记（封存将自动锁定病案）" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateBorrowCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding BorrowLogs}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="病案号" Binding="{Binding CaseNo}" Width="140"/>
+                                <DataGridTextColumn Header="患者姓名" Binding="{Binding PatientName}" Width="100"/>
+                                <DataGridTextColumn Header="业务类型" Binding="{Binding ActionDisplay}" Width="100"/>
+                                <DataGridTextColumn Header="申请人" Binding="{Binding ApplicantName}" Width="110"/>
+                                <DataGridTextColumn Header="用途说明" Binding="{Binding Purpose}" Width="*"/>
+                                <DataGridTextColumn Header="到期日" Binding="{Binding DueDateInt}" Width="100"/>
+                                <DataGridTextColumn Header="经办人" Binding="{Binding HandledBy}" Width="90"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

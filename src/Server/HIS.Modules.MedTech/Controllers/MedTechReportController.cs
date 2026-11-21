@@ -600,6 +600,37 @@ public sealed class MedTechReportController : ControllerBase
             }
         }
 
+                // 联动体检系统：医技报告双签发布后自动回写体检分科结果与异常统计，免去体检医生二次手工录入
+        using (var chkConn = _connFactory.CreateConnection())
+        {
+            string? chkItemId = await chkConn.ExecuteScalarAsync<string?>(
+                "SELECT chk_order_item_id FROM mtc_diagnostic_reports WHERE id = @Rid LIMIT 1",
+                new { Rid = rpt.Id });
+            if (!string.IsNullOrWhiteSpace(chkItemId))
+            {
+                string resText = rpt.DiagnosisImpression ?? rpt.FindingsSummary ?? "已完成";
+                string abnFlag = rpt.IsCriticalValue == 1 ? "POSITIVE" : "NORMAL";
+                await chkConn.ExecuteAsync(@"
+                    UPDATE chk_order_items
+                    SET result_value = @Val, is_abnormal = @Crit, abnormal_flag = @Flag,
+                        exam_doctor_name = @Doc, status = 'DONE', checked_at_ms = @Now, updated_at_ms = @Now
+                    WHERE id = @ItemId",
+                    new { Val = resText, Crit = rpt.IsCriticalValue, Flag = abnFlag, Doc = ActorName, Now = now, ItemId = chkItemId });
+
+                string? orderId = await chkConn.ExecuteScalarAsync<string?>("SELECT order_id FROM chk_order_items WHERE id = @Id", new { Id = chkItemId });
+                if (!string.IsNullOrWhiteSpace(orderId))
+                {
+                    int doneCnt = await chkConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM chk_order_items WHERE order_id = @Oid AND status IN ('DONE','WAIVED')", new { Oid = orderId });
+                    int totalCnt = await chkConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM chk_order_items WHERE order_id = @Oid", new { Oid = orderId });
+                    int abnCnt = await chkConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM chk_order_items WHERE order_id = @Oid AND is_abnormal = 1", new { Oid = orderId });
+                    string nextSt = (totalCnt > 0 && doneCnt >= totalCnt) ? "PENDING_SUMMARY" : "IN_PROGRESS";
+                    await chkConn.ExecuteAsync(
+                        "UPDATE chk_orders SET done_item_count = @Done, abnormal_count = @Abn, status = CASE WHEN status = 'COMPLETED' THEN 'COMPLETED' ELSE @St END, updated_at_ms = @Now WHERE id = @Oid",
+                        new { Done = doneCnt, Abn = abnCnt, St = nextSt, Now = now, Oid = orderId });
+                }
+            }
+        }
+
         if (_auditTrail != null)
             await _auditTrail.RecordAuditAsync("MTC_REPORT_SIGNED", "mtc_diagnostic_reports", rpt.Id, $"审签发布医技报告：{rpt.PatientName} - {rpt.ExamItemName}（报告号 {rpt.ReportNo}，SM3签名 {rpt.SignatureHash[..12]}）", ActorId, ActorName, null, ct);
 

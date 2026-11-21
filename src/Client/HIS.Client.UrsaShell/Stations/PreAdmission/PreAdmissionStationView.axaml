@@ -201,6 +201,7 @@
                                         </Grid>
                                     </StackPanel>
                                 </Border>
+                                <controls:BoDynamicFormPanel EntityType="IPD_PRE_ADMISSION" EntityId="{Binding SelectedMain.Id}"/>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>

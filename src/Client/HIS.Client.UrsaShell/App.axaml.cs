@@ -90,7 +90,9 @@ public partial class App : Application
             var loginRtb = new RenderTargetBitmap(new PixelSize(960, 600), new Vector(96, 96));
             loginRtb.Render(loginWin);
             var loginPath = Path.Combine(outputDir, "view_00_login.png");
+#pragma warning disable CS0618
             loginRtb.Save(loginPath);
+#pragma warning restore CS0618
             if (Directory.Exists(ArtifactDir))
             {
                 File.Copy(loginPath, Path.Combine(ArtifactDir, "view_00_login.png"), true);
@@ -142,7 +144,9 @@ public partial class App : Application
                         var rtb = new RenderTargetBitmap(size, new Vector(96, 96));
                         rtb.Render(main);
                         var localPath = Path.Combine(outputDir, fileName);
+#pragma warning disable CS0618
                         rtb.Save(localPath);
+#pragma warning restore CS0618
                         try
                         {
                             if (Directory.Exists(ArtifactDir))

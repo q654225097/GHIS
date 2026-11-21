@@ -1,4 +1,8 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows.Input;
@@ -7,6 +11,26 @@ using HIS.Client.UrsaShell.Shell;
 using HIS.Client.UrsaShell.ViewModels;
 
 namespace HIS.Client.UrsaShell.Stations.Admin;
+
+
+public sealed class BoTypeOption
+{
+    public string EntityType { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string TableName { get; set; } = string.Empty;
+    public string ModuleName { get; set; } = string.Empty;
+    public int BoundSchemaCount { get; set; }
+    public override string ToString() => $"{DisplayName} ({EntityType} · {ModuleName})";
+}
+
+public sealed class BoRecordOption
+{
+    public string Id { get; set; } = string.Empty;
+    public string BusinessNo { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string SubTitle { get; set; } = string.Empty;
+    public override string ToString() => $"{BusinessNo} · {Title} ({SubTitle})";
+}
 
 public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarget
 {
@@ -44,6 +68,7 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
         SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => Workbench.EditingTemplate != null);
 
         RebuildFiltered();
+        _ = LoadBoTypesAsync();
     }
 
     public WorkbenchModel Workbench { get; }
@@ -74,6 +99,7 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
             if (SetField(ref _selectedTemplate, value) && value != null)
             {
                 _ = OpenFormDesignerAsync(value);
+                SyncSelectedBoTypeFromEditingTemplate();
             }
         }
     }
@@ -426,5 +452,81 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
         }
         _shell?.ShowToast(PermissionBlockedReason, "Warning");
         return false;
+    }
+
+    private static readonly JsonSerializerOptions BoJsonOpts = new() { PropertyNameCaseInsensitive = true };
+    private BoTypeOption? _selectedBoType;
+    private BoRecordOption? _selectedBoRecord;
+
+    public ObservableCollection<BoTypeOption> BoTypes { get; } = new();
+    public ObservableCollection<BoRecordOption> BoRecords { get; } = new();
+
+    public BoTypeOption? SelectedBoType
+    {
+        get => _selectedBoType;
+        set
+        {
+            if (SetField(ref _selectedBoType, value) && value != null)
+            {
+                if (Workbench.EditingTemplate != null && !string.Equals(Workbench.EditingTemplate.EntityType, value.EntityType, StringComparison.OrdinalIgnoreCase))
+                {
+                    Workbench.EditingTemplate.EntityType = value.EntityType;
+                    OnPropertyChanged(nameof(SelectedTemplateMeta));
+                }
+                _ = LoadBoRecordsAsync(value.EntityType);
+            }
+        }
+    }
+
+    public BoRecordOption? SelectedBoRecord
+    {
+        get => _selectedBoRecord;
+        set => SetField(ref _selectedBoRecord, value);
+    }
+
+    private async Task LoadBoTypesAsync()
+    {
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var res = await http.GetFromJsonAsync<ClientApiEnvelope<List<BoTypeOption>>>("/api/v4/config/bo/types", BoJsonOpts);
+            BoTypes.Clear();
+            if (res?.Data != null)
+            {
+                foreach (var item in res.Data) BoTypes.Add(item);
+            }
+            SyncSelectedBoTypeFromEditingTemplate();
+        }
+        catch { }
+    }
+
+    private async Task LoadBoRecordsAsync(string entityType)
+    {
+        if (string.IsNullOrWhiteSpace(entityType)) return;
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var res = await http.GetFromJsonAsync<ClientApiEnvelope<List<BoRecordOption>>>($"/api/v4/config/bo/records/{Uri.EscapeDataString(entityType)}", BoJsonOpts);
+            BoRecords.Clear();
+            if (res?.Data != null)
+            {
+                foreach (var r in res.Data) BoRecords.Add(r);
+            }
+            SelectedBoRecord = BoRecords.FirstOrDefault();
+        }
+        catch { }
+    }
+
+    private void SyncSelectedBoTypeFromEditingTemplate()
+    {
+        string? et = Workbench.EditingTemplate?.EntityType;
+        if (string.IsNullOrWhiteSpace(et) || BoTypes.Count == 0) return;
+        var match = BoTypes.FirstOrDefault(b => string.Equals(b.EntityType, et, StringComparison.OrdinalIgnoreCase)) ?? BoTypes[0];
+        if (!ReferenceEquals(_selectedBoType, match))
+        {
+            _selectedBoType = match;
+            OnPropertyChanged(nameof(SelectedBoType));
+            _ = LoadBoRecordsAsync(match.EntityType);
+        }
     }
 }

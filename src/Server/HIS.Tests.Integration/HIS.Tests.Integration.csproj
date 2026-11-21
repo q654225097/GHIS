@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\HIS.BuildingBlocks\HIS.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\HIS.Contracts\HIS.Contracts.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Finance\HIS.Modules.Finance.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Inpatient\HIS.Modules.Inpatient.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Outpatient\HIS.Modules.Outpatient.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Emr\HIS.Modules.Emr.csproj" />
+    <ProjectReference Include="..\HIS.Modules.ClinicalPathway\HIS.Modules.ClinicalPathway.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Inventory\HIS.Modules.Inventory.csproj" />
+    <ProjectReference Include="..\HIS.Modules.KnowledgeBase\HIS.Modules.KnowledgeBase.csproj" />
+  </ItemGroup>
+
+</Project>

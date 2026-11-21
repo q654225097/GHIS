@@ -1,0 +1,199 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Emergency"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Emergency.EmergencyStationView"
+             x:DataType="local:EmergencyViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="急诊 5 级分诊抢救中心 · 门诊增强工作台" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="MEWS/GCS 自动五级分诊 · 绿色通道欠费挂账 · 临床优先级候诊估算 · 慢病续方 · SM3 防伪诊断证明/病假条"
+                               FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <controls:DynamicPrintTriggerBar Grid.Column="1" PageKey="er_opd_pro" TriggerSlot="TOP_TOOLBAR"/>
+                <Button Grid.Column="2" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: 急诊 5 级分诊与抢救留观闭环 -->
+            <TabItem Header="急诊 5 级分诊与抢救/留观">
+                <Grid ColumnDefinitions="360,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <ScrollViewer>
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="急诊预检分诊登记 (自动 MEWS/GCS 评级)" FontWeight="Bold" FontSize="14"/>
+                                <TextBox Text="{Binding ErPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding ErGender, Mode=TwoWay}"/>
+                                    <NumericUpDown Grid.Column="1" Value="{Binding ErAge, Mode=TwoWay}" Minimum="0" Maximum="120" FormatString="0 岁"/>
+                                </Grid>
+                                <TextBox Text="{Binding ErComplaint, Mode=TwoWay}" PlaceholderText="急诊主诉（如：突发胸痛伴大汗30分钟）" AcceptsReturn="True" Height="56"/>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="体温 (℃)" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding ErTempC, Mode=TwoWay}" Minimum="33" Maximum="43" Increment="0.1" FormatString="0.0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="心率 (次/分)" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding ErHr, Mode=TwoWay}" Minimum="20" Maximum="240" FormatString="0"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="呼吸 (次/分)" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding ErRr, Mode=TwoWay}" Minimum="4" Maximum="60" FormatString="0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="收缩压 SBP (mmHg)" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding ErSbp, Mode=TwoWay}" Minimum="40" Maximum="260" FormatString="0"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="血氧 SpO2 (%)" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding ErSpo2, Mode=TwoWay}" Minimum="50" Maximum="100" FormatString="0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="意识 GCS (3~15)" FontSize="11"/>
+                                        <NumericUpDown Value="{Binding ErGcs, Mode=TwoWay}" Minimum="3" Maximum="15" FormatString="0"/>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBox Text="{Binding ErBedCode, Mode=TwoWay}" PlaceholderText="分配抢救/留观床位号（选填，如 QJ-01）"/>
+                                <CheckBox Content="强制开启急诊绿色通道（先救治后付费）" IsChecked="{Binding ErGreenChannel, Mode=TwoWay}"/>
+                                <Button Content="计算 MEWS 并完成分诊" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding SubmitErTriageCommand}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                                <Button Content="转抢救室" Classes="Danger" Command="{Binding MoveToResusCommand}"/>
+                                <Button Content="转急诊留观" Classes="Warning" Command="{Binding MoveToObsCommand}"/>
+                                <Button Content="急诊转住院" Classes="Success" Command="{Binding ConvertToIpdCommand}"/>
+                                <NumericUpDown Value="{Binding ErAddCredit, Mode=TwoWay}" Minimum="0" Maximum="50000" Width="120" FormatString="¥0"/>
+                                <Button Content="绿通挂账追加" Classes="Secondary" Command="{Binding AddGreenCreditCommand}"/>
+                            </StackPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding ErVisits}" SelectedItem="{Binding SelectedErVisit, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="急诊号" Binding="{Binding ErNo}" Width="140"/>
+                                    <DataGridTextColumn Header="分级" Binding="{Binding LevelTag}" Width="125"/>
+                                    <DataGridTextColumn Header="MEWS" Binding="{Binding MewsScore}" Width="65"/>
+                                    <DataGridTextColumn Header="姓名" Binding="{Binding PatientName}" Width="90"/>
+                                    <DataGridTextColumn Header="主诉" Binding="{Binding ChiefComplaint}" Width="180"/>
+                                    <DataGridTextColumn Header="生命体征" Binding="{Binding VitalsSummary}" Width="240"/>
+                                    <DataGridTextColumn Header="去向/床位" Binding="{Binding DestinationZone}" Width="105"/>
+                                    <DataGridTextColumn Header="绿通" Binding="{Binding GreenTag}" Width="60"/>
+                                    <DataGridTextColumn Header="挂账金额" Binding="{Binding UnpaidCreditAmount, StringFormat=¥{0:F2}}" Width="95"/>
+                                    <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="110"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 门诊临床优先级队列与慢病一键续方 -->
+            <TabItem Header="门诊优先级排队与慢病续方">
+                <Grid ColumnDefinitions="*,420" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="临床优先级 (1急诊>2孕产/高龄>3复诊>4普通)：" VerticalAlignment="Center"/>
+                                <NumericUpDown Value="{Binding NewPriorityLevel, Mode=TwoWay}" Minimum="1" Maximum="4" Width="90" FormatString="0"/>
+                                <TextBox Text="{Binding NewPriorityTag, Mode=TwoWay}" Width="150" PlaceholderText="优先标签"/>
+                                <Button Content="调整选中候诊优先级" Classes="Primary" Command="{Binding UpdateQueuePriorityCommand}"/>
+                            </StackPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding PriorityQueue}" SelectedItem="{Binding SelectedQueue, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="队列号" Binding="{Binding QueueNo}" Width="110"/>
+                                    <DataGridTextColumn Header="患者姓名" Binding="{Binding PatientName}" Width="120"/>
+                                    <DataGridTextColumn Header="优先级" Binding="{Binding PriorityLevel}" Width="80"/>
+                                    <DataGridTextColumn Header="优先标签" Binding="{Binding PriorityTag}" Width="130"/>
+                                    <DataGridTextColumn Header="预计候诊" Binding="{Binding WaitDisplay}" Width="120"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                            <TextBlock Grid.Row="0" Text="慢病历史处方一键续方提取" FontWeight="Bold" FontSize="14"/>
+                            <StackPanel Grid.Row="1" Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" Text="{Binding CopyRxPatientId, Mode=TwoWay}" PlaceholderText="输入患者ID"/>
+                                    <Button Grid.Column="1" Content="提取上次处方" Classes="Primary" Command="{Binding CopyLastRxCommand}"/>
+                                </Grid>
+                                <TextBlock Text="{Binding CopyRxSourceInfo}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding CopiedRxItems}" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="药品名称" Binding="{Binding DrugName}" Width="*"/>
+                                    <DataGridTextColumn Header="单次剂量" Binding="{Binding Dose}" Width="75"/>
+                                    <DataGridTextColumn Header="频次" Binding="{Binding Freq}" Width="65"/>
+                                    <DataGridTextColumn Header="总量" Binding="{Binding Qty}" Width="60"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 诊断证明书与病假条 SM3 防伪签发 -->
+            <TabItem Header="诊断证明书 / 病假条签发">
+                <Grid ColumnDefinitions="360,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="签发 SM3 防伪医疗证明" FontWeight="Bold" FontSize="14"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding CertTypeOptions}" SelectedItem="{Binding CertType, Mode=TwoWay}"/>
+                            <TextBox Text="{Binding CertPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding CertGender, Mode=TwoWay}"/>
+                                <NumericUpDown Grid.Column="1" Value="{Binding CertAge, Mode=TwoWay}" Minimum="0" Maximum="120" FormatString="0 岁"/>
+                            </Grid>
+                            <TextBox Text="{Binding CertDeptName, Mode=TwoWay}" PlaceholderText="就诊科室"/>
+                            <TextBox Text="{Binding CertDiagnosis, Mode=TwoWay}" PlaceholderText="临床诊断结论" AcceptsReturn="True" Height="56"/>
+                            <NumericUpDown Value="{Binding CertRestDays, Mode=TwoWay}" Minimum="0" Maximum="90" FormatString="建议休假 0 天"/>
+                            <TextBox Text="{Binding CertAdvice, Mode=TwoWay}" PlaceholderText="医师建议" AcceptsReturn="True" Height="64"/>
+                            <Button Content="生成 SM3 防伪码并签发" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding IssueCertificateCommand}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                            Background="{DynamicResource SemiColorBackground1}"
+                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Certificates}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="证明编号" Binding="{Binding CertNo}" Width="145"/>
+                                <DataGridTextColumn Header="类型" Binding="{Binding CertTypeDisplay}" Width="90"/>
+                                <DataGridTextColumn Header="姓名" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="科室" Binding="{Binding DeptName}" Width="100"/>
+                                <DataGridTextColumn Header="临床诊断" Binding="{Binding DiagnosisText}" Width="200"/>
+                                <DataGridTextColumn Header="休假(天)" Binding="{Binding RestDays}" Width="80"/>
+                                <DataGridTextColumn Header="签发医师" Binding="{Binding DoctorName}" Width="90"/>
+                                <DataGridTextColumn Header="SM3 防伪摘要" Binding="{Binding ShortHash}" Width="145"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>
