@@ -86,7 +86,23 @@ public sealed class DynamicFormBoController : ControllerBase
             ["CHK_ORDER"] = ("健康体检登记单", "chk_orders", "健康体检中心",
                 "SELECT id AS Id, checkup_no AS BusinessNo, full_name AS Title, package_name || ' · ' || status AS SubTitle FROM chk_orders ORDER BY registered_at_ms DESC LIMIT 50"),
             ["HR_EMPLOYEE"] = ("医院职工人事档案", "hr_employees", "人力资源管理",
-                "SELECT id AS Id, employee_no AS BusinessNo, full_name AS Title, professional_title || ' · ' || employment_status AS SubTitle FROM hr_employees ORDER BY created_at_ms DESC LIMIT 50")
+                "SELECT id AS Id, employee_no AS BusinessNo, full_name AS Title, professional_title || ' · ' || employment_status AS SubTitle FROM hr_employees ORDER BY created_at_ms DESC LIMIT 50"),
+            ["ORD_MEDICAL_ORDER"] = ("住院临床医嘱", "ord_medical_orders", "住院医生站",
+                "SELECT id AS Id, order_no AS BusinessNo, item_name AS Title, order_category || ' · ' || status AS SubTitle FROM ord_medical_orders ORDER BY created_at_ms DESC LIMIT 50"),
+            ["AIMS_PREOP"] = ("麻醉术前评估单", "aims_preop_assessments", "手术麻醉(AIMS)",
+                "SELECT id AS Id, surgery_id AS BusinessNo, patient_name AS Title, 'ASA ' || asa_grade AS SubTitle FROM aims_preop_assessments ORDER BY created_at_ms DESC LIMIT 50"),
+            ["ER_FIVE_CENTER"] = ("急诊五大中心急救专案", "er_five_center_cases", "危急重症质控塔(P0)",
+                "SELECT id AS Id, case_no AS BusinessNo, patient_name AS Title, center_type || ' · ' || status AS SubTitle FROM er_five_center_cases ORDER BY door_at_ms DESC LIMIT 50"),
+            ["ICU_ADMISSION"] = ("ICU重症监护收治单", "icu_admissions", "危急重症质控塔(P0)",
+                "SELECT id AS Id, icu_no AS BusinessNo, patient_name AS Title, icu_bed_code || ' · SOFA ' || CAST(sofa_score AS TEXT) AS SubTitle FROM icu_admissions ORDER BY admitted_at_ms DESC LIMIT 50"),
+            ["PH_REPORT_CARD"] = ("公共卫生法定报卡", "ph_report_cards", "公卫随访中心(P1)",
+                "SELECT id AS Id, card_no AS BusinessNo, patient_name || ' - ' || disease_name AS Title, card_type || ' · ' || status AS SubTitle FROM ph_report_cards ORDER BY created_at_ms DESC LIMIT 50"),
+            ["FOLLOWUP_PLAN"] = ("院后专病随访计划", "followup_plans", "公卫随访中心(P1)",
+                "SELECT id AS Id, plan_no AS BusinessNo, patient_name AS Title, specialty_tag || ' · ' || status AS SubTitle FROM followup_plans ORDER BY created_at_ms DESC LIMIT 50"),
+            ["UDI_IMPLANT"] = ("手术高值耗材UDI台账", "udi_implant_inventory", "公卫随访与UDI(P1)",
+                "SELECT id AS Id, udi_di AS BusinessNo, material_name AS Title, supplier_name || ' · ' || status AS SubTitle FROM udi_implant_inventory ORDER BY created_at_ms DESC LIMIT 50"),
+            ["NUT_NRS2002"] = ("临床营养NRS-2002筛查", "nut_nrs2002_screenings", "公卫随访与营养(P1)",
+                "SELECT id AS Id, encounter_id AS BusinessNo, patient_name AS Title, risk_level || ' (' || CAST(total_score AS TEXT) || '分)' AS SubTitle FROM nut_nrs2002_screenings ORDER BY screened_at_ms DESC LIMIT 50")
         };
 
     /// <summary>
@@ -164,17 +180,23 @@ public sealed class DynamicFormBoController : ControllerBase
             return ApiResponse<object>.Fail(400, $"未注册的业务对象类型：{entityType}");
 
         using var conn = _connFactory.CreateConnection();
-        int exists = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM {meta.TableName} WHERE id = @Id", new { Id = entityId.Trim() });
-        if (exists == 0)
+        string resolvedId = entityId.Trim();
+        string? dbId = await conn.ExecuteScalarAsync<string?>($"SELECT id FROM {meta.TableName} WHERE id = @Id", new { Id = resolvedId });
+        if (dbId == null && et == "IPD_ENCOUNTER")
+            dbId = await conn.ExecuteScalarAsync<string?>("SELECT id FROM ipd_encounters WHERE admission_no = @Id", new { Id = resolvedId });
+        else if (dbId == null && et == "OPD_VISIT")
+            dbId = await conn.ExecuteScalarAsync<string?>("SELECT id FROM opd_visits WHERE visit_no = @Id", new { Id = resolvedId });
+        if (dbId == null)
             return ApiResponse<object>.Fail(404, $"在真实 BO 表 [{meta.TableName}] 中未找到记录 {entityId}");
+        resolvedId = dbId;
 
         var schemas = (await conn.QueryAsync<CfgFormSchema>(
-            "SELECT * FROM cfg_form_schemas WHERE UPPER(entity_type) = @Et AND is_published = 1 ORDER BY updated_at_ms DESC",
+            "SELECT * FROM cfg_form_schemas WHERE (UPPER(entity_type) = @Et OR (@Et = 'OPD_VISIT' AND UPPER(entity_type) = 'OPD') OR (@Et = 'IPD_ENCOUNTER' AND UPPER(entity_type) = 'IPD')) AND is_published = 1 ORDER BY updated_at_ms DESC",
             new { Et = et })).ToList();
 
         var values = (await conn.QueryAsync<CfgEntityFieldValue>(
             "SELECT * FROM cfg_entity_field_values WHERE UPPER(entity_type) = @Et AND entity_id = @Eid",
-            new { Et = et, Eid = entityId.Trim() })).ToList();
+            new { Et = et, Eid = resolvedId })).ToList();
 
         var valMap = values.ToDictionary(v => v.FieldCode, v => v, StringComparer.OrdinalIgnoreCase);
         var forms = new List<object>();

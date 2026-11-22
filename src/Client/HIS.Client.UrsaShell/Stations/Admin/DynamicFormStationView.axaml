@@ -417,7 +417,7 @@
                                     <ComboBox HorizontalAlignment="Stretch"
                                               ItemsSource="{Binding BoRecords}"
                                               SelectedItem="{Binding SelectedBoRecord, Mode=TwoWay}"/>
-                                    <controls:BoDynamicFormPanel EntityType="{Binding Workbench.EditingTemplate.EntityType}"
+                                    <controls:BoDynamicFormPanel EntityType="{Binding SelectedBoType.EntityType}"
                                                                  EntityId="{Binding SelectedBoRecord.Id}"/>
                                 </StackPanel>
                             </Border>

@@ -173,7 +173,7 @@ public sealed class MrmsViewModel : ClientModelBase
             using var http = AuthenticatedHttpClientFactory.Create();
             var resp = await http.PostAsync("api/v4/mrms/cases/sync-discharged", null);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            _shell.ShowToast(env?.Message ?? "已同步出院病案", env?.Code == 0 ? "Success" : "Error");
+            _shell.ShowToast(env?.Message ?? "已同步出院病案", (env?.Code is 200 or 0) ? "Success" : "Error");
             await RefreshAsync();
         }
         catch (Exception ex)
@@ -204,7 +204,7 @@ public sealed class MrmsViewModel : ClientModelBase
                 QcNote = EditQcNote
             });
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            _shell.ShowToast(env?.Message ?? "已更新病案编码与归档状态", env?.Code == 0 ? "Success" : "Error");
+            _shell.ShowToast(env?.Message ?? "已更新病案编码与归档状态", (env?.Code is 200 or 0) ? "Success" : "Error");
             await RefreshAsync();
         }
         catch (Exception ex)
@@ -232,7 +232,7 @@ public sealed class MrmsViewModel : ClientModelBase
                 DueDateInt = BorrowDueDateInt
             });
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            _shell.ShowToast(env?.Message ?? "登记成功", env?.Code == 0 ? "Success" : "Error");
+            _shell.ShowToast(env?.Message ?? "登记成功", (env?.Code is 200 or 0) ? "Success" : "Error");
             BorrowApplicant = string.Empty;
             await RefreshAsync();
         }

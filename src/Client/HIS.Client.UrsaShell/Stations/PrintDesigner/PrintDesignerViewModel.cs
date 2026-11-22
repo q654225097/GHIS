@@ -439,7 +439,7 @@ public sealed class PrintDesignerViewModel : ClientModelBase
             };
             var resp = await http.PostAsJsonAsync("/api/v4/print/templates", payload);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<PrintTemplateDto>>(JsonOpts);
-            if (env?.Code == 0 && env.Data != null)
+            if ((env?.Code is 200 or 0) && env.Data != null)
             {
                 _editTemplateId = env.Data.Id;
                 _shell?.ShowToast($"模板 [{env.Data.TemplateName}] 已保存并生效。", "Success");
@@ -468,7 +468,7 @@ public sealed class PrintDesignerViewModel : ClientModelBase
             using var http = AuthenticatedHttpClientFactory.Create();
             var resp = await http.DeleteAsync($"/api/v4/print/templates/{_editTemplateId}");
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell?.ShowToast("模板及关联打印按钮已停用。", "Warning");
                 PrintEngineService.NotifyTriggersChanged();
@@ -516,7 +516,7 @@ public sealed class PrintDesignerViewModel : ClientModelBase
             };
             var resp = await http.PostAsJsonAsync("/api/v4/print/triggers", payload);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell?.ShowToast($"已挂载到 [{TriggerTargetPage.PageName} · {TriggerTargetSlot.SlotName}]，业务页面已实时生效。", "Success");
                 PrintEngineService.NotifyTriggersChanged();
@@ -542,7 +542,7 @@ public sealed class PrintDesignerViewModel : ClientModelBase
             using var http = AuthenticatedHttpClientFactory.Create();
             var resp = await http.DeleteAsync($"/api/v4/print/triggers/{item.Id}");
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell?.ShowToast("已移除打印触发位。", "Info");
                 PrintEngineService.NotifyTriggersChanged();

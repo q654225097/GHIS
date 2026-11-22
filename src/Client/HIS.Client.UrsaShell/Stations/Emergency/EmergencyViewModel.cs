@@ -241,7 +241,7 @@ public sealed class EmergencyViewModel : ClientModelBase
                 BedCode = string.IsNullOrWhiteSpace(ErBedCode) ? null : ErBedCode
             });
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell.ShowToast(env.Message ?? "急诊分诊完成", "Success");
                 ErPatientName = string.Empty;
@@ -278,7 +278,7 @@ public sealed class EmergencyViewModel : ClientModelBase
                 AddCreditAmount = addCredit
             });
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            _shell.ShowToast(env?.Message ?? "已更新状态", env?.Code == 0 ? "Success" : "Error");
+            _shell.ShowToast(env?.Message ?? "已更新状态", (env?.Code is 200 or 0) ? "Success" : "Error");
             await RefreshAllAsync();
         }
         catch (Exception ex)
@@ -303,7 +303,7 @@ public sealed class EmergencyViewModel : ClientModelBase
                 PriorityTag = NewPriorityTag
             });
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            _shell.ShowToast(env?.Message ?? "优先级别已更新", env?.Code == 0 ? "Success" : "Error");
+            _shell.ShowToast(env?.Message ?? "优先级别已更新", (env?.Code is 200 or 0) ? "Success" : "Error");
             await RefreshAllAsync();
         }
         catch (Exception ex)
@@ -325,7 +325,7 @@ public sealed class EmergencyViewModel : ClientModelBase
             var resp = await http.PostAsync($"api/v4/er-opd/opd/copy-last-rx/{Uri.EscapeDataString(CopyRxPatientId.Trim())}", null);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
             CopiedRxItems.Clear();
-            if (env?.Code == 0 && env.Data.ValueKind == JsonValueKind.Object)
+            if ((env?.Code is 200 or 0) && env.Data.ValueKind == JsonValueKind.Object)
             {
                 CopyRxSourceInfo = env.Message ?? "已提取历史处方";
                 if (env.Data.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array)
@@ -370,7 +370,7 @@ public sealed class EmergencyViewModel : ClientModelBase
                 AdviceText = CertAdvice
             });
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell.ShowToast(env.Message ?? "证明书签发成功", "Success");
                 CertPatientName = string.Empty;

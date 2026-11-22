@@ -1090,7 +1090,14 @@
                     </Grid>
                 </TabItem>
 
-            </TabControl>
+            
+            <TabItem Header="⑤ 专科动态表单(BO)">
+                <ScrollViewer Padding="10">
+                    <controls:BoDynamicFormPanel EntityType="OPD_VISIT"
+                                                 EntityId="{Binding Workbench.SelectedPatient.VisitId}"/>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
         </Grid>
     </Grid>
 </UserControl>

@@ -495,7 +495,7 @@ public sealed class PreAdmissionViewModel : ClientModelBase, IPrintContextProvid
             BundleId = RegSelectedBundle?.Id
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "预住院登记成功", "Success");
             RegPatientName = string.Empty;
@@ -521,7 +521,7 @@ public sealed class PreAdmissionViewModel : ClientModelBase, IPrintContextProvid
             Amount = AddOrderAmount
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "已加开院前检查", "Success");
             AddOrderName = string.Empty;
@@ -542,7 +542,7 @@ public sealed class PreAdmissionViewModel : ClientModelBase, IPrintContextProvid
             CriticalSummary = CritSummary
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "已触发 P0 危急值中断并锁停未做检查", "Warning");
             await LoadAllAsync();
@@ -568,7 +568,7 @@ public sealed class PreAdmissionViewModel : ClientModelBase, IPrintContextProvid
             DoctorSplitSuggestions = doctorSuggestions
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "评估决策已生效", "Success");
             await LoadAllAsync();
@@ -586,7 +586,7 @@ public sealed class PreAdmissionViewModel : ClientModelBase, IPrintContextProvid
             WardName = AdmitWardName
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "已正式入科占床", "Success");
             await LoadAllAsync();
@@ -609,7 +609,7 @@ public sealed class PreAdmissionViewModel : ClientModelBase, IPrintContextProvid
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync($"/api/v4/pre-admission/{SelectedMain.Id}/finance-confirm-split", new { Items = items });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "财务/医保复合拆分已终审", "Success");
             await LoadAllAsync();
@@ -633,7 +633,7 @@ public sealed class PreAdmissionViewModel : ClientModelBase, IPrintContextProvid
             RequireFinanceSplitAudit = true
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "全局参数已保存", "Success");
             await LoadAllAsync();
@@ -661,7 +661,7 @@ public sealed class PreAdmissionViewModel : ClientModelBase, IPrintContextProvid
             OnHitAction = RuleAction
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast("新规则已保存生效。", "Success");
             RuleName = string.Empty;

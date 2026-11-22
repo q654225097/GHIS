@@ -703,7 +703,7 @@ public sealed class HrStationViewModel : ClientModelBase
             using var http = AuthenticatedHttpClientFactory.Create();
             var resp = await http.PostAsync($"/api/v4/hr/employees/{SelectedEmployee.Id}/decrypt-pii?reason={Uri.EscapeDataString("人事档案核查")}", null);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<HrPiiDto>>(JsonOpts);
-            if (env?.Code == 0 && env.Data != null)
+            if ((env?.Code is 200 or 0) && env.Data != null)
             {
                 DecryptedPiiDisplay = $"明文证件：{env.Data.IdCardNo ?? "未登记"} | 明文手机：{env.Data.Phone ?? "未登记"}（已记入不可篡改审计日志）";
                 _shell?.ShowToast("已完成 SM4 解密并记录审计日志。", "Info");
@@ -740,7 +740,7 @@ public sealed class HrStationViewModel : ClientModelBase
             };
             var resp = await http.PostAsJsonAsync($"/api/v4/hr/employees/{SelectedEmployee.Id}/transfer", payload);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell?.ShowToast("调科/调岗已生效，默认科室权限已同步。", "Success");
                 await LoadAllAsync();
@@ -777,7 +777,7 @@ public sealed class HrStationViewModel : ClientModelBase
             };
             var resp = await http.PostAsJsonAsync($"/api/v4/hr/employees/{SelectedEmployee.Id}/promote", payload);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell?.ShowToast("职称晋升与临床分级授权同步成功。", "Success");
                 await LoadAllAsync();
@@ -810,7 +810,7 @@ public sealed class HrStationViewModel : ClientModelBase
             };
             var resp = await http.PostAsJsonAsync($"/api/v4/hr/employees/{SelectedEmployee.Id}/resign", payload);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell?.ShowToast("离职/退休手续已办结，系统工号已停用并强制踢出在线会话。", "Warning");
                 await LoadAllAsync();
@@ -853,7 +853,7 @@ public sealed class HrStationViewModel : ClientModelBase
             };
             var resp = await http.PostAsJsonAsync($"/api/v4/hr/employees/{SelectedEmployee.Id}/credentials", payload);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell?.ShowToast("执业证照登记成功，已联动同步临床权限等级。", "Success");
                 CredNo = string.Empty;
@@ -895,7 +895,7 @@ public sealed class HrStationViewModel : ClientModelBase
             };
             var resp = await http.PostAsJsonAsync($"/api/v4/hr/employees/{SelectedEmployee.Id}/contracts", payload);
             var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-            if (env?.Code == 0)
+            if ((env?.Code is 200 or 0))
             {
                 _shell?.ShowToast("劳动合同签订/续签记录已保存。", "Success");
                 ContractRemark = string.Empty;

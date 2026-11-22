@@ -284,7 +284,7 @@ public sealed class AimsViewModel : ClientModelBase
             using var http = AuthenticatedHttpClientFactory.Create();
             var env = await http.GetFromJsonAsync<ClientApiEnvelope<JsonElement>>($"api/v4/aims/intraop-events/{Uri.EscapeDataString(scheduleId)}", JsonOpts);
             IntraopEvents.Clear();
-            if (env?.Code == 0 && env.Data.ValueKind == JsonValueKind.Object)
+            if ((env?.Code is 200 or 0) && env.Data.ValueKind == JsonValueKind.Object)
             {
                 decimal fIn = env.Data.GetProperty("totalFluidInMl").GetDecimal();
                 decimal fOut = env.Data.GetProperty("totalFluidOutMl").GetDecimal();
@@ -306,7 +306,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/aims/or-board/emergency-insert", new { EncounterId = "", OrRoomCode = EmgRoom, SurgeryCode = "EMG", SurgeryName = EmgSurgName, SurgeryLevel = 3, SurgeonName = EmgSurgeon, AnesthesiologistName = "" });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "急诊插台成功", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "急诊插台成功", (env?.Code is 200 or 0) ? "Success" : "Error");
         EmgSurgName = string.Empty;
         await RefreshAllAsync();
     }
@@ -317,7 +317,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/aims/preop-assessments", new { ScheduleId = SelectedOr?.Id ?? "MANUAL", EncounterId = SelectedOr?.EncounterId, PatientName = PrePatient, WeightKg = PreWeight, AsaClass = PreAsa, MallampatiClass = PreMallampati, StopBangScore = PreStopBang, FastingHours = PreFasting, PlannedAnesthesiaMethod = PreMethod });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "术前访视已保存", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "术前访视已保存", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -327,7 +327,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/aims/intraop-events", new { ScheduleId = sid, RecordType = IntraType, CategoryName = IntraCat, VolumeMl = IntraVol, EventDetail = IntraDetail, PatientWeightKg = PreWeight });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "术中记录已保存", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "术中记录已保存", (env?.Code is 200 or 0) ? "Success" : "Error");
         IntraDetail = string.Empty;
         await LoadIntraopAsync(sid);
     }
@@ -338,7 +338,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/aims/narcotics/issue", new { ScheduleId = SelectedOr?.Id ?? "MANUAL", PatientName = string.IsNullOrWhiteSpace(NarcPatient) ? "手术患者" : NarcPatient, DrugName = NarcDrug, BatchNo = "LOT2026", IssuedAmpoules = NarcIssued });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "领用已登记", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "领用已登记", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -348,7 +348,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync($"api/v4/aims/narcotics/{SelectedNarcotic.Id}/reconcile", new { UsedAmpoules = RecUsed, ReturnedIntactAmpoules = RecReturned, EmptyAmpoulesRecovered = RecEmpty, WasteVolumeMl = RecWaste, WitnessName = RecWitness });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "核销完成", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "核销完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -358,7 +358,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/aims/pacu", new { ScheduleId = SelectedOr?.Id ?? "MANUAL", PatientName = PacuPatient, ActivityScore = PAct, RespirationScore = PResp, CirculationScore = PCirc, ConsciousnessScore = PCons, Spo2Score = PSpo2, SbarHandoffSummary = PacuSbar });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "PACU 评分已保存", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "PACU 评分已保存", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -368,7 +368,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync($"api/v4/aims/pacu/{SelectedPacu.Id}/handoff", new { ReceivingWardNurse = PacuNurse, SbarHandoffSummary = PacuSbar });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "交接完成", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "交接完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -378,7 +378,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/aims/pca", new { ScheduleId = SelectedOr?.Id ?? "MANUAL", PatientName = PcaPatient, PcaMode, FormulaSummary = PcaFormula, BackgroundRateMlH = 2.0m, BolusDoseMl = 0.5m, LockoutMinutes = 15 });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "PCA 已启用", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "PCA 已启用", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -388,7 +388,7 @@ public sealed class AimsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsJsonAsync($"api/v4/aims/pca/{SelectedPca.Id}/followup", new { Vas24h = PcaVas, Vas48h = Math.Max(0, PcaVas - 1), Vas72h = 0, AdverseEvents = "无恶心呕吐及呼吸抑制", Status = "STOPPED" });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已停泵并记录随访", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已停泵并记录随访", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 }

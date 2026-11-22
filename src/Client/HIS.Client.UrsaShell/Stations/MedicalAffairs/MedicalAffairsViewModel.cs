@@ -158,7 +158,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
             await LoadListAsync(http, "api/v4/medical-affairs/new-tech", NewTechs);
 
             var d = await http.GetFromJsonAsync<ClientApiEnvelope<JsonElement>>("api/v4/medical-affairs/dashboard", JsonOpts);
-            if (d?.Code == 0 && d.Data.ValueKind == JsonValueKind.Object)
+            if ((d?.Code is 200 or 0) && d.Data.ValueKind == JsonValueKind.Object)
             {
                 DashSummary = $"有效医师授权 {d.Data.GetProperty("activePrivileges").GetInt32()} · 停权 {d.Data.GetProperty("suspendedPrivileges").GetInt32()} · Ⅰ/Ⅱ级警讯事件 {d.Data.GetProperty("openSentinelEvents").GetInt32()} · 在办纠纷 {d.Data.GetProperty("openDisputes").GetInt32()} · 准入新技术 {d.Data.GetProperty("approvedNewTechs").GetInt32()}";
             }
@@ -179,7 +179,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/medical-affairs/privileges", new { UserId = PUserId, DoctorName = PDocName, DeptName = PDept, PrescribeLevel = PRxLevel, SurgeryLevel = PSurgLevel, NarcoticAuth = PNarcotic, ValidUntilInt = 20271231 });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "授权已生效", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "授权已生效", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -189,7 +189,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsJsonAsync($"api/v4/medical-affairs/privileges/{SelectedPrivilege.Id}/suspend", new { Reason = PSuspendReason });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已停权", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已停权", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -199,7 +199,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/medical-affairs/safety-events", new { SeverityLevel = ESev, EventCategory = ECat, DeptName = EDept, EventSummary = ESum });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "上报成功", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "上报成功", (env?.Code is 200 or 0) ? "Success" : "Error");
         ESum = string.Empty;
         await RefreshAllAsync();
     }
@@ -210,7 +210,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsJsonAsync($"api/v4/medical-affairs/safety-events/{SelectedEvent.Id}/rca", new { RcaRootCause = ERca, PdcaActionPlan = EPdca, Status = "CLOSED" });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "RCA/PDCA 已归档", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "RCA/PDCA 已归档", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -220,7 +220,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/medical-affairs/disputes", new { PatientName = DPat, DeptName = DDept, MrmsCaseId = (string?)null, DisputeSummary = DSum, CompensationAmount = 0m });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已立案", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已立案", (env?.Code is 200 or 0) ? "Success" : "Error");
         DPat = string.Empty; DSum = string.Empty;
         await RefreshAllAsync();
     }
@@ -231,7 +231,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"api/v4/medical-affairs/disputes/{SelectedDispute.Id}/seal-mrms", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已封存", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已封存", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -241,7 +241,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/medical-affairs/new-tech", new { ProjectName = TName, DeptName = TDept, LeadDoctorName = TLead, RiskGrade = TRisk, EthicsApproved = true });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已申报", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已申报", (env?.Code is 200 or 0) ? "Success" : "Error");
         TName = string.Empty;
         await RefreshAllAsync();
     }
@@ -252,7 +252,7 @@ public sealed class MedicalAffairsViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsJsonAsync($"api/v4/medical-affairs/new-tech/{SelectedTech.Id}/review", new { Status = "APPROVED", PerformedCases = SelectedTech.PerformedCases + 1, ComplicationCases = SelectedTech.ComplicationCases, ReviewComment = "医务科与伦理委员会准予临床开展" });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已准入", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已准入", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 }

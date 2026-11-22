@@ -169,7 +169,7 @@ public sealed class MasterDictViewModel : ClientModelBase
             Description = NewCatDesc
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已保存分类", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已保存分类", (env?.Code is 200 or 0) ? "Success" : "Error");
         NewCatType = string.Empty; NewCatName = string.Empty; NewCatDesc = string.Empty;
         await LoadCategoriesAsync();
     }
@@ -192,7 +192,7 @@ public sealed class MasterDictViewModel : ClientModelBase
             IsDefault = ItemIsDefault
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已保存字典项", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已保存字典项", (env?.Code is 200 or 0) ? "Success" : "Error");
         ItemCode = string.Empty; ItemName = string.Empty; ItemPinyin = string.Empty;
         await LoadItemsAsync(SelectedCategory.DictType);
         await LoadCategoriesAsync();
@@ -208,7 +208,7 @@ public sealed class MasterDictViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsync($"api/v4/config/dictionaries/items/{SelectedItem.Id}/toggle", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已切换状态", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已切换状态", (env?.Code is 200 or 0) ? "Success" : "Error");
         await LoadItemsAsync(SelectedCategory.DictType);
     }
 }

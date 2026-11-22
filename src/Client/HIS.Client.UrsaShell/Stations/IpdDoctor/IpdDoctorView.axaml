@@ -1,5 +1,6 @@
 ﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
              xmlns:u="https://irihi.tech/ursa"
              xmlns:local="using:HIS.Client.UrsaShell.Stations.IpdDoctor"
              xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
@@ -1039,7 +1040,14 @@
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
-            </TabControl>
+            
+            <TabItem Header="专科动态表单(BO)">
+                <ScrollViewer Padding="10">
+                    <controls:BoDynamicFormPanel EntityType="IPD_ENCOUNTER"
+                                                 EntityId="{Binding Workbench.SelectedInpatient.AdmissionNo}"/>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
         </Grid>
     </Grid>
 </UserControl>

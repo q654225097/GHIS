@@ -585,7 +585,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             Remark = (string?)null
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast("体检预约创建成功。", "Success"); ApptName = string.Empty; await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast("体检预约创建成功。", "Success"); ApptName = string.Empty; await LoadAllAsync(); }
         else _shell?.ShowToast(env?.Message ?? "预约失败", "Error");
     }
 
@@ -595,7 +595,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"/api/v4/checkup-pro/appointments/{appt.Id}/checkin", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell?.ShowToast(env?.Message ?? "签到完成", env?.Code == 0 ? "Success" : "Error");
+        _shell?.ShowToast(env?.Message ?? "签到完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         await LoadAllAsync();
     }
 
@@ -616,7 +616,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             AutoPay = RegAutoPay
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast(env.Message ?? "体检登记成功", "Success"); RegFullName = string.Empty; await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast(env.Message ?? "体检登记成功", "Success"); RegFullName = string.Empty; await LoadAllAsync(); }
         else _shell?.ShowToast(env?.Message ?? "登记失败", "Error");
     }
 
@@ -626,7 +626,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"/api/v4/checkup/orders/{SelectedOrder.Id}/pay", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast("体检缴费已确认。", "Success"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast("体检缴费已确认。", "Success"); await LoadAllAsync(); }
     }
 
     private async Task SaveCompanyAsync()
@@ -639,7 +639,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             ContactName = NewCompanyContact, ContactPhone = "", DiscountRate = NewCompanyDiscount, SettlementMode = "POST_SETTLE", Remark = ""
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast("体检单位档案已创建。", "Success"); NewCompanyName = string.Empty; await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast("体检单位档案已创建。", "Success"); NewCompanyName = string.Empty; await LoadAllAsync(); }
     }
 
     private async Task CreateGroupAsync()
@@ -652,7 +652,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             PackageId = RegSelectedPackage.Id, PlannedCount = NewGroupPlanned, Remark = ""
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast("团检分组订单已创建。", "Success"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast("团检分组订单已创建。", "Success"); await LoadAllAsync(); }
     }
 
     private async Task BatchImportAsync()
@@ -661,7 +661,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync($"/api/v4/checkup-pro/groups/{SelectedGroup.Id}/batch-import", new { MembersLines = BatchImportText });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell?.ShowToast(env?.Message ?? "批量导入完成", env?.Code == 0 ? "Success" : "Error");
+        _shell?.ShowToast(env?.Message ?? "批量导入完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         await LoadAllAsync();
     }
 
@@ -670,7 +670,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         if (SelectedGroup == null) return;
         using var http = AuthenticatedHttpClientFactory.Create();
         var res = await http.GetFromJsonAsync<ClientApiEnvelope<JsonElement>>($"/api/v4/checkup-pro/groups/{SelectedGroup.Id}/report", JsonOpts);
-        if (res?.Code == 0)
+        if ((res?.Code is 200 or 0))
         {
             var d = res.Data;
             int reg = d.GetProperty("registeredCount").GetInt32();
@@ -691,7 +691,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             DeptName = AddonDept, ItemCode = "", ItemName = AddonItemName.Trim(), UnitPrice = AddonPrice
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast(env.Message ?? "加项成功", "Success"); AddonItemName = string.Empty; await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast(env.Message ?? "加项成功", "Success"); AddonItemName = string.Empty; await LoadAllAsync(); }
     }
 
     private async Task SaveItemResultAsync()
@@ -703,7 +703,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             ResultValue = EntryResultValue, ReferenceRange = EntryRefRange, AbnormalFlag = EntryAbnormalFlag
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast($"[{SelectedOrderItem.ItemName}] 结果已保存。", "Success"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast($"[{SelectedOrderItem.ItemName}] 结果已保存。", "Success"); await LoadAllAsync(); }
     }
 
     private async Task WaiveItemAsync()
@@ -712,7 +712,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsJsonAsync($"/api/v4/checkup-pro/items/{SelectedOrderItem.Id}/waive", new { Reason = WaiveReason });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast("已标记弃检/延期。", "Warning"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast("已标记弃检/延期。", "Warning"); await LoadAllAsync(); }
     }
 
     private async Task SaveQuestionnaireAsync()
@@ -724,7 +724,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             PastHistory = QPastHistory, FamilyHistory = QFamilyHistory, SmokingDrinking = QLifestyle, AllergyHistory = "", ChiefComplaint = ""
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) _shell?.ShowToast("医生问诊健康问卷已保存。", "Success");
+        if ((env?.Code is 200 or 0)) _shell?.ShowToast("医生问诊健康问卷已保存。", "Success");
     }
 
     private async Task AutoMatchKbAsync()
@@ -733,7 +733,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"/api/v4/checkup-pro/orders/{SelectedOrder.Id}/auto-match-kb", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             SummaryConclusion = env.Data.GetProperty("conclusion").GetString() ?? string.Empty;
             SummaryAdvice = env.Data.GetProperty("advice").GetString() ?? string.Empty;
@@ -751,7 +751,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             OverallConclusion = SummaryConclusion, HealthAdvice = SummaryAdvice
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast("主检初审结论已提交保存。", "Success"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast("主检初审结论已提交保存。", "Success"); await LoadAllAsync(); }
     }
 
     private async Task FinalReviewAsync(bool approved)
@@ -760,7 +760,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync($"/api/v4/checkup-pro/orders/{SelectedOrder.Id}/final-review", new { Approved = approved, ReviewNote = "" });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast(env.Message ?? "终审完成", "Success"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast(env.Message ?? "终审完成", "Success"); await LoadAllAsync(); }
     }
 
     private async Task PrintFullPersonalReportAsync()
@@ -797,7 +797,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsJsonAsync($"/api/v4/checkup-pro/followups/{SelectedFollowup.Id}", new { FollowupStatus = status, FollowupNote = FollowupNote });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast("随访状态已更新。", "Success"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast("随访状态已更新。", "Success"); await LoadAllAsync(); }
     }
 
     private async Task ReferToPreAdmissionAsync()
@@ -809,7 +809,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             TargetDeptName = ReferDeptName, PrimaryDiagName = SelectedFollowup.FindingSummary, PlannedSurgeryName = ""
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast(env.Message ?? "已一键转入预住院", "Success"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast(env.Message ?? "已一键转入预住院", "Success"); await LoadAllAsync(); }
         else _shell?.ShowToast(env?.Message ?? "转诊失败", "Error");
     }
 
@@ -823,7 +823,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             OccConclusion = OccConclusion, ConclusionDetail = OccDetail, IssueHealthCert = OccIssueHealthCert
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0) { _shell?.ShowToast(env.Message ?? "职业/从业体检已评定", "Success"); await LoadAllAsync(); }
+        if ((env?.Code is 200 or 0)) { _shell?.ShowToast(env.Message ?? "职业/从业体检已评定", "Success"); await LoadAllAsync(); }
         else _shell?.ShowToast(env?.Message ?? "保存失败", "Error");
     }
 
@@ -833,7 +833,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"/api/v4/checkup-pro/occupational/{row.Id}/export-report", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             OccNetReportPreview = env.Data.GetProperty("netReportJson").GetString() ?? string.Empty;
             _shell?.ShowToast("已生成省职业病监测平台网报数据包并标记上报完成。", "Success");

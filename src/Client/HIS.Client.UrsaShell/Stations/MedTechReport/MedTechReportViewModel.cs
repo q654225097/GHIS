@@ -506,7 +506,7 @@ public sealed class MedTechReportViewModel : ClientModelBase
             ExamItemName = NewExamItem.Trim()
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<MtcDiagnosticReportRow>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast("已分配至【待书写】队列。", "Success");
             NewPatName = string.Empty;
@@ -557,7 +557,7 @@ public sealed class MedTechReportViewModel : ClientModelBase
             IsCriticalValue = false
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<MtcDiagnosticReportRow>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "仪器结果已直接进入【待审签】队列。", "Success");
             NewPatName = string.Empty;
@@ -582,7 +582,7 @@ public sealed class MedTechReportViewModel : ClientModelBase
             IsCriticalValue = EditIsCriticalValue
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<MtcDiagnosticReportRow>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast("报告草稿已保存。", "Success");
             await LoadAllAsync();
@@ -611,7 +611,7 @@ public sealed class MedTechReportViewModel : ClientModelBase
             IsCriticalValue = EditIsCriticalValue
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<MtcDiagnosticReportRow>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast("报告已提交至【待审签】队列。", "Success");
             await LoadAllAsync();
@@ -634,7 +634,7 @@ public sealed class MedTechReportViewModel : ClientModelBase
             IsCriticalValue = EditIsCriticalValue
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<MtcDiagnosticReportRow>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast("报告已审签双签发布，并自动回写临床申请单状态。", "Success");
             await LoadAllAsync();
@@ -651,7 +651,7 @@ public sealed class MedTechReportViewModel : ClientModelBase
             Reason = string.IsNullOrWhiteSpace(RejectReasonInput) ? "请核对描述与诊断结论后重新提交" : RejectReasonInput.Trim()
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<MtcDiagnosticReportRow>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast("已驳回退回报告医师修改。", "Warning");
             await LoadAllAsync();
@@ -827,7 +827,7 @@ public sealed class MedTechReportViewModel : ClientModelBase
             IsDefault = TplIsDefault
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<MtcReportTemplateRow>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast("科室报告编辑与打印模板已保存生效。", "Success");
             await LoadAllAsync();

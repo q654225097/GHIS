@@ -176,7 +176,7 @@ public sealed class NursingMgmtViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/nursing-mgmt/competencies", new { NurseUserId = CUid, NurseName = CName, WardName = CWard, NLevel = CLevel, SpecialtyCerts = CCerts, TheoryScore = CTheory, SkillScore = CSkill, CmeCredits = 20m });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已保存", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已保存", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -186,7 +186,7 @@ public sealed class NursingMgmtViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/nursing-mgmt/shifts", new { WardName = SWard, ShiftDateInt = SDateInt, NurseUserId = SUid, NurseName = SName, NLevel = CLevel, ShiftCode = SCode, ShiftHours = SCode == "NIGHT" ? 10m : 8m, Remark = "" });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "排班完成", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "排班完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -195,7 +195,7 @@ public sealed class NursingMgmtViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/nursing-mgmt/qc-inspections", new { WardName = QWard, InspectLevel = QLevel, Score = QScore, DefectSummary = QDefect, RectificationPlan = QPlan });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已提交督查", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已提交督查", (env?.Code is 200 or 0) ? "Success" : "Error");
         QDefect = string.Empty;
         await RefreshAllAsync();
     }
@@ -206,7 +206,7 @@ public sealed class NursingMgmtViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsJsonAsync($"api/v4/nursing-mgmt/qc-inspections/{SelectedQc.Id}/rectify", new { RectificationPlan = string.IsNullOrWhiteSpace(QPlan) ? "已完成PDCA整改复查合格" : QPlan, Status = "CLOSED" });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已整改关闭", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已整改关闭", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -216,7 +216,7 @@ public sealed class NursingMgmtViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/nursing-mgmt/handovers", new { WardName = HWard, FromShiftCode = HFrom, ToShiftCode = HTo, TotalPatients = 30, CriticalPatients = 2, SurgeryPatients = 3, HighRiskFallUlcer = 4, SbarSummary = HSbar });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "交接已发起", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "交接已发起", (env?.Code is 200 or 0) ? "Success" : "Error");
         HSbar = string.Empty;
         await RefreshAllAsync();
     }
@@ -227,7 +227,7 @@ public sealed class NursingMgmtViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync($"api/v4/nursing-mgmt/handovers/{SelectedHandover.Id}/ack", new { ToNurseName = HAckNurse });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "双签完成", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "双签完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 }

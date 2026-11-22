@@ -448,7 +448,7 @@ public sealed class MasterCatalogViewModel : ClientModelBase
             IsActive = true
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "药品字典已保存", "Success");
             await LoadDrugsAsync();
@@ -501,7 +501,7 @@ public sealed class MasterCatalogViewModel : ClientModelBase
             IsActive = true
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "耗材字典已保存", "Success");
             await LoadConsumablesAsync();
@@ -595,7 +595,7 @@ public sealed class MasterCatalogViewModel : ClientModelBase
         };
         var resp = await http.PostAsJsonAsync("/api/v4/catalog/bundles", payload);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             _shell?.ShowToast(env.Message ?? "组合套餐已保存", "Success");
             await LoadBundlesAsync();
@@ -623,7 +623,7 @@ public sealed class MasterCatalogViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"/api/v4/catalog/bundles/{_editBundleId}/expand", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        if (env?.Code == 0)
+        if ((env?.Code is 200 or 0))
         {
             ExpandPreviewText = $"前台医生开立「{EditBundleName}」→ 后台自动拆解为 {EditingBundleItems.Count} 项底层收费项目（原价合计 ¥{BundleItemsSumPrice:0.00}，套餐执行价 ¥{EditBundlePackagePrice:0.00}）：" +
                                 string.Join(" + ", EditingBundleItems.Select(i => $"{i.ItemName}(¥{i.UnitPrice:0.00})"));

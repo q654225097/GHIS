@@ -344,6 +344,10 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
         {
             return;
         }
+        if (Workbench.EditingTemplate != null && SelectedBoType != null)
+        {
+            Workbench.EditingTemplate.EntityType = SelectedBoType.EntityType;
+        }
         bool ok = await Workbench.SaveEditingTemplateAsync();
         if (!ok)
         {
@@ -351,6 +355,8 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
             return;
         }
 
+        await LoadBoTypesAsync();
+        if (SelectedBoType != null) await LoadBoRecordsAsync(SelectedBoType.EntityType);
         RebuildFiltered();
         NotifyDesignerState();
         _shell?.ShowToast(Workbench.SystemNotice, "Success");
@@ -529,14 +535,23 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
                 foreach (var r in res.Data) BoRecords.Add(r);
             }
             SelectedBoRecord = BoRecords.FirstOrDefault();
+            if (BoRecords.Count == 0)
+            {
+                _shell?.ShowToast($"业务对象 [{entityType}] 暂无业务单据，请先在对应业务站建单后再联调。", "Info");
+            }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"加载 BO [{entityType}] 单据失败：{ex.Message}", "Warning");
+        }
     }
 
     private void SyncSelectedBoTypeFromEditingTemplate()
     {
         string? et = Workbench.EditingTemplate?.EntityType;
         if (string.IsNullOrWhiteSpace(et) || BoTypes.Count == 0) return;
+        if (string.Equals(et, "OPD", StringComparison.OrdinalIgnoreCase)) et = "OPD_VISIT";
+        else if (string.Equals(et, "IPD", StringComparison.OrdinalIgnoreCase)) et = "IPD_ENCOUNTER";
         var match = BoTypes.FirstOrDefault(b => string.Equals(b.EntityType, et, StringComparison.OrdinalIgnoreCase)) ?? BoTypes[0];
         if (!ReferenceEquals(_selectedBoType, match))
         {

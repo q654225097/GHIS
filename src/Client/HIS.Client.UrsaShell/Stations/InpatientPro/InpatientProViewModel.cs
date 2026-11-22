@@ -402,7 +402,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsJsonAsync($"api/v4/ipd-pro/beds/{SelectedBed.BedId}/isolation", new { IsIsolation = SelectedBed.IsIsolation == 0 });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已更新隔离标志", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已更新隔离标志", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -412,7 +412,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/ipd-pro/beds/swap", new { SourceBedId = SelectedBed.BedId, TargetBedId = SwapTargetBed.BedId });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "换床完成", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "换床完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -422,7 +422,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"api/v4/ipd-pro/mar/{SelectedMarPlan.PlanId}/execute", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "执行完成", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "执行完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         if (SelectedBed?.EncounterId != null) await LoadBedClinicalDetailAsync(SelectedBed.EncounterId);
     }
 
@@ -441,7 +441,7 @@ public sealed class InpatientProViewModel : ClientModelBase
             PurposeSummary = CsPurpose
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已发起会诊", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已发起会诊", (env?.Code is 200 or 0) ? "Success" : "Error");
         CsPatientName = string.Empty; CsPurpose = string.Empty;
         await RefreshAllAsync();
     }
@@ -452,7 +452,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"api/v4/ipd-pro/consultations/{SelectedConsult.Id}/accept", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已签收", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已签收", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -462,7 +462,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync($"api/v4/ipd-pro/consultations/{SelectedConsult.Id}/complete", new { ConsultOpinion = CsOpinion });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "会诊完成并回写EMR", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "会诊完成并回写EMR", (env?.Code is 200 or 0) ? "Success" : "Error");
         CsOpinion = string.Empty;
         await RefreshAllAsync();
     }
@@ -472,7 +472,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/ipd-pro/daily-billing/run", new { BillDateInt = ManualBillDateInt });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "每日滚费完成", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "每日滚费完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -491,7 +491,7 @@ public sealed class InpatientProViewModel : ClientModelBase
             Reason = DrReason
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "退药申请已提交", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "退药申请已提交", (env?.Code is 200 or 0) ? "Success" : "Error");
         DrDrugName = string.Empty;
         await RefreshAllAsync();
     }
@@ -502,7 +502,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync($"api/v4/ipd-pro/drug-returns/{SelectedDrugReturn.Id}/review", new { Decision = decision });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已审批", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已审批", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -518,7 +518,7 @@ public sealed class InpatientProViewModel : ClientModelBase
             TotalAmount = DmTotalAmount
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已开立出院带药", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已开立出院带药", (env?.Code is 200 or 0) ? "Success" : "Error");
         DmSummary = string.Empty;
         await RefreshAllAsync();
     }
@@ -529,7 +529,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsync($"api/v4/ipd-pro/discharge-meds/{SelectedDischargeMed.Id}/dispense", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已发药核对", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已发药核对", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -549,7 +549,7 @@ public sealed class InpatientProViewModel : ClientModelBase
             ApgarScores = MatApgar
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "分娩登记完成", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "分娩登记完成", (env?.Code is 200 or 0) ? "Success" : "Error");
         MatMotherName = string.Empty;
         await RefreshAllAsync();
     }
@@ -568,7 +568,7 @@ public sealed class InpatientProViewModel : ClientModelBase
             SurgeonName = (string?)null
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已登记日间手术", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已登记日间手术", (env?.Code is 200 or 0) ? "Success" : "Error");
         DsPatientName = string.Empty; DsSurgeryName = string.Empty;
         await RefreshAllAsync();
     }
@@ -584,7 +584,7 @@ public sealed class InpatientProViewModel : ClientModelBase
             Remark = DsRemark
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已更新日间手术状态", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已更新日间手术状态", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 
@@ -604,7 +604,7 @@ public sealed class InpatientProViewModel : ClientModelBase
             ValidDays = VpValidDays
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "陪护证已签发", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "陪护证已签发", (env?.Code is 200 or 0) ? "Success" : "Error");
         VpVisitorName = string.Empty;
         await RefreshAllAsync();
     }
@@ -615,7 +615,7 @@ public sealed class InpatientProViewModel : ClientModelBase
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PutAsync($"api/v4/ipd-pro/visitor-passes/{SelectedVisitorPass.Id}/revoke", null);
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
-        _shell.ShowToast(env?.Message ?? "已注销", env?.Code == 0 ? "Success" : "Error");
+        _shell.ShowToast(env?.Message ?? "已注销", (env?.Code is 200 or 0) ? "Success" : "Error");
         await RefreshAllAsync();
     }
 }
