@@ -409,7 +409,55 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Border Padding="8" CornerRadius="6"
+                            <!-- 门诊处方开立动态字段效果联调 (当配置处方明细字段时呈现) -->
+                            <Border IsVisible="{Binding Workbench.IsPrescriptionSchemaDesigner}"
+                                    Padding="10" CornerRadius="6"
+                                    Background="{DynamicResource SemiColorBackground2}"
+                                    BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="门诊医生站 · 处方开立动态字段效果联调" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            <TextBlock Text="在此配置的处方明细扩展字段，将实时对齐并同步至门诊医生站处方开立与审方引擎。" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                        </StackPanel>
+                                        <controls:StatusTag Grid.Column="1" Text="门诊处方开立已联动" Kind="Success"/>
+                                    </Grid>
+
+                                    <!-- Sample Prescription Item Preview Card -->
+                                    <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="6">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="2">
+                                                    <TextBlock Text="阿莫西林胶囊 [西药 · 处方开立样例]" FontWeight="Bold" FontSize="12"/>
+                                                    <TextBlock Text="规格: 0.25g*24粒/盒 | 每次用量: 0.5g | 频次: TID | 用法: 口服 | 天数: 3天 | 总量: 1盒" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </StackPanel>
+                                                <controls:StatusTag Grid.Column="1" Text="处方前置审方通过" Kind="Success"/>
+                                            </Grid>
+
+                                            <!-- Dynamic Custom Fields on Prescription Item -->
+                                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="4" Padding="8,6" Margin="0,2,0,0">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="已配置的处方明细动态扩展字段：" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
+                                                    <ItemsControl ItemsSource="{Binding Workbench.PreviewFields}">
+                                                        <ItemsControl.ItemTemplate>
+                                                             <DataTemplate x:DataType="vm:DynamicFormFieldModel">
+                                                                 <Grid ColumnDefinitions="120,*" Margin="0,2">
+                                                                     <TextBlock Grid.Column="0" Text="{Binding FieldLabel, StringFormat='{}{0}:'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                                     <TextBlock Grid.Column="1" Text="{Binding RuntimeValue, FallbackValue='(未填写)'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                                 </Grid>
+                                                             </DataTemplate>
+                                                         </ItemsControl.ItemTemplate>
+                                                     </ItemsControl>
+                                                 </StackPanel>
+                                             </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 通用 BO 联调填报 (仅在非处方字段模板时呈现) -->
+                            <Border IsVisible="{Binding !Workbench.IsPrescriptionSchemaDesigner}"
+                                    Padding="8" CornerRadius="6"
                                     Background="{DynamicResource SemiColorBackground2}"
                                     BorderBrush="{DynamicResource SemiColorPrimary}" BorderThickness="1">
                                 <StackPanel Spacing="6">

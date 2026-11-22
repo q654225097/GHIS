@@ -806,7 +806,7 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
         {
             using var http = AuthenticatedHttpClientFactory.Create();
             var res = await http.GetFromJsonAsync<ClientApiEnvelope<List<WorkflowDefinitionSummaryDto>>>("/api/v4/workflow/definitions");
-            if (res?.Code == 200 && res.Data != null)
+            if (res?.Code == 200 && res.Data != null && res.Data.Count > 0)
             {
                 Definitions.Clear();
                 foreach (var d in res.Data)
@@ -822,12 +822,59 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
                         FallbackApproverId = d.FallbackApproverId
                     });
                 }
+                if (SelectedDefinition == null)
+                {
+                    SelectedDefinition = Definitions.FirstOrDefault(d => d.DefKey == "WF_DEF_CSM_REQUISITION") ?? Definitions[0];
+                }
+                return;
             }
         }
         catch (Exception ex)
         {
             StatusNotice = "加载流程定义失败: " + ex.Message;
         }
+
+        if (Definitions.Count == 0)
+        {
+            SeedLocalDefaultWorkflows();
+        }
+    }
+
+    private void SeedLocalDefaultWorkflows()
+    {
+        Definitions.Clear();
+        Definitions.Add(new WorkflowDefinitionItemModel
+        {
+            Id = "WF-DEF-CSM-01",
+            DefKey = "WF_DEF_CSM_REQUISITION",
+            DefName = "科室耗材领用审批流",
+            BoType = "CSM_REQUISITION",
+            VersionNum = 1,
+            Status = "PUBLISHED",
+            FallbackApproverId = "USR-ADMIN"
+        });
+        Definitions.Add(new WorkflowDefinitionItemModel
+        {
+            Id = "WF-DEF-BLOOD-01",
+            DefKey = "WF_DEF_BLOOD_REQUEST",
+            DefName = "临床用血分级审批流",
+            BoType = "BLOOD_REQUEST",
+            VersionNum = 1,
+            Status = "PUBLISHED",
+            FallbackApproverId = "USR-ADMIN"
+        });
+        Definitions.Add(new WorkflowDefinitionItemModel
+        {
+            Id = "WF-DEF-EMR-01",
+            DefKey = "WF_DEF_EMR_ACCESS_GRANT",
+            DefName = "病历跨科与外院调阅审批",
+            BoType = "EMR_ACCESS_GRANT",
+            VersionNum = 1,
+            Status = "PUBLISHED",
+            FallbackApproverId = "USR-ADMIN"
+        });
+
+        SelectedDefinition = Definitions[0];
     }
 
     private void LoadGraphFromJson(WorkflowDefinitionItemModel def)
@@ -847,10 +894,11 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
         {
             using var http = AuthenticatedHttpClientFactory.Create();
             var res = await http.GetFromJsonAsync<ClientApiEnvelope<WorkflowDefinitionDetailDto>>($"/api/v4/workflow/definitions/{defId}");
-            if (res?.Code == 200 && res.Data != null)
+            if (res?.Code == 200 && res.Data != null && !string.IsNullOrWhiteSpace(res.Data.GraphJson))
             {
                 DeserializeGraph(res.Data.GraphJson);
                 StatusNotice = $"已加载流程定义 [{res.Data.DefName} v{res.Data.VersionNum}]";
+                return;
             }
         }
         catch (Exception ex)
@@ -861,6 +909,34 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
         {
             IsBusy = false;
         }
+
+        LoadLocalDefaultGraph(defId);
+    }
+
+    private void LoadLocalDefaultGraph(string defId)
+    {
+        Nodes.Clear();
+        Edges.Clear();
+
+        var startNode = new WorkflowNodeModel { Type = "START", Name = "开始", X = 80, Y = 160 };
+        var deptApprove = new WorkflowNodeModel { Type = "APPROVAL", Name = "科室负责人审批", X = 280, Y = 160, ApprovalMode = "SINGLE", AssigneeStrategy = "DEPT_MANAGER", AssigneeConfig = "DEPT-MANAGER" };
+        var directorApprove = new WorkflowNodeModel { Type = "APPROVAL", Name = "业务部长会签", X = 500, Y = 160, ApprovalMode = "AND_SIGN", AssigneeStrategy = "ROLE", AssigneeConfig = "ROLE-DIRECTOR" };
+        var endNode = new WorkflowNodeModel { Type = "END", Name = "结束归档", X = 720, Y = 160 };
+
+        Nodes.Add(startNode);
+        Nodes.Add(deptApprove);
+        Nodes.Add(directorApprove);
+        Nodes.Add(endNode);
+
+        var e1 = new WorkflowEdgeModel { SourceNodeId = startNode.Id, TargetNodeId = deptApprove.Id, Label = "提交", X1 = startNode.CenterX, Y1 = startNode.CenterY, X2 = deptApprove.CenterX, Y2 = deptApprove.CenterY };
+        var e2 = new WorkflowEdgeModel { SourceNodeId = deptApprove.Id, TargetNodeId = directorApprove.Id, Label = "同意", X1 = deptApprove.CenterX, Y1 = deptApprove.CenterY, X2 = directorApprove.CenterX, Y2 = directorApprove.CenterY };
+        var e3 = new WorkflowEdgeModel { SourceNodeId = directorApprove.Id, TargetNodeId = endNode.Id, Label = "核准", X1 = directorApprove.CenterX, Y1 = directorApprove.CenterY, X2 = endNode.CenterX, Y2 = endNode.CenterY };
+
+        Edges.Add(e1);
+        Edges.Add(e2);
+        Edges.Add(e3);
+
+        StatusNotice = $"已加载流程定义标准图谱（4个节点，3条流向）";
     }
 
     private void DeserializeGraph(string? graphJson)

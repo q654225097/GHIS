@@ -158,16 +158,12 @@
                                 <Canvas Width="2000" Height="1500"/>
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
-                        <ItemsControl.Styles>
-                            <Style Selector="Canvas > ContentPresenter" x:DataType="local:WorkflowNodeModel">
+                        <ItemsControl.ItemContainerTheme>
+                            <ControlTheme TargetType="ContentPresenter" x:DataType="local:WorkflowNodeModel">
                                 <Setter Property="Canvas.Left" Value="{Binding X}"/>
                                 <Setter Property="Canvas.Top" Value="{Binding Y}"/>
-                            </Style>
-                            <Style Selector="ItemsControl ContentPresenter" x:DataType="local:WorkflowNodeModel">
-                                <Setter Property="Canvas.Left" Value="{Binding X}"/>
-                                <Setter Property="Canvas.Top" Value="{Binding Y}"/>
-                            </Style>
-                        </ItemsControl.Styles>
+                            </ControlTheme>
+                        </ItemsControl.ItemContainerTheme>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="local:WorkflowNodeModel">
                                 <Border Width="140" MinHeight="65"

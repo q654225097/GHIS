@@ -636,6 +636,7 @@
                                                             <StackPanel Spacing="1">
                                                                 <TextBlock Text="{Binding DrugName}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
                                                                 <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" IsVisible="{Binding Spec, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                                <TextBlock Text="{Binding CustomFieldsSummary}" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CustomFieldsSummary}" IsVisible="{Binding CustomFieldsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                                             </StackPanel>
                                                         </Border>
                                                         <!-- 5. 组 -->

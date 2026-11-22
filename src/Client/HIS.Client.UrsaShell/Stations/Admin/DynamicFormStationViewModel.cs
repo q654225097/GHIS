@@ -85,6 +85,7 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
         RebuildFiltered();
         _ = LoadBoTypesAsync();
         _ = LoadMasterDictionariesAsync();
+        _ = OpenPrescriptionSchemaDesignerAsync();
     }
 
     public WorkbenchModel Workbench { get; }
@@ -157,7 +158,7 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
         RebuildFiltered();
         if (SelectedTemplate == null && FilteredTemplates.Count > 0)
         {
-            SelectedTemplate = FilteredTemplates[0];
+            SelectedTemplate = FilteredTemplates.FirstOrDefault(t => t.TemplateCode == "FORM-PRESCRIPTION-ITEM-FIELDS") ?? FilteredTemplates[0];
         }
     }
 
@@ -431,7 +432,10 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
     {
         FilteredTemplates.Clear();
         string keyword = (SearchKeyword ?? string.Empty).Trim();
-        foreach (var template in Workbench.DynamicFormTemplates)
+        var sorted = Workbench.DynamicFormTemplates
+            .OrderByDescending(t => string.Equals(t.TemplateCode, "FORM-PRESCRIPTION-ITEM-FIELDS", StringComparison.OrdinalIgnoreCase))
+            .ThenBy(t => t.TemplateName);
+        foreach (var template in sorted)
         {
             if (!string.IsNullOrEmpty(keyword)
                 && !template.TemplateName.Contains(keyword, StringComparison.OrdinalIgnoreCase)

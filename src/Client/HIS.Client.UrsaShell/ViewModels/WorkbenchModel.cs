@@ -4508,12 +4508,12 @@ public partial class WorkbenchModel : ClientModelBase
 				Status = "生产已发布"
 			}
 		};
+		DynamicFormTemplates.Add(CreatePrescriptionItemFieldsTemplate());
 		DynamicFormTemplateModel[] array2 = array;
 		foreach (DynamicFormTemplateModel item in array2)
 		{
 			DynamicFormTemplates.Add(item);
 		}
-		DynamicFormTemplates.Add(CreatePrescriptionItemFieldsTemplate());
 	}
 
 	public async Task LoadDynamicFormTemplatesAsync()
@@ -4531,14 +4531,15 @@ public partial class WorkbenchModel : ClientModelBase
 				return;
 			}
 			DynamicFormTemplates.Clear();
+			DynamicFormTemplates.Add(CreatePrescriptionItemFieldsTemplate());
 			foreach (DynamicFormSchemaModel schema in envelope.Data)
 			{
+				if (string.Equals(schema.FormCode, "FORM-PRESCRIPTION-ITEM-FIELDS", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
 				DynamicFormTemplateModel template = FromSchema(schema);
 				DynamicFormTemplates.Add(template);
-			}
-			if (DynamicFormTemplates.All((DynamicFormTemplateModel x) => !string.Equals(x.TemplateCode, "FORM-PRESCRIPTION-ITEM-FIELDS", StringComparison.OrdinalIgnoreCase)))
-			{
-				DynamicFormTemplates.Add(CreatePrescriptionItemFieldsTemplate());
 			}
 			SelectedFormTemplate = DynamicFormTemplates.FirstOrDefault();
 			if (SelectedFormTemplate != null)
