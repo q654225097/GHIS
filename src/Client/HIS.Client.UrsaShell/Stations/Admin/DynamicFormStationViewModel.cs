@@ -13,6 +13,21 @@ using HIS.Client.UrsaShell.ViewModels;
 namespace HIS.Client.UrsaShell.Stations.Admin;
 
 
+
+public sealed class DictCategoryOption
+{
+    public string DictType { get; set; } = string.Empty;
+    public string DictName { get; set; } = string.Empty;
+    public int ActiveItemCount { get; set; }
+    public override string ToString() => string.IsNullOrWhiteSpace(DictType) ? "（不引用主数据字典）" : $"{DictName} ({DictType} · {ActiveItemCount}项)";
+}
+
+public sealed class DictItemSimpleOption
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+}
+
 public sealed class BoTypeOption
 {
     public string EntityType { get; set; } = string.Empty;
@@ -69,6 +84,7 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
 
         RebuildFiltered();
         _ = LoadBoTypesAsync();
+        _ = LoadMasterDictionariesAsync();
     }
 
     public WorkbenchModel Workbench { get; }
@@ -528,5 +544,66 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
             OnPropertyChanged(nameof(SelectedBoType));
             _ = LoadBoRecordsAsync(match.EntityType);
         }
+    }
+
+    private DictCategoryOption? _selectedFieldDictCategory;
+    public ObservableCollection<DictCategoryOption> DictCategories { get; } = new();
+    public ObservableCollection<string> StandardUnits { get; } = new();
+
+    public DictCategoryOption? SelectedFieldDictCategory
+    {
+        get => _selectedFieldDictCategory;
+        set
+        {
+            if (SetField(ref _selectedFieldDictCategory, value) && Workbench.EditingField != null)
+            {
+                string code = value?.DictType ?? string.Empty;
+                Workbench.EditingField.DictCode = string.IsNullOrWhiteSpace(code) ? null : code;
+                if (!string.IsNullOrWhiteSpace(code))
+                {
+                    Workbench.EditingField.UrsaControlType = "ComboBox";
+                    _ = PopulatePreviewOptionsFromDictAsync(code);
+                }
+            }
+        }
+    }
+
+    private async Task LoadMasterDictionariesAsync()
+    {
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var catEnv = await http.GetFromJsonAsync<ClientApiEnvelope<List<DictCategoryOption>>>("/api/v4/config/dictionaries/categories", BoJsonOpts);
+            DictCategories.Clear();
+            DictCategories.Add(new DictCategoryOption { DictType = string.Empty, DictName = "不引用字典" });
+            if (catEnv?.Data != null) foreach (var c in catEnv.Data) DictCategories.Add(c);
+
+            var unitEnv = await http.GetFromJsonAsync<ClientApiEnvelope<List<DictItemSimpleOption>>>("/api/v4/config/dictionaries/units", BoJsonOpts);
+            StandardUnits.Clear();
+            StandardUnits.Add(string.Empty);
+            if (unitEnv?.Data != null)
+            {
+                foreach (var u in unitEnv.Data)
+                {
+                    if (!string.IsNullOrWhiteSpace(u.ItemName) && !StandardUnits.Contains(u.ItemName))
+                        StandardUnits.Add(u.ItemName);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task PopulatePreviewOptionsFromDictAsync(string dictType)
+    {
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var env = await http.GetFromJsonAsync<ClientApiEnvelope<List<DictItemSimpleOption>>>($"/api/v4/config/dictionaries/items/{Uri.EscapeDataString(dictType)}", BoJsonOpts);
+            if (env?.Data != null && Workbench.EditingField != null && string.Equals(Workbench.EditingField.DictCode, dictType, StringComparison.OrdinalIgnoreCase))
+            {
+                Workbench.EditingField.OptionsText = string.Join(Environment.NewLine, env.Data.Select(x => x.ItemName));
+            }
+        }
+        catch { }
     }
 }

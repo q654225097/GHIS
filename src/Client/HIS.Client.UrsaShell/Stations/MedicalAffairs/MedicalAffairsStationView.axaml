@@ -1,0 +1,140 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.MedicalAffairs"
+             x:Class="HIS.Client.UrsaShell.Stations.MedicalAffairs.MedicalAffairsStationView"
+             x:DataType="local:MedicalAffairsViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="医务管理与医疗质量治理中心 (Medical Affairs)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding DashSummary}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="医师分级动态授权与停权">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="动态授权（实时同步 sys_users 拦截）" FontWeight="Bold"/>
+                            <TextBox Text="{Binding PUserId, Mode=TwoWay}" PlaceholderText="医师账号ID / 用户名"/>
+                            <TextBox Text="{Binding PDocName, Mode=TwoWay}" PlaceholderText="医师姓名"/>
+                            <TextBox Text="{Binding PDept, Mode=TwoWay}" PlaceholderText="所属科室"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <NumericUpDown Grid.Column="0" Value="{Binding PRxLevel, Mode=TwoWay}" Minimum="0" Maximum="3" FormatString="处方0级"/>
+                                <NumericUpDown Grid.Column="1" Value="{Binding PSurgLevel, Mode=TwoWay}" Minimum="0" Maximum="4" FormatString="手术0级"/>
+                            </Grid>
+                            <CheckBox Content="授予毒麻精药品处方权" IsChecked="{Binding PNarcotic, Mode=TwoWay}"/>
+                            <Button Content="签发授权并实时生效" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding GrantPrivilegeCommand}"/>
+                            <TextBox Text="{Binding PSuspendReason, Mode=TwoWay}" PlaceholderText="停权原因" Margin="0,8,0,0"/>
+                            <Button Content="紧急暂停选中医师权限" Classes="Danger" HorizontalAlignment="Stretch" Command="{Binding SuspendPrivilegeCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Privileges}" SelectedItem="{Binding SelectedPrivilege, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="授权单号" Binding="{Binding GrantNo}" Width="140"/>
+                                <DataGridTextColumn Header="医师" Binding="{Binding DoctorName}" Width="85"/>
+                                <DataGridTextColumn Header="科室" Binding="{Binding DeptName}" Width="95"/>
+                                <DataGridTextColumn Header="处方级" Binding="{Binding PrescribeLevel}" Width="65"/>
+                                <DataGridTextColumn Header="手术级" Binding="{Binding SurgeryLevel}" Width="65"/>
+                                <DataGridTextColumn Header="有效期" Binding="{Binding ValidUntilInt}" Width="90"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                                <DataGridTextColumn Header="停权说明" Binding="{Binding SuspendReason}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="医疗安全事件 (Ⅰ~Ⅳ级) · RCA · PDCA">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="非惩罚性安全事件上报" FontWeight="Bold"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding SeverityOptions}" SelectedItem="{Binding ESev, Mode=TwoWay}"/>
+                            <TextBox Text="{Binding ECat, Mode=TwoWay}" PlaceholderText="事件分类"/>
+                            <TextBox Text="{Binding EDept, Mode=TwoWay}" PlaceholderText="发生科室"/>
+                            <TextBox Text="{Binding ESum, Mode=TwoWay}" PlaceholderText="事件经过摘要" AcceptsReturn="True" Height="56"/>
+                            <Button Content="上报安全事件" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding ReportEventCommand}"/>
+                            <TextBox Text="{Binding ERca, Mode=TwoWay}" PlaceholderText="RCA 根因分析" Margin="0,8,0,0"/>
+                            <TextBox Text="{Binding EPdca, Mode=TwoWay}" PlaceholderText="PDCA 持续改进措施"/>
+                            <Button Content="保存 RCA/PDCA 并结案" Classes="Success" HorizontalAlignment="Stretch" Command="{Binding SaveRcaCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding SafetyEvents}" SelectedItem="{Binding SelectedEvent, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="单号" Binding="{Binding EventNo}" Width="140"/>
+                                <DataGridTextColumn Header="分级" Binding="{Binding SeverityLevel}" Width="85"/>
+                                <DataGridTextColumn Header="科室" Binding="{Binding DeptName}" Width="85"/>
+                                <DataGridTextColumn Header="事件经过" Binding="{Binding EventSummary}" Width="*"/>
+                                <DataGridTextColumn Header="RCA根因" Binding="{Binding RcaRootCause}" Width="160"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="医疗纠纷专案 · 联动封存病案">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="医疗纠纷立案与病案封存" FontWeight="Bold"/>
+                            <TextBox Text="{Binding DPat, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <TextBox Text="{Binding DDept, Mode=TwoWay}" PlaceholderText="涉事科室"/>
+                            <TextBox Text="{Binding DSum, Mode=TwoWay}" PlaceholderText="纠纷诉求与摘要" AcceptsReturn="True" Height="64"/>
+                            <Button Content="纠纷立案登记" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateDisputeCommand}"/>
+                            <Button Content="一键联动病案室依法封存病案" Classes="Danger" HorizontalAlignment="Stretch" Command="{Binding SealDisputeMrmsCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Disputes}" SelectedItem="{Binding SelectedDispute, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="专案号" Binding="{Binding DisputeNo}" Width="140"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="85"/>
+                                <DataGridTextColumn Header="科室" Binding="{Binding DeptName}" Width="90"/>
+                                <DataGridTextColumn Header="病案封存" Binding="{Binding SealDisplay}" Width="115"/>
+                                <DataGridTextColumn Header="纠纷摘要" Binding="{Binding DisputeSummary}" Width="*"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="85"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="新技术新项目临床准入">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="新技术新项目申报与准入" FontWeight="Bold"/>
+                            <TextBox Text="{Binding TName, Mode=TwoWay}" PlaceholderText="新技术项目名称"/>
+                            <TextBox Text="{Binding TDept, Mode=TwoWay}" PlaceholderText="申报科室"/>
+                            <TextBox Text="{Binding TLead, Mode=TwoWay}" PlaceholderText="项目负责人"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding RiskOptions}" SelectedItem="{Binding TRisk, Mode=TwoWay}"/>
+                            <Button Content="提交准入申报" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateNewTechCommand}"/>
+                            <Button Content="准予临床开展 / 登记例数+1" Classes="Success" HorizontalAlignment="Stretch" Command="{Binding ApproveNewTechCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding NewTechs}" SelectedItem="{Binding SelectedTech, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="项目编号" Binding="{Binding ProjectNo}" Width="140"/>
+                                <DataGridTextColumn Header="新技术名称" Binding="{Binding ProjectName}" Width="*"/>
+                                <DataGridTextColumn Header="科室" Binding="{Binding DeptName}" Width="90"/>
+                                <DataGridTextColumn Header="负责人" Binding="{Binding LeadDoctorName}" Width="85"/>
+                                <DataGridTextColumn Header="风险" Binding="{Binding RiskGrade}" Width="75"/>
+                                <DataGridTextColumn Header="开展例数" Binding="{Binding PerformedCases}" Width="80"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

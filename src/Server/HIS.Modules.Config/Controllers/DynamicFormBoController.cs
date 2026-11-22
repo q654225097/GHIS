@@ -184,6 +184,20 @@ public sealed class DynamicFormBoController : ControllerBase
                 "SELECT * FROM cfg_field_definitions WHERE form_schema_id = @Sid AND is_deleted = 0 ORDER BY sort_order ASC",
                 new { Sid = s.Id })).ToList();
 
+            var dictTypes = fields
+                .Where(f => !string.IsNullOrWhiteSpace(f.DictCode))
+                .Select(f => f.DictCode!.Trim().ToUpperInvariant())
+                .Distinct()
+                .ToList();
+            var dictMap = new Dictionary<string, List<object>>(StringComparer.OrdinalIgnoreCase);
+            foreach (string dt in dictTypes)
+            {
+                var dRows = (await conn.QueryAsync<dynamic>(
+                    "SELECT item_code AS ItemCode, item_name AS ItemName, is_default AS IsDefault FROM cfg_clinical_dictionaries WHERE UPPER(dict_type) = @Dt AND is_active = 1 ORDER BY sort_order ASC, item_code ASC",
+                    new { Dt = dt })).ToList<object>();
+                dictMap[dt] = dRows;
+            }
+
             var fieldItems = fields.Select(f =>
             {
                 valMap.TryGetValue(f.FieldCode, out var v);
@@ -191,6 +205,9 @@ public sealed class DynamicFormBoController : ControllerBase
                     ?? (v?.ValDecimal.HasValue == true ? v.ValDecimal.Value.ToString("0.####") : null)
                     ?? (v?.ValInt.HasValue == true ? v.ValInt.Value.ToString() : null)
                     ?? string.Empty;
+                var dictOptions = !string.IsNullOrWhiteSpace(f.DictCode) && dictMap.TryGetValue(f.DictCode.Trim().ToUpperInvariant(), out var opts)
+                    ? opts
+                    : new List<object>();
                 return new
                 {
                     f.Id,
@@ -201,7 +218,8 @@ public sealed class DynamicFormBoController : ControllerBase
                     f.UnitText,
                     f.DictCode,
                     f.SortOrder,
-                    Value = displayVal
+                    Value = displayVal,
+                    DictOptions = dictOptions
                 };
             }).ToList();
 
@@ -246,6 +264,34 @@ public sealed class DynamicFormBoController : ControllerBase
 
         if (req.Values == null || req.Values.Count == 0)
             return ApiResponse<object>.Fail(400, "未提交任何扩展字段值");
+
+        // 服务端强制主数据字典约束校验：防止绕过前端手工输入非法值
+        var boundFields = (await checkConn.QueryAsync<CfgFieldDefinition>(@"
+            SELECT f.* FROM cfg_field_definitions f
+            INNER JOIN cfg_form_schemas s ON s.id = f.form_schema_id
+            WHERE UPPER(s.entity_type) = @Et AND s.is_published = 1 AND f.is_deleted = 0 AND f.dict_code IS NOT NULL AND f.dict_code <> ''",
+            new { Et = et })).ToList();
+        var dictFieldMap = boundFields
+            .GroupBy(f => f.FieldCode, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in req.Values)
+        {
+            if (string.IsNullOrWhiteSpace(item.FieldCode) || string.IsNullOrWhiteSpace(item.ValString)) continue;
+            if (dictFieldMap.TryGetValue(item.FieldCode.Trim(), out var def) && !string.IsNullOrWhiteSpace(def.DictCode))
+            {
+                string submitted = item.ValString.Trim();
+                int matchCnt = await checkConn.ExecuteScalarAsync<int>(@"
+                    SELECT COUNT(1) FROM cfg_clinical_dictionaries
+                    WHERE UPPER(dict_type) = UPPER(@Dt) AND is_active = 1
+                      AND (UPPER(item_code) = UPPER(@Val) OR item_name = @Val)",
+                    new { Dt = def.DictCode.Trim(), Val = submitted });
+                if (matchCnt == 0)
+                {
+                    return ApiResponse<object>.Fail(400, $"字段 [{def.FieldLabel}] 引用了主数据字典 [{def.DictCode}]，输入值「{submitted}」不在有效字典范围内，已拒绝保存");
+                }
+            }
+        }
 
         long now = SystemTime.UtcNowMs;
         int savedCount = 0;

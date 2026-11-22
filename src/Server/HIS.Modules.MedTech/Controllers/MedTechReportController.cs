@@ -534,7 +534,36 @@ public sealed class MedTechReportController : ControllerBase
                 });
         }
 
-                // 联动预住院评估闭环：双签发布后自动更新院前检查进度；若命中危急值或P0规则则立即中断并锁停未做检查
+                // 闭环：医技诊断报告双签发布且标记危急值时，自动向 medtech_critical_values 插入临床双签工单
+        if (rpt.IsCriticalValue == 1)
+        {
+            using var cvConn = _connFactory.CreateConnection();
+            int cvExists = await cvConn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM medtech_critical_values WHERE report_id = @Rid", new { Rid = rpt.Id });
+            if (cvExists == 0)
+            {
+                await cvConn.ExecuteAsync(@"
+                    INSERT INTO medtech_critical_values
+                    (id, report_id, source_type, visit_or_encounter_id, patient_id, item_code, item_name, critical_value_text, published_by, published_at_ms, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                    VALUES
+                    (@Id, @Rid, @Src, @Enc, @Pat, @Code, @Name, @Text, @Pub, @Now, 'PUBLISHED', 1, @Now, @Actor, @Now, @Actor, 1)",
+                    new
+                    {
+                        Id = Guid.NewGuid().ToString("D"),
+                        Rid = rpt.Id,
+                        Src = "IPD",
+                        Enc = rpt.ServiceRequestId ?? rpt.Id,
+                        Pat = rpt.PatientId ?? rpt.PatientName,
+                        Code = rpt.ExamItemCode ?? "MTC_RPT",
+                        Name = rpt.ExamItemName,
+                        Text = rpt.DiagnosisImpression ?? rpt.FindingsSummary ?? "危急值报告待临床双签确认",
+                        Pub = ActorName,
+                        Now = now,
+                        Actor = ActorId
+                    });
+            }
+        }
+
+        // 联动预住院评估闭环：双签发布后自动更新院前检查进度；若命中危急值或P0规则则立即中断并锁停未做检查
         using (var paConn = _connFactory.CreateConnection())
         {
             string? preId = await paConn.ExecuteScalarAsync<string?>(

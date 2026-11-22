@@ -51,7 +51,16 @@ public sealed class BoDynamicFormPanel : UserControl
         public string DataType { get; set; } = "STRING";
         public string UrsaControlType { get; set; } = "TextBox";
         public string? UnitText { get; set; }
+        public string? DictCode { get; set; }
         public string Value { get; set; } = string.Empty;
+        public List<DictOptDto> DictOptions { get; set; } = new();
+    }
+
+    private sealed class DictOptDto
+    {
+        public string ItemCode { get; set; } = string.Empty;
+        public string ItemName { get; set; } = string.Empty;
+        public override string ToString() => ItemName;
     }
 
     private readonly StackPanel _rootPanel = new() { Spacing = 8 };
@@ -171,6 +180,19 @@ public sealed class BoDynamicFormPanel : UserControl
                             Content = f.FieldLabel
                         };
                     }
+                    else if (!string.IsNullOrWhiteSpace(f.DictCode) && f.DictOptions is { Count: > 0 })
+                    {
+                        var cb = new ComboBox
+                        {
+                            ItemsSource = f.DictOptions,
+                            HorizontalAlignment = HorizontalAlignment.Stretch,
+                            PlaceholderText = $"请选择 {f.FieldLabel}（引用字典 {f.DictCode}）"
+                        };
+                        cb.SelectedItem = f.DictOptions.FirstOrDefault(o =>
+                            string.Equals(o.ItemName, f.Value, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(o.ItemCode, f.Value, StringComparison.OrdinalIgnoreCase));
+                        editor = cb;
+                    }
                     else
                     {
                         editor = new TextBox
@@ -213,6 +235,7 @@ public sealed class BoDynamicFormPanel : UserControl
                 string raw = editor switch
                 {
                     CheckBox cb => cb.IsChecked == true ? "true" : "false",
+                    ComboBox cmb => (cmb.SelectedItem as DictOptDto)?.ItemName ?? cmb.SelectedItem?.ToString() ?? string.Empty,
                     TextBox tb => tb.Text ?? string.Empty,
                     _ => string.Empty
                 };

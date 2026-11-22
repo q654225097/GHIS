@@ -1,0 +1,142 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.NursingMgmt"
+             x:Class="HIS.Client.UrsaShell.Stations.NursingMgmt.NursingMgmtStationView"
+             x:DataType="local:NursingMgmtViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="护理部与病区护理管理中心 (Nursing Management)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding AcuityBanner}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="病区约束排班 · Acuity 护患比">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="安全约束校验排班（严禁大夜接白班/连夜>2天）" FontWeight="Bold" TextWrapping="Wrap"/>
+                            <TextBox Text="{Binding SWard, Mode=TwoWay}" PlaceholderText="病区名称"/>
+                            <NumericUpDown Value="{Binding SDateInt, Mode=TwoWay}" Minimum="20200101" Maximum="20991231" FormatString="0"/>
+                            <TextBox Text="{Binding SUid, Mode=TwoWay}" PlaceholderText="护士工号"/>
+                            <TextBox Text="{Binding SName, Mode=TwoWay}" PlaceholderText="护士姓名"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding ShiftCodes}" SelectedItem="{Binding SCode, Mode=TwoWay}"/>
+                            <Button Content="校验约束并保存排班" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding ScheduleShiftCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Shifts}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="日期" Binding="{Binding ShiftDateInt}" Width="100"/>
+                                <DataGridTextColumn Header="病区" Binding="{Binding WardName}" Width="120"/>
+                                <DataGridTextColumn Header="工号" Binding="{Binding NurseUserId}" Width="90"/>
+                                <DataGridTextColumn Header="护士" Binding="{Binding NurseName}" Width="95"/>
+                                <DataGridTextColumn Header="能级" Binding="{Binding NLevel}" Width="65"/>
+                                <DataGridTextColumn Header="班次" Binding="{Binding ShiftCode}" Width="95"/>
+                                <DataGridTextColumn Header="工时(h)" Binding="{Binding ShiftHours}" Width="80"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="护士能级 (N0–N4) 与技能考核">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="护士分层级档案与三基三严考核" FontWeight="Bold"/>
+                            <TextBox Text="{Binding CUid, Mode=TwoWay}" PlaceholderText="护士工号"/>
+                            <TextBox Text="{Binding CName, Mode=TwoWay}" PlaceholderText="护士姓名"/>
+                            <TextBox Text="{Binding CWard, Mode=TwoWay}" PlaceholderText="所属病区"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding NLevels}" SelectedItem="{Binding CLevel, Mode=TwoWay}"/>
+                            <TextBox Text="{Binding CCerts, Mode=TwoWay}" PlaceholderText="专科认证（如 ICU/ER/PICC）"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <NumericUpDown Grid.Column="0" Value="{Binding CTheory, Mode=TwoWay}" Minimum="0" Maximum="100" FormatString="理论 0.0"/>
+                                <NumericUpDown Grid.Column="1" Value="{Binding CSkill, Mode=TwoWay}" Minimum="0" Maximum="100" FormatString="技能 0.0"/>
+                            </Grid>
+                            <Button Content="保存能级档案" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding SaveCompetencyCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Competencies}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="工号" Binding="{Binding NurseUserId}" Width="90"/>
+                                <DataGridTextColumn Header="姓名" Binding="{Binding NurseName}" Width="90"/>
+                                <DataGridTextColumn Header="病区" Binding="{Binding WardName}" Width="110"/>
+                                <DataGridTextColumn Header="能级" Binding="{Binding NLevel}" Width="65"/>
+                                <DataGridTextColumn Header="专科认证" Binding="{Binding SpecialtyCerts}" Width="*"/>
+                                <DataGridTextColumn Header="理论" Binding="{Binding TheoryScore}" Width="70"/>
+                                <DataGridTextColumn Header="技能" Binding="{Binding SkillScore}" Width="70"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="三级护理质控 · PDCA 整改">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="病区自查 / 科护士长抽查 / 护理部督查" FontWeight="Bold"/>
+                            <TextBox Text="{Binding QWard, Mode=TwoWay}" PlaceholderText="被检病区"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding QcLevels}" SelectedItem="{Binding QLevel, Mode=TwoWay}"/>
+                            <NumericUpDown Value="{Binding QScore, Mode=TwoWay}" Minimum="0" Maximum="100" FormatString="得分 0.0"/>
+                            <TextBox Text="{Binding QDefect, Mode=TwoWay}" PlaceholderText="存在缺陷摘要" AcceptsReturn="True" Height="50"/>
+                            <TextBox Text="{Binding QPlan, Mode=TwoWay}" PlaceholderText="PDCA 整改措施"/>
+                            <Button Content="提交质控督查" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateQcCommand}"/>
+                            <Button Content="整改复查合格关闭" Classes="Success" HorizontalAlignment="Stretch" Command="{Binding CloseQcCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding QcInspections}" SelectedItem="{Binding SelectedQc, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="单号" Binding="{Binding InspectNo}" Width="135"/>
+                                <DataGridTextColumn Header="病区" Binding="{Binding WardName}" Width="105"/>
+                                <DataGridTextColumn Header="层级" Binding="{Binding InspectLevel}" Width="115"/>
+                                <DataGridTextColumn Header="得分" Binding="{Binding Score}" Width="65"/>
+                                <DataGridTextColumn Header="缺陷摘要" Binding="{Binding DefectSummary}" Width="*"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="85"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="病区 SBAR 床旁交接班 (双签)">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="结构化 SBAR 交接班（强制异人双签）" FontWeight="Bold"/>
+                            <TextBox Text="{Binding HWard, Mode=TwoWay}" PlaceholderText="病区名称"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding ShiftCodes}" SelectedItem="{Binding HFrom, Mode=TwoWay}"/>
+                                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding ShiftCodes}" SelectedItem="{Binding HTo, Mode=TwoWay}"/>
+                            </Grid>
+                            <TextBox Text="{Binding HSbar, Mode=TwoWay}" PlaceholderText="病危/手术/跌倒压疮高危患者 SBAR 交接重点" AcceptsReturn="True" Height="64"/>
+                            <Button Content="发起交接班" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateHandoverCommand}"/>
+                            <TextBox Text="{Binding HAckNurse, Mode=TwoWay}" PlaceholderText="接班护士姓名(须与交班人不同)" Margin="0,8,0,0"/>
+                            <Button Content="接班护士双签确认" Classes="Success" HorizontalAlignment="Stretch" Command="{Binding AckHandoverCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Handovers}" SelectedItem="{Binding SelectedHandover, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="交接单号" Binding="{Binding HandoverNo}" Width="140"/>
+                                <DataGridTextColumn Header="病区" Binding="{Binding WardName}" Width="100"/>
+                                <DataGridTextColumn Header="交班→接班" Binding="{Binding FromShiftCode}" Width="85"/>
+                                <DataGridTextColumn Header="交班人" Binding="{Binding FromNurseName}" Width="85"/>
+                                <DataGridTextColumn Header="接班人" Binding="{Binding ToNurseName}" Width="85"/>
+                                <DataGridTextColumn Header="SBAR重点" Binding="{Binding SbarSummary}" Width="*"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

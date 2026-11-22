@@ -1,0 +1,140 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.CriticalCareControl"
+             x:Class="HIS.Client.UrsaShell.Stations.CriticalCareControl.CriticalCareControlStationView"
+             x:DataType="local:CriticalCareControlViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="危急重症与临床质控控制塔 (P0: 五大中心 · ICU CIS · DRG事中控费 · PIVAS/DDDs)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding SummaryBanner}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: 急诊五大中心时间轴质控 -->
+            <TabItem Header="急诊五大中心时间轴质控">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="启动五大中心绿色通道" FontWeight="Bold"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding CenterTypes}" SelectedItem="{Binding FcCenterType, Mode=TwoWay}"/>
+                            <TextBox Text="{Binding FcPatientId, Mode=TwoWay}" PlaceholderText="患者ID"/>
+                            <TextBox Text="{Binding FcPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <Button Content="建立急救专案并打点到院(Door)" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding OpenFiveCenterCaseCommand}"/>
+                            <TextBlock Text="记录急救质控节点" FontWeight="Bold" Margin="0,8,0,0"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding MilestoneCodes}" SelectedItem="{Binding FcMilestoneCode, Mode=TwoWay}"/>
+                            <Button Content="为选中专案打点当前节点" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding RecordMilestoneCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding FiveCenterCases}" SelectedItem="{Binding SelectedFiveCenterCase, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="专案号" Binding="{Binding CaseNo}" Width="145"/>
+                                <DataGridTextColumn Header="中心" Binding="{Binding CenterType}" Width="105"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="质控指标" Binding="{Binding TargetMetricName}" Width="85"/>
+                                <DataGridTextColumn Header="标准限额(分)" Binding="{Binding TargetLimitMinutes}" Width="95"/>
+                                <DataGridTextColumn Header="实际耗时(分)" Binding="{Binding ActualMinutes}" Width="95"/>
+                                <DataGridTextColumn Header="超时" Binding="{Binding OvertimeDisplay}" Width="75"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: ICU 重症监护工作站 (CIS) -->
+            <TabItem Header="ICU 重症监护 (APACHE II / SOFA / 三管)">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="ICU 重症收治与危重评分" FontWeight="Bold"/>
+                            <TextBox Text="{Binding IcuEncounterId, Mode=TwoWay}" PlaceholderText="住院就诊ID"/>
+                            <TextBox Text="{Binding IcuPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <TextBox Text="{Binding IcuBedCode, Mode=TwoWay}" PlaceholderText="ICU 床位号 (如 ICU-01)"/>
+                            <Button Content="收治入科 (ICU)" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding AdmitIcuCommand}"/>
+                            <Button Content="对选中患者测算 APACHE II / SOFA" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding ScoreIcuCommand}"/>
+                            <Button Content="登记小时级呼吸机与出入量特护" HorizontalAlignment="Stretch" Command="{Binding AddIcuHourlyCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding IcuAdmissions}" SelectedItem="{Binding SelectedIcu, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="ICU单号" Binding="{Binding IcuNo}" Width="140"/>
+                                <DataGridTextColumn Header="床位" Binding="{Binding IcuBedCode}" Width="80"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="95"/>
+                                <DataGridTextColumn Header="APACHE II" Binding="{Binding ApacheIiScore}" Width="85"/>
+                                <DataGridTextColumn Header="SOFA" Binding="{Binding SofaScore}" Width="70"/>
+                                <DataGridTextColumn Header="预测病死率%" Binding="{Binding PredictedMortalityPct}" Width="105"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: DRG/DIP 事中实时控费预警 -->
+            <TabItem Header="DRG/DIP 事中实时控费预警">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="在院患者实时费用与病组限额评估" FontWeight="Bold"/>
+                            <TextBox Text="{Binding DrgEncounterId, Mode=TwoWay}" PlaceholderText="住院就诊ID"/>
+                            <TextBox Text="{Binding DrgGroupCode, Mode=TwoWay}" PlaceholderText="DRG病组编码 (如 EB19 / FM19 / BR23)"/>
+                            <Button Content="立即核算实时控费红黄灯" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding EvaluateDrgCommand}"/>
+                            <TextBox Text="{Binding DrgAppealReason, Mode=TwoWay}" PlaceholderText="特病单议申诉理由" Margin="0,8,0,0"/>
+                            <Button Content="提交选中记录特病单议申诉" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding AppealDrgCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding DrgAlerts}" SelectedItem="{Binding SelectedDrgAlert, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="住院ID" Binding="{Binding EncounterId}" Width="125"/>
+                                <DataGridTextColumn Header="病组" Binding="{Binding GroupCode}" Width="75"/>
+                                <DataGridTextColumn Header="病组名称" Binding="{Binding GroupName}" Width="160"/>
+                                <DataGridTextColumn Header="基准限额" Binding="{Binding BenchmarkFee}" Width="90"/>
+                                <DataGridTextColumn Header="当前费用" Binding="{Binding CurrentTotalFee}" Width="90"/>
+                                <DataGridTextColumn Header="占比" Binding="{Binding FeeRatio}" Width="70"/>
+                                <DataGridTextColumn Header="预警等级" Binding="{Binding AlertLevel}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: 抗菌药物 DDDs 与 PIVAS 静配闭环 -->
+            <TabItem Header="抗菌药物 DDDs 与 PIVAS 静配中心">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="PIVAS 静配闭环操作" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding AbxAudSummary}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>
+                            <TextBox Text="{Binding PivasDrugName, Mode=TwoWay}" PlaceholderText="主药名称 (如 美罗培南 0.5g)"/>
+                            <TextBox Text="{Binding PivasSolventName, Mode=TwoWay}" PlaceholderText="溶媒 (如 0.9%氯化钠 100ml)"/>
+                            <Button Content="下达静配工单" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreatePivasCommand}"/>
+                            <Button Content="审方通过选中工单" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding ReviewPivasCommand}"/>
+                            <Button Content="贴签 -> 调配 -> 双人核对出仓" HorizontalAlignment="Stretch" Command="{Binding AdvancePivasCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding PivasOrders}" SelectedItem="{Binding SelectedPivas, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="静配单号" Binding="{Binding PivasNo}" Width="140"/>
+                                <DataGridTextColumn Header="批次" Binding="{Binding BatchCode}" Width="80"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="85"/>
+                                <DataGridTextColumn Header="主药" Binding="{Binding DrugName}" Width="140"/>
+                                <DataGridTextColumn Header="溶媒" Binding="{Binding SolventName}" Width="130"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="115"/>
+                                <DataGridTextColumn Header="条码" Binding="{Binding LabelBarcode}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

@@ -886,4 +886,47 @@ public sealed class CheckupProController : ControllerBase
 
         return ApiResponse<object>.Success(new { rec.Id, rec.ReportUploadStatus, NetReportJson = json }, "已生成职业病平台网报数据包并标记上报完成");
     }
+
+    public sealed record SettleCheckupCashDto(decimal CashTendered);
+
+    /// <summary>
+    /// 闭环：团检分组订单现金统一结算，同步写入全院 fin_payment_orders 与 fin_charge_ledgers 并纳入财务日结与总账凭证
+    /// </summary>
+    [HttpPost("groups/{groupId}/settle-cash")]
+    public async Task<ApiResponse<object>> SettleGroupOrderCash(string groupId, [FromBody] SettleCheckupCashDto req, CancellationToken ct)
+    {
+        var grp = await _groupRepo.GetByIdAsync(groupId, ct);
+        if (grp == null) return ApiResponse<object>.Fail(404, "团检分组订单不存在");
+        if (grp.SettlementStatus == "SETTLED") return ApiResponse<object>.Fail(400, "该团检分组订单已完成结算");
+
+        decimal amount = grp.TotalAmount;
+        if (req.CashTendered < amount)
+            return ApiResponse<object>.Fail(400, $"现金实收金额 (¥{req.CashTendered:F2}) 小于团检应收金额 (¥{amount:F2})");
+
+        long now = SystemTime.UtcNowMs;
+        string payId = Guid.NewGuid().ToString("D");
+        string payNo = "PEIS-PAY-" + SystemTime.ShanghaiNow.ToString("yyyyMMddHHmmss");
+        decimal change = Math.Round(req.CashTendered - amount, 2);
+
+        using var conn = _connFactory.CreateConnection();
+        using var tx = conn.BeginTransaction();
+        await conn.ExecuteAsync(@"
+            INSERT INTO fin_payment_orders
+            (id, payment_no, scene, patient_id, visit_or_encounter_id, total_amount, insurance_amount, prepayment_deduct, self_pay_amount, payment_channel, status, paid_at_ms, ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+            VALUES
+            (@Id, @No, 'PEIS', @Pat, @Enc, @Amt, 0, 0, @Amt, 'CASH', 1, @Now, @Ext, 1, @Now, @Actor, @Now, @Actor, 1)",
+            new { Id = payId, No = payNo, Pat = grp.CompanyId, Enc = grp.Id, Amt = amount, Now = now, Ext = $"{{\"cashTendered\":{req.CashTendered:F2},\"changeAmount\":{change:F2},\"groupName\":\"{grp.GroupName}\"}}", Actor = ActorId }, tx);
+
+        await conn.ExecuteAsync(@"
+            INSERT INTO fin_charge_ledgers
+            (id, patient_id, visit_or_encounter_id, order_dept_id, exec_dept_id, item_code, item_name, quantity, unit_price, total_amount, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+            VALUES
+            (@Id, @Pat, @Enc, 'PEIS_CENTER', 'PEIS_CENTER', 'PEIS_GROUP_FEE', @Name, @Qty, @Unit, @Amt, 1, 1, @Now, @Actor, @Now, @Actor, 1)",
+            new { Id = Guid.NewGuid().ToString("D"), Pat = grp.CompanyId, Enc = grp.Id, Name = $"团检现金结算：{grp.GroupName}", Qty = Math.Max(1, grp.RegisteredCount), Unit = Math.Round(amount / Math.Max(1, grp.RegisteredCount), 2), Amt = amount, Now = now, Actor = ActorId }, tx);
+
+        await conn.ExecuteAsync("UPDATE chk_group_orders SET settlement_status = 'SETTLED', updated_at_ms = @Now, updated_by = @Actor WHERE id = @Id", new { Now = now, Actor = ActorId, Id = grp.Id }, tx);
+        tx.Commit();
+
+        return ApiResponse<object>.Success(new { PaymentId = payId, PaymentNo = payNo, Amount = amount, CashTendered = req.CashTendered, ChangeAmount = change }, $"团检现金结算完成 [{payNo}]，找零 ¥{change:F2}，已计入全院财务日结");
+    }
 }

@@ -482,9 +482,34 @@ public sealed class InpatientProController : ControllerBase
                     Actor = ActorId
                 }, tx);
         }
+        if (decision == "APPROVED")
+        {
+            // 闭环：退药审批通过后同步回补药房有效批次库存并写入 inv_stock_ledgers
+            int retQtyInt = Math.Max(1, (int)Math.Round(Convert.ToDecimal(item.return_qty)));
+            var batch = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT b.id AS BatchId, b.warehouse_or_pharmacy_id AS WhId, b.drug_id AS DrugId, b.quantity AS Qty
+                FROM inv_drug_batches b
+                INNER JOIN inv_drugs d ON d.id = b.drug_id
+                WHERE d.drug_name = @DrugName AND b.is_frozen = 0
+                ORDER BY b.expiry_date_int DESC LIMIT 1",
+                new { DrugName = (string)item.drug_name }, tx);
+            if (batch != null)
+            {
+                int newBal = Convert.ToInt32(batch.Qty) + retQtyInt;
+                await conn.ExecuteAsync(
+                    "UPDATE inv_drug_batches SET quantity = @Qty, updated_at_ms = @Now, updated_by = @Actor WHERE id = @Bid",
+                    new { Qty = newBal, Now = now, Actor = ActorId, Bid = (string)batch.BatchId }, tx);
+                await conn.ExecuteAsync(@"
+                    INSERT INTO inv_stock_ledgers
+                    (id, warehouse_or_pharmacy_id, drug_id, batch_id, change_type, change_quantity, balance_after, reference_doc_no, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                    VALUES
+                    (@Id, @Wh, @Did, @Bid, 'WARD_DRUG_RETURN', @Chg, @Bal, @Ref, 1, @Now, @Actor, @Now, @Actor, 1)",
+                    new { Id = Guid.NewGuid().ToString("D"), Wh = (string)batch.WhId, Did = (string)batch.DrugId, Bid = (string)batch.BatchId, Chg = retQtyInt, Bal = newBal, Ref = (string)item.return_no, Now = now, Actor = ActorId }, tx);
+            }
+        }
         tx.Commit();
 
-        return ApiResponse<object>.Success(new { Id = id, Status = decision }, decision == "APPROVED" ? "药房已确认退药并写入负数冲正费用" : "已驳回该退药申请");
+        return ApiResponse<object>.Success(new { Id = id, Status = decision }, decision == "APPROVED" ? "药房已确认退药、回补批次库存并写入负数冲正费用" : "已驳回该退药申请");
     }
 
     [HttpGet("discharge-meds")]
@@ -537,12 +562,49 @@ public sealed class InpatientProController : ControllerBase
     public async Task<ApiResponse<object>> DispenseDischargeMed(string id)
     {
         using var conn = _connFactory.CreateConnection();
+        var item = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT * FROM ipd_discharge_medications WHERE id = @Id", new { Id = id });
+        if (item == null) return ApiResponse<object>.Fail(404, "未找到出院带药单");
+        if ((string)item.status == "DISPENSED") return ApiResponse<object>.Fail(400, "该出院带药单已完成发药");
+
         long now = SystemTime.UtcNowMs;
-        int n = await conn.ExecuteAsync(
+        using var tx = conn.BeginTransaction();
+        await conn.ExecuteAsync(
             "UPDATE ipd_discharge_medications SET status = 'DISPENSED', dispensed_at_ms = @Now, updated_at_ms = @Now, updated_by = @Actor WHERE id = @Id",
-            new { Now = now, Actor = ActorId, Id = id });
-        if (n == 0) return ApiResponse<object>.Fail(404, "未找到出院带药单");
-        return ApiResponse<object>.Success(new { Id = id, Status = "DISPENSED" }, "已完成出院带药发药核对");
+            new { Now = now, Actor = ActorId, Id = id }, tx);
+
+        decimal amt = Convert.ToDecimal(item.total_amount);
+        if (amt > 0m)
+        {
+            await conn.ExecuteAsync(@"
+                INSERT INTO fin_charge_ledgers
+                (id, patient_id, visit_or_encounter_id, order_dept_id, exec_dept_id, item_code, item_name, quantity, unit_price, total_amount, status, ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                VALUES
+                (@Id, @Pat, @Enc, 'IPD_WARD', 'IPD_PHARMACY', 'IPD_DISCHARGE_MED', @Name, 1, @Amt, @Amt, 1, @Ext, 1, @Now, @Actor, @Now, @Actor, 1)",
+                new { Id = Guid.NewGuid().ToString("D"), Pat = (string)item.patient_name, Enc = (string?)item.encounter_id ?? id, Name = $"出院带药 ({(string)item.rx_no}): {(string)item.medications_summary}", Amt = amt, Ext = $"{{\"rxNo\":\"{(string)item.rx_no}\"}}", Now = now, Actor = ActorId }, tx);
+        }
+
+        // 扣减匹配药品的药房有效库存批次
+        string summary = (string)item.medications_summary;
+        var matchedBatch = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT b.id AS BatchId, b.warehouse_or_pharmacy_id AS WhId, b.drug_id AS DrugId, b.quantity AS Qty
+            FROM inv_drug_batches b
+            INNER JOIN inv_drugs d ON d.id = b.drug_id
+            WHERE b.is_frozen = 0 AND b.quantity > 0 AND @Sum LIKE '%' || d.drug_name || '%'
+            ORDER BY b.expiry_date_int ASC LIMIT 1",
+            new { Sum = summary }, tx);
+        if (matchedBatch != null)
+        {
+            int newBal = Math.Max(0, Convert.ToInt32(matchedBatch.Qty) - 1);
+            await conn.ExecuteAsync("UPDATE inv_drug_batches SET quantity = @Qty, updated_at_ms = @Now WHERE id = @Bid", new { Qty = newBal, Now = now, Bid = (string)matchedBatch.BatchId }, tx);
+            await conn.ExecuteAsync(@"
+                INSERT INTO inv_stock_ledgers
+                (id, warehouse_or_pharmacy_id, drug_id, batch_id, change_type, change_quantity, balance_after, reference_doc_no, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                VALUES
+                (@Id, @Wh, @Did, @Bid, 'DISCHARGE_DISPENSE', -1, @Bal, @Ref, 1, @Now, @Actor, @Now, @Actor, 1)",
+                new { Id = Guid.NewGuid().ToString("D"), Wh = (string)matchedBatch.WhId, Did = (string)matchedBatch.DrugId, Bid = (string)matchedBatch.BatchId, Bal = newBal, Ref = (string)item.rx_no, Now = now, Actor = ActorId }, tx);
+        }
+        tx.Commit();
+        return ApiResponse<object>.Success(new { Id = id, Status = "DISPENSED" }, "已完成出院带药发药核对、库存扣减与住院记账");
     }
 
     // ===================== 4. 专科扩展：产科分娩新生儿 / 日间手术24h / 陪护探视证 =====================
@@ -737,6 +799,20 @@ public sealed class InpatientProController : ControllerBase
             WHERE id = @Id",
             new { St = st, Padss = req.PadssScore, Remark = req.Remark?.Trim(), Disch = dischargedAt, Now = now, Actor = ActorId, Id = id });
         if (n == 0) return ApiResponse<object>.Fail(404, "未找到该日间手术记录");
-        return ApiResponse<object>.Success(new { Id = id, Status = st, req.PadssScore }, st == "CONVERTED_IPD" ? "已超期转常规住院病房继续治疗" : "已更新日间手术状态与 PADSS 评分");
+        if (st == "CONVERTED_IPD")
+        {
+            var dsRow = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT case_no AS CaseNo, patient_name AS Pat, dept_name AS Dept, surgery_name AS Surg FROM ipd_day_surgery_cases WHERE id = @Id", new { Id = id });
+            if (dsRow != null)
+            {
+                string cardNo = "ADM-DS-" + SystemTime.ShanghaiNow.ToString("yyyyMMddHHmmss") + Random.Shared.Next(10, 99);
+                await conn.ExecuteAsync(@"
+                    INSERT OR IGNORE INTO ipd_admission_cards
+                    (id, card_no, request_key, patient_id, source_doctor_id, source_dept_id, suggested_ipd_dept_id, admission_diagnosis, remark, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                    VALUES
+                    (@Id, @CardNo, @ReqKey, @Pat, @Actor, 'DAY_SURGERY', @Dept, @Diag, @Remark, 'PENDING', 1, @Now, @Actor, @Now, @Actor, 1)",
+                    new { Id = Guid.NewGuid().ToString("D"), CardNo = cardNo, ReqKey = "DS_ADM_" + id, Pat = (string)dsRow.Pat, Actor = ActorId, Dept = (string)dsRow.Dept, Diag = $"日间手术超期转住院：{(string)dsRow.Surg}", Remark = $"日间手术单号 {(string)dsRow.CaseNo}，PADSS={req.PadssScore}", Now = now });
+            }
+        }
+        return ApiResponse<object>.Success(new { Id = id, Status = st, req.PadssScore }, st == "CONVERTED_IPD" ? "已超期转常规住院并自动签发住院入院证" : "已更新日间手术状态与 PADSS 评分");
     }
 }

@@ -155,15 +155,71 @@ public sealed class EmergencyAndOpdProController : ControllerBase
     {
         long now = SystemTime.UtcNowMs;
         using var conn = _connFactory.CreateConnection();
+        var visit = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT * FROM er_triage_visits WHERE id = @Id", new { Id = id });
+        if (visit == null) return ApiResponse<object>.Fail(404, "未找到急诊分诊记录");
+
+        string? createdCardId = null;
+        decimal totalCredit = Convert.ToDecimal(visit.unpaid_credit_amount) + (req.AddCreditAmount ?? 0m);
+
+        using var tx = conn.BeginTransaction();
         await conn.ExecuteAsync(@"
             UPDATE er_triage_visits
             SET status = @St, destination_zone = COALESCE(@Zone, destination_zone),
                 bed_code = COALESCE(@Bed, bed_code),
-                unpaid_credit_amount = unpaid_credit_amount + COALESCE(@Credit, 0),
+                unpaid_credit_amount = @TotalCredit,
                 updated_at_ms = @Now, updated_by = @Actor
             WHERE id = @Id",
-            new { St = req.Status, Zone = req.DestinationZone, Bed = req.BedCode, Credit = req.AddCreditAmount, Now = now, Actor = ActorId, Id = id });
-        return ApiResponse<object>.Success(new { id, req.Status }, "急诊留观/抢救状态已更新");
+            new { St = req.Status, Zone = req.DestinationZone, Bed = req.BedCode, TotalCredit = totalCredit, Now = now, Actor = ActorId, Id = id }, tx);
+
+        if (string.Equals(req.Status, "ADMITTED_IPD", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace((string?)visit.converted_encounter_id))
+        {
+            createdCardId = Guid.NewGuid().ToString("D");
+            string cardNo = "ADM-ER-" + SystemTime.ShanghaiNow.ToString("yyyyMMddHHmmss") + Random.Shared.Next(10, 99);
+            await conn.ExecuteAsync(@"
+                INSERT INTO ipd_admission_cards
+                (id, card_no, request_key, patient_id, visit_id, source_doctor_id, source_dept_id, suggested_ipd_dept_id, admission_diagnosis, remark, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                VALUES
+                (@Id, @CardNo, @ReqKey, @Pat, @Vid, @Actor, 'ER_DEPT', @TgtDept, @Diag, @Remark, 'PENDING', 1, @Now, @Actor, @Now, @Actor, 1)",
+                new
+                {
+                    Id = createdCardId,
+                    CardNo = cardNo,
+                    ReqKey = "ER_ADM_" + id,
+                    Pat = (string)visit.patient_name,
+                    Vid = id,
+                    Actor = ActorId,
+                    TgtDept = string.IsNullOrWhiteSpace(req.DestinationZone) ? "IPD_WARD" : req.DestinationZone,
+                    Diag = (string)visit.chief_complaint,
+                    Remark = $"急诊{(int)visit.triage_level}级转住院（急诊号 {(string)visit.er_no}，绿通挂账 ¥{totalCredit:F2}）",
+                    Now = now
+                }, tx);
+
+            await conn.ExecuteAsync("UPDATE er_triage_visits SET converted_encounter_id = @Cid WHERE id = @Id", new { Cid = createdCardId, Id = id }, tx);
+
+            if (totalCredit > 0m)
+            {
+                await conn.ExecuteAsync(@"
+                    INSERT INTO fin_charge_ledgers
+                    (id, patient_id, visit_or_encounter_id, order_dept_id, exec_dept_id, item_code, item_name, quantity, unit_price, total_amount, status, ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                    VALUES
+                    (@Id, @Pat, @Enc, 'ER_DEPT', 'ER_DEPT', 'ER_GREEN_CREDIT_CARRYOVER', @ItemName, 1, @Amt, @Amt, 1, @Ext, 1, @Now, @Actor, @Now, @Actor, 1)",
+                    new
+                    {
+                        Id = Guid.NewGuid().ToString("D"),
+                        Pat = (string)visit.patient_name,
+                        Enc = createdCardId,
+                        ItemName = $"急诊绿色通道挂账费用结转 ({(string)visit.er_no})",
+                        Amt = totalCredit,
+                        Ext = $"{{\"erVisitId\":\"{id}\",\"erNo\":\"{(string)visit.er_no}\"}}",
+                        Now = now,
+                        Actor = ActorId
+                    }, tx);
+            }
+        }
+        tx.Commit();
+
+        return ApiResponse<object>.Success(new { id, req.Status, AdmissionCardId = createdCardId, CarriedCredit = totalCredit },
+            createdCardId != null ? $"急诊已转住院并自动签发入院证，结转绿通挂账 ¥{totalCredit:F2}" : "急诊留观/抢救状态已更新");
     }
 
     // ===================== 2. 门诊临床优先级队列与预计候诊时间估算 =====================
@@ -173,14 +229,15 @@ public sealed class EmergencyAndOpdProController : ControllerBase
     {
         using var conn = _connFactory.CreateConnection();
         var raw = (await conn.QueryAsync<dynamic>(@"
-            SELECT q.id AS Id, q.queue_no AS QueueNo, COALESCE(p.full_name, q.patient_id) AS PatientName,
+            SELECT q.id AS Id, COALESCE(v.visit_no, q.visit_id) AS QueueNo, COALESCE(p.full_name, v.patient_id, q.visit_id) AS PatientName,
                    COALESCE(q.priority_level, 4) AS PriorityLevel,
                    COALESCE(q.priority_tag, '普通') AS PriorityTag,
-                   q.status AS Status, q.created_at_ms AS CreatedAtMs
-            FROM opd_queue_tickets q
-            LEFT JOIN pat_patients p ON p.id = q.patient_id
-            WHERE q.status IN (0, 1)
-            ORDER BY COALESCE(q.priority_level, 4) ASC, q.created_at_ms ASC LIMIT 100")).ToList();
+                   q.queue_status AS Status, q.checkin_at_ms AS CreatedAtMs
+            FROM opd_triage_queues q
+            LEFT JOIN opd_visits v ON v.id = q.visit_id
+            LEFT JOIN pat_patients p ON p.id = v.patient_id
+            WHERE q.queue_status IN (0, 1)
+            ORDER BY COALESCE(q.priority_level, 4) ASC, q.priority_score DESC, q.checkin_at_ms ASC LIMIT 100")).ToList();
 
         var result = new List<object>();
         int idx = 0;
@@ -206,7 +263,7 @@ public sealed class EmergencyAndOpdProController : ControllerBase
     {
         using var conn = _connFactory.CreateConnection();
         await conn.ExecuteAsync(
-            "UPDATE opd_queue_tickets SET priority_level = @Lvl, priority_tag = @Tag, updated_at_ms = @Now WHERE id = @Id",
+            "UPDATE opd_triage_queues SET priority_level = @Lvl, priority_tag = @Tag, priority_score = (5 - @Lvl) * 100, updated_at_ms = @Now WHERE id = @Id",
             new { Lvl = Math.Clamp(req.PriorityLevel, 1, 4), Tag = req.PriorityTag, Now = SystemTime.UtcNowMs, Id = ticketId });
         return ApiResponse<object>.Success(new { ticketId, req.PriorityLevel, req.PriorityTag }, "已更新门诊临床优先级别");
     }

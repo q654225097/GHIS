@@ -101,6 +101,21 @@ SELECT (
 		{
 			EncounterId = encounterId
 		}, ct);
+		int pendingConsults = await QueryCountAsync("SELECT count(*) FROM ipd_consultations WHERE encounter_id = @EncounterId AND status IN ('REQUESTED', 'ACCEPTED')", new { EncounterId = encounterId }, ct);
+		if (pendingConsults > 0)
+		{
+			failures.Add($"存在 {pendingConsults} 份全院会诊单尚未完成会诊意见与病历回写");
+		}
+		int pendingDrugReturns = await QueryCountAsync("SELECT count(*) FROM ipd_drug_returns WHERE encounter_id = @EncounterId AND status = 'APPLIED'", new { EncounterId = encounterId }, ct);
+		if (pendingDrugReturns > 0)
+		{
+			failures.Add($"存在 {pendingDrugReturns} 笔病区退药申请尚未经药房审批冲正");
+		}
+		int pendingDischargeMeds = await QueryCountAsync("SELECT count(*) FROM ipd_discharge_medications WHERE encounter_id = @EncounterId AND status = 'PRESCRIBED'", new { EncounterId = encounterId }, ct);
+		if (pendingDischargeMeds > 0)
+		{
+			failures.Add($"存在 {pendingDischargeMeds} 张出院带药处方尚未完成药房发药核对");
+		}
 		if (unreturnedBloodBags > 0)
 		{
 			failures.Add($"输血科存在 {unreturnedBloodBags} 袋已配发血液尚未完成输血完毕空血袋回收核销");

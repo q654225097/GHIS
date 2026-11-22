@@ -601,6 +601,17 @@ public sealed class PreAdmissionController : ControllerBase
                     "UPDATE ipd_pre_admission_orders SET billing_track = 'SPLIT_TO_OPD', doctor_split_suggest = 'SPLIT_OPD', finance_split_confirm = 'SPLIT_OPD', updated_at_ms = @Now WHERE pre_admission_id = @Pid AND exec_status = 'DONE'",
                     new { Now = now, Pid = id });
                 main.Status = "CONVERTED_OPD";
+                // 闭环：将拆回门诊结算的已执行院前检查费写入 fin_charge_ledgers 供收费处结算
+                var opdOrders = await conn.QueryAsync<dynamic>("SELECT id AS Id, item_code AS ItemCode, item_name AS ItemName, amount AS Amount, exec_dept_name AS ExecDept FROM ipd_pre_admission_orders WHERE pre_admission_id = @Pid AND exec_status = 'DONE'", new { Pid = id });
+                foreach (var po in opdOrders)
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO fin_charge_ledgers
+                        (id, patient_id, visit_or_encounter_id, order_dept_id, exec_dept_id, item_code, item_name, quantity, unit_price, total_amount, status, ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                        VALUES
+                        (@Id, @Pat, @Enc, 'PRE_ADMIT_OPD', @Exec, @Code, @Name, 1, @Amt, @Amt, 1, @Ext, 1, @Now, @Actor, @Now, @Actor, 1)",
+                        new { Id = Guid.NewGuid().ToString("D"), Pat = main.PatientName, Enc = id, Exec = (string?)po.ExecDept ?? "MEDTECH", Code = (string)po.ItemCode, Name = $"[预住院转门诊] {(string)po.ItemName}", Amt = Convert.ToDecimal(po.Amount), Ext = $"{{\"preAdmissionId\":\"{id}\",\"track\":\"SPLIT_TO_OPD\"}}", Now = now, Actor = ActorId });
+                }
                 msg = "预住院已中止：未执行项已自动退费，已执行项已转回原门诊结算，院前文书归档至门诊病历";
             }
             else if (decision is "SWITCH_TO_B_IPD" or "ESCALATE_EMERGENCY")
@@ -683,6 +694,25 @@ public sealed class PreAdmissionController : ControllerBase
             main.ConvertedPrimaryDiag = main.PrimaryDiagName;
             main.AdmittedAtMs = now; // 病历质控 8h/24h/48h 及平均住院日严格从此时间起算！
             main.Status = "CONVERTED_IPD";
+            // 闭环：自动签发正式住院入院证 ipd_admission_cards 并将 MERGED_TO_IPD 院前检查费写入住院费用台账 fin_charge_ledgers
+            string paCardNo = "ADM-PA-" + SystemTime.ShanghaiNow.ToString("yyyyMMddHHmmss") + Random.Shared.Next(10, 99);
+            await conn.ExecuteAsync(@"
+                INSERT INTO ipd_admission_cards
+                (id, card_no, request_key, patient_id, source_doctor_id, source_dept_id, suggested_ipd_dept_id, admission_diagnosis, remark, status, encounter_id, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                VALUES
+                (@Id, @CardNo, @ReqKey, @Pat, @Actor, 'PRE_ADMIT', @Dept, @Diag, @Remark, 'REGISTERED', @EncId, 1, @Now, @Actor, @Now, @Actor, 1)",
+                new { Id = Guid.NewGuid().ToString("D"), CardNo = paCardNo, ReqKey = "PA_ADM_" + id, Pat = main.PatientName, Actor = ActorId, Dept = main.ConvertedDeptName ?? main.TargetDeptName, Diag = main.ConvertedPrimaryDiag ?? main.PrimaryDiagName, Remark = $"预住院 {main.PreAdmitNo} 转正式住院", EncId = encId, Now = now });
+
+            var ipdOrders = await conn.QueryAsync<dynamic>("SELECT id AS Id, item_code AS ItemCode, item_name AS ItemName, amount AS Amount, exec_dept_name AS ExecDept FROM ipd_pre_admission_orders WHERE pre_admission_id = @Pid AND exec_status = 'DONE' AND billing_track = 'MERGED_TO_IPD'", new { Pid = id });
+            foreach (var po in ipdOrders)
+            {
+                await conn.ExecuteAsync(@"
+                    INSERT INTO fin_charge_ledgers
+                    (id, patient_id, visit_or_encounter_id, order_dept_id, exec_dept_id, item_code, item_name, quantity, unit_price, total_amount, status, ext_data_json, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                    VALUES
+                    (@Id, @Pat, @Enc, @Dept, @Exec, @Code, @Name, 1, @Amt, @Amt, 1, @Ext, 1, @Now, @Actor, @Now, @Actor, 1)",
+                    new { Id = Guid.NewGuid().ToString("D"), Pat = main.PatientName, Enc = encId, Dept = main.ConvertedDeptName ?? main.TargetDeptName, Exec = (string?)po.ExecDept ?? "MEDTECH", Code = (string)po.ItemCode, Name = $"[预住院并入住院] {(string)po.ItemName}", Amt = Convert.ToDecimal(po.Amount), Ext = $"{{\"preAdmissionId\":\"{id}\",\"track\":\"MERGED_TO_IPD\"}}", Now = now, Actor = ActorId });
+            }
             main.UpdatedAtMs = now;
             main.UpdatedBy = ActorId;
             await _mainRepo.UpdateAsync(main, token);

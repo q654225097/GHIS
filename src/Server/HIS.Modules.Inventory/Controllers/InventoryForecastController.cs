@@ -27,19 +27,6 @@ public sealed class InventoryForecastController : ControllerBase
         _session = session;
     }
 
-    private sealed class StockRow
-    {
-        public string DrugId { get; set; } = string.Empty;
-        public int Qty { get; set; }
-    }
-
-    private sealed class UsageRow
-    {
-        public string DrugId { get; set; } = string.Empty;
-        public int Out30 { get; set; }
-        public int Out90 { get; set; }
-    }
-
     public sealed record DrugForecastRow(
         string DrugId,
         string DrugCode,
@@ -77,16 +64,16 @@ public sealed class InventoryForecastController : ControllerBase
             : string.Empty;
 
         // 1. 当前未冻结且未过期有效库存
-        var stockList = await conn.QueryAsync<StockRow>($@"
+        var stockRaw = await conn.QueryAsync<(string DrugId, decimal Qty)>($@"
             SELECT drug_id AS DrugId, COALESCE(SUM(quantity), 0) AS Qty
             FROM inv_drug_batches
             WHERE is_frozen = 0 AND expiry_date_int >= @Today {whFilter}
             GROUP BY drug_id",
             new { Today = todayInt, WhId = warehouseId?.Trim() });
-        var stockRows = stockList.ToDictionary(r => r.DrugId, r => r.Qty);
+        var stockRows = stockRaw.ToDictionary(r => r.DrugId, r => (int)r.Qty);
 
         // 2. 近 90 天与近 30 天真实出库消耗量（change_quantity < 0）
-        var usageList = await conn.QueryAsync<UsageRow>($@"
+        var usageRaw = await conn.QueryAsync<(string DrugId, decimal Out30, decimal Out90)>($@"
             SELECT drug_id AS DrugId,
                    COALESCE(SUM(CASE WHEN created_at_ms >= @Ms30 THEN ABS(change_quantity) ELSE 0 END), 0) AS Out30,
                    COALESCE(SUM(ABS(change_quantity)), 0) AS Out90
@@ -94,7 +81,7 @@ public sealed class InventoryForecastController : ControllerBase
             WHERE change_quantity < 0 AND created_at_ms >= @Ms90 {whFilter}
             GROUP BY drug_id",
             new { Ms30 = ms30dAgo, Ms90 = ms90dAgo, WhId = warehouseId?.Trim() });
-        var usageRows = usageList.ToDictionary(r => r.DrugId, r => (r.Out30, r.Out90));
+        var usageRows = usageRaw.ToDictionary(r => r.DrugId, r => (Out30: (int)r.Out30, Out90: (int)r.Out90));
 
         var result = new List<DrugForecastRow>(drugs.Count);
         foreach (var d in drugs)
@@ -146,5 +133,80 @@ public sealed class InventoryForecastController : ControllerBase
             .ToList();
 
         return ApiResponse<IReadOnlyList<DrugForecastRow>>.Success(ordered, $"已完成 {ordered.Count} 种药品的 30/60/90 天智能补货预测与缺货天数评估");
+    }
+
+    public sealed record GenerateReplenishTransferDto(string SourceWarehouseId, string TargetWarehouseId, int HorizonDays = 30, int SafetyDays = 14);
+
+    /// <summary>
+    /// 闭环：根据 90 天智能补货预测结果，一键批量生成待审核药库调拨补货单写入 inv_transfer_orders
+    /// </summary>
+    [HttpPost("generate-transfer")]
+    public async Task<ApiResponse<object>> GenerateReplenishmentTransfers([FromBody] GenerateReplenishTransferDto req)
+    {
+        if (string.IsNullOrWhiteSpace(req.SourceWarehouseId) || string.IsNullOrWhiteSpace(req.TargetWarehouseId))
+            return ApiResponse<object>.Fail(400, "源药库与目标药房ID不能为空");
+
+        var forecastRes = await GetReplenishmentForecast(req.TargetWarehouseId, req.SafetyDays);
+        if (forecastRes.Code != 0 || forecastRes.Data == null)
+            return ApiResponse<object>.Fail(500, "无法计算补货预测");
+
+        long now = SystemTime.UtcNowMs;
+        int created = 0;
+        var createdNos = new List<string>();
+        string actor = _session?.UserId?.Trim() ?? "SYSTEM";
+
+        using var conn = _connFactory.CreateConnection();
+        using var tx = conn.BeginTransaction();
+        foreach (var row in forecastRes.Data)
+        {
+            int qty = req.HorizonDays >= 90 ? row.SuggestedOrder90d : req.HorizonDays >= 60 ? row.SuggestedOrder60d : row.SuggestedOrder30d;
+            if (qty <= 0) continue;
+
+            var srcBatch = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT b.id AS BatchId, b.batch_no AS BatchNo, b.expiry_date_int AS ExpInt, d.cost_price AS CostPrice, d.price AS RetailPrice
+                FROM inv_drug_batches b
+                INNER JOIN inv_drugs d ON d.id = b.drug_id
+                WHERE b.warehouse_or_pharmacy_id = @SrcWh AND b.drug_id = @Did AND b.is_frozen = 0 AND b.quantity > 0
+                ORDER BY b.expiry_date_int ASC LIMIT 1",
+                new { SrcWh = req.SourceWarehouseId.Trim(), Did = row.DrugId }, tx);
+
+            string batchId = srcBatch != null ? (string)srcBatch.BatchId : "PENDING_PURCHASE";
+            string batchNo = srcBatch != null ? (string)srcBatch.BatchNo : "AUTO_FORECAST";
+            int expInt = srcBatch != null ? Convert.ToInt32(srcBatch.ExpInt) : int.Parse(SystemTime.ShanghaiNow.AddYears(1).ToString("yyyyMMdd"));
+            decimal costPrice = srcBatch != null ? Convert.ToDecimal(srcBatch.CostPrice) : 0m;
+            decimal retailPrice = srcBatch != null ? Convert.ToDecimal(srcBatch.RetailPrice) : 0m;
+            string tNo = "TR-AUTO-" + SystemTime.ShanghaiNow.ToString("yyyyMMddHHmmss") + "-" + (created + 1).ToString("D2");
+
+            await conn.ExecuteAsync(@"
+                INSERT INTO inv_transfer_orders
+                (id, transfer_no, transfer_type, source_warehouse_id, target_warehouse_id, drug_id, drug_name_snapshot, batch_id, batch_no, expiry_date_int, quantity, unit_cost_price, unit_retail_price, total_retail_amount, status, applicant_id, remark, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                VALUES
+                (@Id, @No, 'AUTO_REPLENISH', @Src, @Tgt, @Did, @DName, @Bid, @BNo, @Exp, @Qty, @Cost, @Retail, @Total, 0, @Actor, @Remark, 1, @Now, @Actor, @Now, @Actor, 1)",
+                new
+                {
+                    Id = Guid.NewGuid().ToString("D"),
+                    No = tNo,
+                    Src = req.SourceWarehouseId.Trim(),
+                    Tgt = req.TargetWarehouseId.Trim(),
+                    Did = row.DrugId,
+                    DName = row.DrugName,
+                    Bid = batchId,
+                    BNo = batchNo,
+                    Exp = expInt,
+                    Qty = qty,
+                    Cost = costPrice,
+                    Retail = retailPrice,
+                    Total = Math.Round(retailPrice * qty, 2),
+                    Actor = actor,
+                    Remark = $"智能预测自动请领（预计缺货 {row.DaysOutOfStock} 天，补货周期 {req.HorizonDays} 天）",
+                    Now = now
+                }, tx);
+            created++;
+            createdNos.Add(tNo);
+        }
+        tx.Commit();
+
+        return ApiResponse<object>.Success(new { CreatedCount = created, TransferNos = createdNos },
+            created > 0 ? $"已按智能预测一键生成 {created} 张待审核补货调拨单" : "当前各药品库存充足，无需生成补货单");
     }
 }

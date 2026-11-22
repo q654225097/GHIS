@@ -267,29 +267,10 @@ CREATE TABLE IF NOT EXISTS ipd_day_surgery_cases (
     updated_by VARCHAR(36),
     version_no INT NOT NULL DEFAULT 1
 );
-
-CREATE TABLE IF NOT EXISTS opd_queue_tickets (
-    id VARCHAR(36) PRIMARY KEY,
-    patient_id VARCHAR(36) NOT NULL,
-    dept_id VARCHAR(36),
-    doctor_id VARCHAR(36),
-    queue_no VARCHAR(40),
-    priority_level INT DEFAULT 4,
-    priority_tag VARCHAR(32) DEFAULT '普通',
-    status INT NOT NULL DEFAULT 0,
-    ext_data_json VARCHAR(4000),
-    schema_version INT NOT NULL DEFAULT 1,
-    created_at_ms BIGINT NOT NULL,
-    created_by VARCHAR(36),
-    updated_at_ms BIGINT NOT NULL,
-    updated_by VARCHAR(36),
-    version_no INT NOT NULL DEFAULT 1
-);
-CREATE INDEX IF NOT EXISTS ix_opd_queue_status ON opd_queue_tickets (status, priority_level, created_at_ms);
 ");
 
-        await EnsureColumnAsync(conn, "opd_queue_tickets", "priority_level", "INT DEFAULT 4");
-        await EnsureColumnAsync(conn, "opd_queue_tickets", "priority_tag", "VARCHAR(32) DEFAULT '普通'");
+        await EnsureColumnAsync(conn, "opd_triage_queues", "priority_level", "INT DEFAULT 4");
+        await EnsureColumnAsync(conn, "opd_triage_queues", "priority_tag", "VARCHAR(32) DEFAULT '普通'");
         await EnsureColumnAsync(conn, "ipd_beds", "is_isolation", "SMALLINT DEFAULT 0");
     }
 }

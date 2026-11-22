@@ -632,6 +632,12 @@ public sealed class ShellViewModel : ClientModelBase
             sys.Items.Add(new ShellNavItem { Key = "pre_admission", LegacyNavIndex = -1, Title = "预住院管理中心", Icon = "🏥", Description = "医保预住院登记、P0危急值抢占中断、准入评估与复合费用拆分" });
             sys.Items.Add(new ShellNavItem { Key = "er_opd_pro", LegacyNavIndex = -1, Title = "急诊分诊与门诊增强", Icon = "🚑", Description = "急诊MEWS五级分诊抢救留观、临床优先级候诊、慢病续方与SM3证明书" });
             sys.Items.Add(new ShellNavItem { Key = "ipd_pro", LegacyNavIndex = -1, Title = "住院全流程与专科中心", Icon = "🛏️", Description = "图形化床位看板、MAR三测单、全院会诊、每日自动滚费、退药冲正、产科与日间手术" });
+            sys.Items.Add(new ShellNavItem { Key = "medical_affairs", LegacyNavIndex = -1, Title = "医务管理中心", Icon = "⚖️", Description = "医师动态分级授权与停权、Ⅰ~Ⅳ级安全事件RCA/PDCA、医疗纠纷联动封存病案与新技术准入" });
+            sys.Items.Add(new ShellNavItem { Key = "nursing_mgmt", LegacyNavIndex = -1, Title = "护理管理中心", Icon = "👩‍⚕️", Description = "护士能级N0-N4档案、病区安全约束排班与Acuity护患比测算、三级护理质控与SBAR双签交接" });
+            sys.Items.Add(new ShellNavItem { Key = "critical_care_control", LegacyNavIndex = -1, Title = "危急重症质控塔(P0)", Icon = "🚨", Description = "急诊五大中心时间轴质控、ICU重症CIS(APACHE II/SOFA/三管)、DRG事中实时控费、抗菌药DDDs与PIVAS静配" });
+            sys.Items.Add(new ShellNavItem { Key = "public_health_supply", LegacyNavIndex = -1, Title = "公卫随访与UDI营养(P1)", Icon = "🛡️", Description = "公卫ICD-10多报卡强触发、院后专病随访与30天再入院追踪、高值耗材UDI消耗记账代销对账、NRS-2002营养配餐" });
+            sys.Items.Add(new ShellNavItem { Key = "aims", LegacyNavIndex = -1, Title = "手术麻醉中心 (AIMS)", Icon = "🩺", Description = "手术排台急诊插台、术前访视极量计算、术中出入量/MH应急、毒麻空安瓿双人销毁、PACU门禁与PCA随访" });
+            sys.Items.Add(new ShellNavItem { Key = "master_dict", LegacyNavIndex = -1, Title = "主数据字典中心", Icon = "📖", Description = "全院标准计量单位与临床主数据字典维护，供动态表单直接引用限制输入" });
             sys.Items.Add(new ShellNavItem { Key = "mrms", LegacyNavIndex = -1, Title = "病案室与临床编码", Icon = "📚", Description = "出院病案回收、ICD-10/ICD-9编码、DRG预分组、归档封存与借阅复印" });
             NavGroups.Add(sys);
         }
@@ -747,6 +753,12 @@ public sealed class ShellViewModel : ClientModelBase
             "pre_admission" => new Stations.PreAdmission.PreAdmissionStationView { DataContext = new Stations.PreAdmission.PreAdmissionViewModel(Workbench, this) },
             "er_opd_pro" => new Stations.Emergency.EmergencyStationView { DataContext = new Stations.Emergency.EmergencyViewModel(Workbench, this) },
             "ipd_pro" => new Stations.InpatientPro.InpatientProStationView { DataContext = new Stations.InpatientPro.InpatientProViewModel(Workbench, this) },
+            "medical_affairs" => new Stations.MedicalAffairs.MedicalAffairsStationView { DataContext = new Stations.MedicalAffairs.MedicalAffairsViewModel(Workbench, this) },
+            "nursing_mgmt" => new Stations.NursingMgmt.NursingMgmtStationView { DataContext = new Stations.NursingMgmt.NursingMgmtViewModel(Workbench, this) },
+            "critical_care_control" => new Stations.CriticalCareControl.CriticalCareControlStationView { DataContext = new Stations.CriticalCareControl.CriticalCareControlViewModel(Workbench, this) },
+            "public_health_supply" => new Stations.PublicHealthSupply.PublicHealthSupplyStationView { DataContext = new Stations.PublicHealthSupply.PublicHealthSupplyViewModel(Workbench, this) },
+            "aims" => new Stations.Aims.AimsStationView { DataContext = new Stations.Aims.AimsViewModel(Workbench, this) },
+            "master_dict" => new Stations.MasterDict.MasterDictStationView { DataContext = new Stations.MasterDict.MasterDictViewModel(Workbench, this) },
             "mrms" => new Stations.Mrms.MrmsStationView { DataContext = new Stations.Mrms.MrmsViewModel(Workbench, this) },
             "workflow_inbox" => new Stations.WorkflowInbox.WorkflowInboxStationView { DataContext = new Stations.WorkflowInbox.WorkflowInboxViewModel(Workbench, this) },
             _ => new LegacyStationBridgeView(

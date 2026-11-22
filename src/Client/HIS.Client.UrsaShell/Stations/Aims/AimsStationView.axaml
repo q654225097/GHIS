@@ -1,0 +1,223 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Aims"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Stations.Aims.AimsStationView"
+             x:DataType="local:AimsViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8"
+                Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="手术麻醉全流程信息管理工作站 (AIMS)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding QcSummaryText}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <controls:DynamicPrintTriggerBar Grid.Column="1" PageKey="aims" TriggerSlot="TOP_TOOLBAR"/>
+                <Button Grid.Column="2" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: 手术排台看板与急诊插台重排 -->
+            <TabItem Header="手术排台 · 急诊插台 · 家属大屏">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8" Margin="0,8,0,0">
+                    <Border Grid.Row="0" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="急诊加台自动顺延择期台次：" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                            <TextBox Text="{Binding EmgRoom, Mode=TwoWay}" Width="90" PlaceholderText="手术间"/>
+                            <TextBox Text="{Binding EmgSurgName, Mode=TwoWay}" Width="220" PlaceholderText="急诊手术名称"/>
+                            <TextBox Text="{Binding EmgSurgeon, Mode=TwoWay}" Width="110" PlaceholderText="主刀医师"/>
+                            <Button Content="急诊插台至第1台" Classes="Danger" Command="{Binding EmergencyInsertCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding OrBoard}" SelectedItem="{Binding SelectedOr, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="手术间" Binding="{Binding OrRoomCode}" Width="85"/>
+                                <DataGridTextColumn Header="台次" Binding="{Binding TableSeq}" Width="60"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="手术名称" Binding="{Binding SurgeryName}" Width="*"/>
+                                <DataGridTextColumn Header="分级" Binding="{Binding SurgeryLevel}" Width="60"/>
+                                <DataGridTextColumn Header="主刀" Binding="{Binding MainSurgeon}" Width="90"/>
+                                <DataGridTextColumn Header="麻醉师" Binding="{Binding Anesthesiologist}" Width="90"/>
+                                <DataGridTextColumn Header="家属大屏脱敏" Binding="{Binding FamilyScreenName}" Width="100"/>
+                                <DataGridTextColumn Header="家属大屏状态" Binding="{Binding FamilyStage}" Width="140"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 术前麻醉访视与极量计算 -->
+            <TabItem Header="术前访视 · 困难气道 · 极量计算">
+                <Grid ColumnDefinitions="360,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="术前麻醉访视（自动计算潮气量与局麻极量并回写EMR）" FontWeight="Bold" TextWrapping="Wrap"/>
+                            <TextBox Text="{Binding PrePatient, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <NumericUpDown Grid.Column="0" Value="{Binding PreWeight, Mode=TwoWay}" Minimum="3" Maximum="250" FormatString="体重 0.0 kg"/>
+                                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding AsaOptions}" SelectedItem="{Binding PreAsa, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                <NumericUpDown Grid.Column="0" Value="{Binding PreMallampati, Mode=TwoWay}" Minimum="1" Maximum="4" FormatString="Mallampati 0"/>
+                                <NumericUpDown Grid.Column="1" Value="{Binding PreStopBang, Mode=TwoWay}" Minimum="0" Maximum="8" FormatString="STOP-BANG 0"/>
+                                <NumericUpDown Grid.Column="2" Value="{Binding PreFasting, Mode=TwoWay}" Minimum="0" Maximum="48" FormatString="禁食 0h"/>
+                            </Grid>
+                            <TextBox Text="{Binding PreMethod, Mode=TwoWay}" PlaceholderText="拟行麻醉方式"/>
+                            <Button Content="自动计算风险极量并回写EMR" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding SavePreopCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding PreopList}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="85"/>
+                                <DataGridTextColumn Header="ASA" Binding="{Binding AsaClass}" Width="55"/>
+                                <DataGridTextColumn Header="气道" Binding="{Binding MallampatiClass}" Width="55"/>
+                                <DataGridTextColumn Header="潮气量建议" Binding="{Binding TidalVolumeRangeMl}" Width="140"/>
+                                <DataGridTextColumn Header="利多卡因极量" Binding="{Binding LidocaineMaxMg, StringFormat={}{0}mg}" Width="95"/>
+                                <DataGridTextColumn Header="罗哌卡因极量" Binding="{Binding RopivacaineMaxMg, StringFormat={}{0}mg}" Width="95"/>
+                                <DataGridTextColumn Header="风险预警" Binding="{Binding RiskAlerts}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 术中出入量与危机应急 -->
+            <TabItem Header="术中出入量平衡 · 危机应急 (MH)">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8" Margin="0,8,0,0">
+                    <Border Grid.Row="0" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="{Binding FluidBalanceText}" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                            <WrapPanel Orientation="Horizontal">
+                                <ComboBox Width="130" Margin="0,0,6,4" ItemsSource="{Binding IntraTypeOptions}" SelectedItem="{Binding IntraType, Mode=TwoWay}"/>
+                                <TextBox Text="{Binding IntraCat, Mode=TwoWay}" Width="160" Margin="0,0,6,4" PlaceholderText="液体名/恶性高热MH"/>
+                                <NumericUpDown Value="{Binding IntraVol, Mode=TwoWay}" Width="110" Margin="0,0,6,4" Minimum="0" Maximum="10000" FormatString="0 ml"/>
+                                <TextBox Text="{Binding IntraDetail, Mode=TwoWay}" Width="240" Margin="0,0,6,4" PlaceholderText="处置备注"/>
+                                <Button Content="记入术中时间轴" Classes="Primary" Margin="0,0,6,4" Command="{Binding AddIntraopCommand}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding IntraopEvents}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="类型" Binding="{Binding RecordType}" Width="120"/>
+                                <DataGridTextColumn Header="项目/事件" Binding="{Binding CategoryName}" Width="160"/>
+                                <DataGridTextColumn Header="容量(ml)" Binding="{Binding VolumeMl}" Width="90"/>
+                                <DataGridTextColumn Header="详细记录" Binding="{Binding EventDetail}" Width="*"/>
+                                <DataGridTextColumn Header="记录人" Binding="{Binding RecordedBy}" Width="90"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: 毒麻精药空安瓿回收与双人销毁 -->
+            <TabItem Header="毒麻精药 · 空安瓿回收 · 双人销毁">
+                <Grid ColumnDefinitions="360,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="1. 术前毒麻精药领用（联动药房批次扣库存）" FontWeight="Bold"/>
+                            <TextBox Text="{Binding NarcPatient, Mode=TwoWay}" PlaceholderText="手术患者姓名"/>
+                            <Grid ColumnDefinitions="*,90" ColumnSpacing="6">
+                                <TextBox Grid.Column="0" Text="{Binding NarcDrug, Mode=TwoWay}" PlaceholderText="毒麻药品名称"/>
+                                <NumericUpDown Grid.Column="1" Value="{Binding NarcIssued, Mode=TwoWay}" Minimum="1" Maximum="20" FormatString="0 支"/>
+                            </Grid>
+                            <Button Content="登记领用" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding IssueNarcoticCommand}"/>
+
+                            <TextBlock Text="2. 术后空安瓿回收与残液双人见证销毁" FontWeight="Bold" Margin="0,10,0,0"/>
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                                <NumericUpDown Grid.Column="0" Value="{Binding RecUsed, Mode=TwoWay}" Minimum="0" Maximum="20" FormatString="实耗 0"/>
+                                <NumericUpDown Grid.Column="1" Value="{Binding RecReturned, Mode=TwoWay}" Minimum="0" Maximum="20" FormatString="退回 0"/>
+                                <NumericUpDown Grid.Column="2" Value="{Binding RecEmpty, Mode=TwoWay}" Minimum="0" Maximum="20" FormatString="空瓿 0"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" ColumnSpacing="6">
+                                <NumericUpDown Grid.Column="0" Value="{Binding RecWaste, Mode=TwoWay}" Minimum="0" Maximum="100" FormatString="残液 0.0ml"/>
+                                <TextBox Grid.Column="1" Text="{Binding RecWitness, Mode=TwoWay}" PlaceholderText="第二见证人姓名(须异人)"/>
+                            </Grid>
+                            <Button Content="双人签字核销（账实不符阻断）" Classes="Success" HorizontalAlignment="Stretch" Command="{Binding ReconcileNarcoticCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding NarcoticLedgers}" SelectedItem="{Binding SelectedNarcotic, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="台账单号" Binding="{Binding LedgerNo}" Width="140"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="80"/>
+                                <DataGridTextColumn Header="毒麻药品" Binding="{Binding DrugName}" Width="130"/>
+                                <DataGridTextColumn Header="领用" Binding="{Binding IssuedAmpoules}" Width="55"/>
+                                <DataGridTextColumn Header="实耗" Binding="{Binding UsedAmpoules}" Width="55"/>
+                                <DataGridTextColumn Header="空安瓿" Binding="{Binding EmptyAmpoulesRecovered}" Width="65"/>
+                                <DataGridTextColumn Header="残液ml" Binding="{Binding WasteVolumeMl}" Width="65"/>
+                                <DataGridTextColumn Header="见证人" Binding="{Binding WitnessName}" Width="85"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 5: PACU Aldrete 离室门禁 & PCA 术后镇痛 -->
+            <TabItem Header="PACU 苏醒门禁 (Aldrete≥9) · 术后 PCA">
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                            <TextBlock Grid.Row="0" Text="PACU Modified Aldrete 评分与 SBAR 交接" FontWeight="Bold"/>
+                            <StackPanel Grid.Row="1" Spacing="5">
+                                <TextBox Text="{Binding PacuPatient, Mode=TwoWay}" PlaceholderText="复苏患者姓名"/>
+                                <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="4">
+                                    <NumericUpDown Grid.Column="0" Value="{Binding PAct, Mode=TwoWay}" Minimum="0" Maximum="2" FormatString="动0"/>
+                                    <NumericUpDown Grid.Column="1" Value="{Binding PResp, Mode=TwoWay}" Minimum="0" Maximum="2" FormatString="呼0"/>
+                                    <NumericUpDown Grid.Column="2" Value="{Binding PCirc, Mode=TwoWay}" Minimum="0" Maximum="2" FormatString="循0"/>
+                                    <NumericUpDown Grid.Column="3" Value="{Binding PCons, Mode=TwoWay}" Minimum="0" Maximum="2" FormatString="意0"/>
+                                    <NumericUpDown Grid.Column="4" Value="{Binding PSpo2, Mode=TwoWay}" Minimum="0" Maximum="2" FormatString="氧0"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                                    <TextBox Grid.Column="0" Text="{Binding PacuNurse, Mode=TwoWay}" PlaceholderText="病区接班护士"/>
+                                    <Button Grid.Column="1" Content="录入评分" Classes="Primary" Command="{Binding SavePacuCommand}"/>
+                                    <Button Grid.Column="2" Content="SBAR转出" Classes="Success" Command="{Binding HandoffPacuCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding PacuList}" SelectedItem="{Binding SelectedPacu, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="80"/>
+                                    <DataGridTextColumn Header="Aldrete门禁" Binding="{Binding GateText}" Width="135"/>
+                                    <DataGridTextColumn Header="接班护士" Binding="{Binding ReceivingWardNurse}" Width="85"/>
+                                    <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="95"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                            <TextBlock Grid.Row="0" Text="术后 PCA 镇痛泵与 VAS 随访" FontWeight="Bold"/>
+                            <StackPanel Grid.Row="1" Spacing="5">
+                                <Grid ColumnDefinitions="*,100" ColumnSpacing="4">
+                                    <TextBox Grid.Column="0" Text="{Binding PcaPatient, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                                    <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding PcaModeOptions}" SelectedItem="{Binding PcaMode, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBox Text="{Binding PcaFormula, Mode=TwoWay}" PlaceholderText="镇痛泵配方"/>
+                                <Grid ColumnDefinitions="100,*,*" ColumnSpacing="4">
+                                    <NumericUpDown Grid.Column="0" Value="{Binding PcaVas, Mode=TwoWay}" Minimum="0" Maximum="10" FormatString="VAS 0"/>
+                                    <Button Grid.Column="1" Content="启用镇痛泵" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreatePcaCommand}"/>
+                                    <Button Grid.Column="2" Content="随访并停泵" Classes="Success" HorizontalAlignment="Stretch" Command="{Binding StopPcaCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding PcaList}" SelectedItem="{Binding SelectedPca, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="75"/>
+                                    <DataGridTextColumn Header="模式" Binding="{Binding PcaMode}" Width="65"/>
+                                    <DataGridTextColumn Header="配方" Binding="{Binding FormulaSummary}" Width="*"/>
+                                    <DataGridTextColumn Header="24h VAS" Binding="{Binding Vas24h}" Width="70"/>
+                                    <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="80"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

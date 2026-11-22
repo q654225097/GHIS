@@ -12,17 +12,23 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+      <ProjectReference Include="..\HIS.Modules.Consumables\HIS.Modules.Consumables.csproj" />
+      <ProjectReference Include="..\HIS.Modules.Pharmacy\HIS.Modules.Pharmacy.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\HIS.BuildingBlocks\HIS.BuildingBlocks.csproj" />
     <ProjectReference Include="..\..\HIS.Contracts\HIS.Contracts.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Checkup\HIS.Modules.Checkup.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Config\HIS.Modules.Config.csproj" />
     <ProjectReference Include="..\HIS.Modules.Finance\HIS.Modules.Finance.csproj" />
     <ProjectReference Include="..\HIS.Modules.Inpatient\HIS.Modules.Inpatient.csproj" />
     <ProjectReference Include="..\HIS.Modules.Outpatient\HIS.Modules.Outpatient.csproj" />
     <ProjectReference Include="..\HIS.Modules.Emr\HIS.Modules.Emr.csproj" />
     <ProjectReference Include="..\HIS.Modules.ClinicalPathway\HIS.Modules.ClinicalPathway.csproj" />
     <ProjectReference Include="..\HIS.Modules.Inventory\HIS.Modules.Inventory.csproj" />
+    <ProjectReference Include="..\HIS.Modules.MedTech\HIS.Modules.MedTech.csproj" />
+    <ProjectReference Include="..\HIS.Modules.Operations\HIS.Modules.Operations.csproj" />
     <ProjectReference Include="..\HIS.Modules.KnowledgeBase\HIS.Modules.KnowledgeBase.csproj" />
   </ItemGroup>
 

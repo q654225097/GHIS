@@ -507,6 +507,27 @@ VALUES
                         IpdBed bed = beds[0];
                         bed.BedStatus = 0;
                         bed.CurrentEncounterId = null;
+                        // 闭环：患者正式出院释放床位时，自动推送待回收病案至 mrms_case_records 并自动注销陪护/探视证
+                        using (var mrmsConn = _connFactory.CreateConnection())
+                        {
+                            int hasCase = await mrmsConn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM mrms_case_records WHERE encounter_id = @Eid", new { Eid = encounter.Id });
+                            if (hasCase == 0)
+                            {
+                                string patName = await mrmsConn.ExecuteScalarAsync<string?>("SELECT full_name FROM pat_patients WHERE id = @Pid", new { Pid = encounter.PatientId }) ?? encounter.PatientId;
+                                string deptName = await mrmsConn.ExecuteScalarAsync<string?>("SELECT dept_name FROM sys_departments WHERE id = @Did", new { Did = encounter.AdmitDeptId }) ?? encounter.AdmitDeptId;
+                                long disNow = SystemTime.UtcNowMs;
+                                int disDateInt = int.Parse(SystemTime.ShanghaiNow.ToString("yyyyMMdd"));
+                                await mrmsConn.ExecuteAsync(@"
+                                    INSERT INTO mrms_case_records
+                                    (id, case_no, encounter_id, patient_name, gender, age, discharge_dept_name, discharge_date_int, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+                                    VALUES
+                                    (@Id, @No, @Eid, @Name, '男', 45, @Dept, @Dt, 'PENDING_RETRIEVE', 1, @Now, @Actor, @Now, @Actor, 1)",
+                                    new { Id = Guid.NewGuid().ToString("D"), No = "BA-" + encounter.AdmissionNo, Eid = encounter.Id, Name = patName, Dept = deptName, Dt = disDateInt, Now = disNow, Actor = CurrentUserId() });
+                            }
+                            await mrmsConn.ExecuteAsync(
+                                "UPDATE ipd_visitor_passes SET status = 'REVOKED', updated_at_ms = @Now, updated_by = @Actor WHERE encounter_id = @Eid AND status = 'ACTIVE'",
+                                new { Now = SystemTime.UtcNowMs, Actor = CurrentUserId(), Eid = encounter.Id });
+                        }
                         bed.UpdatedBy = userId;
                         await _bedRepo.UpdateAsync(bed, ct);
                     }

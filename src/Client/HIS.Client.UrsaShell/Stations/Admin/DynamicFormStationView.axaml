@@ -252,11 +252,13 @@
                                                   HorizontalAlignment="Stretch"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
-                                        <TextBlock Text="计量单位" FontSize="11"
+                                        <TextBlock Text="计量单位（引用主数据字典 DOSAGE_UNIT）" FontSize="11"
                                                    Foreground="{DynamicResource SemiColorText2}"/>
-                                        <TextBox Text="{Binding Workbench.EditingField.UnitText, Mode=TwoWay}"
-                                                 Height="32" FontSize="12"
-                                                 PlaceholderText="如 mg、片、次"/>
+                                        <ComboBox ItemsSource="{Binding StandardUnits}"
+                                                  SelectedItem="{Binding Workbench.EditingField.UnitText, Mode=TwoWay}"
+                                                  Height="32" FontSize="12"
+                                                  HorizontalAlignment="Stretch"
+                                                  PlaceholderText="从标准单位字典点选（防拼写错误）"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
                                         <TextBlock Text="列宽" FontSize="11"
@@ -279,13 +281,20 @@
                                                   Height="32" FontSize="12"
                                                   HorizontalAlignment="Stretch"/>
                                     </StackPanel>
-                                    <StackPanel Grid.Row="4" Grid.Column="0" Spacing="3">
-                                        <TextBlock Text="下拉选项（每行一个）" FontSize="11"
+                                    <StackPanel Grid.Row="4" Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="引用主数据字典（限制用户输入）" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                                        <ComboBox ItemsSource="{Binding DictCategories}"
+                                                  SelectedItem="{Binding SelectedFieldDictCategory, Mode=TwoWay}"
+                                                  Height="32" FontSize="12"
+                                                  HorizontalAlignment="Stretch"
+                                                  PlaceholderText="选择主数据字典自动限制可选项"/>
+                                        <TextBlock Text="下拉选项（引用字典后自动同步，或手工每行一个）" FontSize="10"
                                                    Foreground="{DynamicResource SemiColorText2}"/>
                                         <TextBox Text="{Binding Workbench.EditingField.OptionsText, Mode=TwoWay}"
                                                  AcceptsReturn="True" TextWrapping="Wrap"
-                                                 MinHeight="58" MaxHeight="100" FontSize="12"
-                                                 PlaceholderText="例如：口服&#10;静脉滴注"/>
+                                                 MinHeight="46" MaxHeight="84" FontSize="12"
+                                                 PlaceholderText="引用字典后自动填充"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="4" Grid.Column="1" Spacing="6">
                                                     <TextBlock Text="字段属性" FontSize="11"

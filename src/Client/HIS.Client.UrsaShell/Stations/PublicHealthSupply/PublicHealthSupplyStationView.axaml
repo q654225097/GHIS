@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.PublicHealthSupply"
+             x:Class="HIS.Client.UrsaShell.Stations.PublicHealthSupply.PublicHealthSupplyStationView"
+             x:DataType="local:PublicHealthSupplyViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="公卫报卡 · 院后随访 · 高值耗材 UDI · 临床营养中心 (P1)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding SummaryBanner}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: 公卫多报卡强触发 -->
+            <TabItem Header="公卫多报卡 (ICD-10 强触发)">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="诊断 ICD-10 法定报卡检测" FontWeight="Bold"/>
+                            <TextBox Text="{Binding PhPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <TextBox Text="{Binding PhIcdCode, Mode=TwoWay}" PlaceholderText="ICD-10 编码 (如 A15.0 / C34.9 / A05.0)"/>
+                            <Button Content="执行诊断强触发评估" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding TriggerPhCardCommand}"/>
+                            <Button Content="提交选中待报卡" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding SubmitPhCardCommand}"/>
+                            <Button Content="公卫科审核通过选中报卡" HorizontalAlignment="Stretch" Command="{Binding AuditPhCardCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding PhCards}" SelectedItem="{Binding SelectedPhCard, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="报卡号" Binding="{Binding CardNo}" Width="145"/>
+                                <DataGridTextColumn Header="类别" Binding="{Binding CardType}" Width="105"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="ICD-10" Binding="{Binding IcdCode}" Width="80"/>
+                                <DataGridTextColumn Header="疾病名称" Binding="{Binding DiseaseName}" Width="150"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 院后专病随访与 30 天再入院 -->
+            <TabItem Header="院后专病随访与 30 天再入院">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="出院专病随访建档" FontWeight="Bold"/>
+                            <TextBox Text="{Binding FuPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <TextBox Text="{Binding FuSpecialtyTag, Mode=TwoWay}" PlaceholderText="专病标签 (如 心衰/PCI术后/糖尿病)"/>
+                            <Button Content="生成 7 天院后随访计划" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateFollowupCommand}"/>
+                            <Button Content="完成选中随访并登记满意度" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding CompleteFollowupCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding FollowupPlans}" SelectedItem="{Binding SelectedFollowup, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="随访单号" Binding="{Binding PlanNo}" Width="145"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="专病标签" Binding="{Binding SpecialtyTag}" Width="130"/>
+                                <DataGridTextColumn Header="计划日期" Binding="{Binding PlannedDateInt}" Width="95"/>
+                                <DataGridTextColumn Header="方式" Binding="{Binding Channel}" Width="80"/>
+                                <DataGridTextColumn Header="满意度" Binding="{Binding SatisfactionScore}" Width="75"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 高值耗材 UDI 消耗-记账-代销对账 -->
+            <TabItem Header="高值耗材 UDI 消耗 · 记账 · 代销对账">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="GS1 UDI 扫码入库与手术消耗记账" FontWeight="Bold"/>
+                            <TextBox Text="{Binding UdiFull, Mode=TwoWay}" PlaceholderText="GS1 UDI 码 (01)...(17)...(10)...(21)..."/>
+                            <TextBox Text="{Binding UdiMaterialName, Mode=TwoWay}" PlaceholderText="高值耗材名称"/>
+                            <TextBox Text="{Binding UdiSupplier, Mode=TwoWay}" PlaceholderText="代销供应商名称"/>
+                            <Button Content="解析 GS1 UDI 并入库" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding ReceiveUdiCommand}"/>
+                            <Button Content="手术扫码消耗并自动记账" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding ConsumeUdiCommand}"/>
+                            <Button Content="生成当前供应商代销月结对账单" HorizontalAlignment="Stretch" Command="{Binding GenerateStatementCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding UdiItems}" SelectedItem="{Binding SelectedUdi, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="UDI-DI" Binding="{Binding UdiDi}" Width="135"/>
+                                <DataGridTextColumn Header="耗材名称" Binding="{Binding MaterialName}" Width="165"/>
+                                <DataGridTextColumn Header="供应商" Binding="{Binding SupplierName}" Width="120"/>
+                                <DataGridTextColumn Header="效期" Binding="{Binding ExpiryDateInt}" Width="85"/>
+                                <DataGridTextColumn Header="计费单价" Binding="{Binding UnitPrice}" Width="85"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: 临床营养筛查 NRS-2002 与配餐 -->
+            <TabItem Header="临床营养筛查 NRS-2002 与膳食配餐">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="NRS-2002 营养风险筛查与配餐" FontWeight="Bold"/>
+                            <TextBox Text="{Binding NutPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <NumericUpDown Grid.Column="0" Value="{Binding NutDiseaseScore, Mode=TwoWay}" Minimum="0" Maximum="3" FormatString="疾病0分"/>
+                                <NumericUpDown Grid.Column="1" Value="{Binding NutImpairedScore, Mode=TwoWay}" Minimum="0" Maximum="3" FormatString="营养0分"/>
+                            </Grid>
+                            <NumericUpDown Value="{Binding NutAgeYears, Mode=TwoWay}" Minimum="1" Maximum="120" FormatString="年龄0岁"/>
+                            <Button Content="提交 NRS-2002 营养风险筛查" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding SubmitNrs2002Command}"/>
+                            <Button Content="下达糖尿病/低盐治疗膳食配餐单" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding CreateDietOrderCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding NrsScreenings}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="95"/>
+                                <DataGridTextColumn Header="疾病分" Binding="{Binding DiseaseSeverityScore}" Width="70"/>
+                                <DataGridTextColumn Header="营养分" Binding="{Binding NutritionalImpairedScore}" Width="70"/>
+                                <DataGridTextColumn Header="总分" Binding="{Binding TotalScore}" Width="70"/>
+                                <DataGridTextColumn Header="风险等级" Binding="{Binding RiskLevel}" Width="105"/>
+                                <DataGridTextColumn Header="建议干预" Binding="{Binding InterventionType}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>
