@@ -101,7 +101,7 @@ public class TreatmentAppointmentItem : ClientModelBase
     public string Status { get; set; } = "BOOKED";
 
     public string ScheduledTimeText => ScheduledStartMs > 0
-        ? $"{DateTimeOffset.FromUnixTimeMilliseconds(ScheduledStartMs).ToLocalTime():yyyy-MM-dd HH:mm} - {DateTimeOffset.FromUnixTimeMilliseconds(ScheduledEndMs).ToLocalTime():HH:mm}"
+        ? $"{DateTimeOffset.FromUnixTimeMilliseconds(ScheduledStartMs).ToLocalTime():yyyy-MM-dd HH:mm:ss} ~ {DateTimeOffset.FromUnixTimeMilliseconds(ScheduledEndMs).ToLocalTime():yyyy-MM-dd HH:mm:ss}"
         : "-";
 }
 
@@ -121,7 +121,7 @@ public class TreatmentExecutionRecordItem : ClientModelBase
     public string Status { get; set; } = "FINISHED";
 
     public string ActualTimeText => ActualStartMs > 0
-        ? $"{DateTimeOffset.FromUnixTimeMilliseconds(ActualStartMs).ToLocalTime():yyyy-MM-dd HH:mm} - {DateTimeOffset.FromUnixTimeMilliseconds(ActualEndMs).ToLocalTime():HH:mm}"
+        ? $"{DateTimeOffset.FromUnixTimeMilliseconds(ActualStartMs).ToLocalTime():yyyy-MM-dd HH:mm:ss} ~ {DateTimeOffset.FromUnixTimeMilliseconds(ActualEndMs).ToLocalTime():yyyy-MM-dd HH:mm:ss}"
         : "-";
 }
 

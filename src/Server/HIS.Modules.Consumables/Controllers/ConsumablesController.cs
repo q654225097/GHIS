@@ -426,6 +426,18 @@ WHERE 1=1";
         {
             return ApiResponse<CsmSterilePackage>.Fail(400, "灭菌包名称不能为空");
         }
+        if (req.Contents == null || req.Contents.Count == 0)
+        {
+            return ApiResponse<CsmSterilePackage>.Fail(400, "灭菌包不能是空包，请至少包含一件器械或辅料明细");
+        }
+        using (var mdmConn = _connFactory.CreateConnection())
+        {
+            var packMdm = await mdmConn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT pack_code AS PackCode, is_active AS IsActive FROM mdm_cssd_packs WHERE pack_code = @Key OR pack_name = @Key LIMIT 1",
+                new { Key = req.PackageName.Trim() });
+            if (packMdm != null && Convert.ToInt32(packMdm.IsActive) == 0)
+                return ApiResponse<CsmSterilePackage>.Fail(409, $"CSSD 器械包主数据 [{req.PackageName}] 已停用，禁止组装");
+        }
         var pkg = await _service.CreateSterilePackageAsync(req, CurrentUserId(), _userSession?.DisplayName, ct);
         return ApiResponse<CsmSterilePackage>.Success(pkg, "灭菌包已创建");
     }

@@ -39,4 +39,6 @@ public class IpdEncounter : BaseEntity
 	public long? AcceptedAtMs { get; set; }
 
 	public string? AcceptedBy { get; set; }
+
+	public long AdmitTimeMs { get; set; }
 }

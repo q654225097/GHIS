@@ -33,9 +33,9 @@ internal static class FinanceSettlementService
         var medTechRows = (await conn.QueryAsync<decimal>(new CommandDefinition(
             """
             SELECT fee_amount FROM mtc_service_requests
-            WHERE source_visit_id = @VisitId AND source_type = 'OPD' AND is_fee_confirmed = 0 AND status = 0
+            WHERE source_visit_id = @VisitId AND patient_id = @PatientId AND source_type = 'OPD' AND is_fee_confirmed = 0 AND status = 0
             """,
-            new { VisitId = visitId }, transaction, cancellationToken: ct))).ToList();
+            new { VisitId = visitId, PatientId = patientId }, transaction, cancellationToken: ct))).ToList();
 
         if (rows.Count == 0 && medTechRows.Count == 0)
             return (0m, "没有已通过药师前置审方的处方或待缴费医技项目，禁止收费。请先完成审方");

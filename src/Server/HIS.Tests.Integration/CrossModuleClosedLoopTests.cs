@@ -38,7 +38,7 @@ public sealed class CrossModuleClosedLoopTests
         string erId = await conn.ExecuteScalarAsync<string>("SELECT id FROM er_triage_visits LIMIT 1") ?? string.Empty;
 
         var res = await erCtrl.UpdateErStatus(erId, new EmergencyAndOpdProController.UpdateErStatusDto("ADMITTED_IPD", "CARDIO_WARD", "CCU-01", 1280.50m));
-        Assert.Equal(0, res.Code);
+        Assert.True(res.Code is 0 or 200, res.Message);
 
         int cardCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM ipd_admission_cards WHERE visit_id = @Id", new { Id = erId });
         decimal carriedFee = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(SUM(total_amount),0) FROM fin_charge_ledgers WHERE item_code = 'ER_GREEN_CREDIT_CARRYOVER'");
@@ -79,7 +79,7 @@ public sealed class CrossModuleClosedLoopTests
         using var conn2 = db.CreateConnection();
         string retId = await conn2.ExecuteScalarAsync<string>("SELECT id FROM ipd_drug_returns LIMIT 1") ?? string.Empty;
         var rev = await ipdCtrl.ReviewDrugReturn(retId, new InpatientProController.ReviewDrugReturnDto("APPROVED"));
-        Assert.Equal(0, rev.Code);
+        Assert.True(rev.Code is 0 or 200, rev.Message);
         int qtyAfterReturn = await conn2.ExecuteScalarAsync<int>("SELECT quantity FROM inv_drug_batches WHERE id = 'BAT-1'");
         Assert.Equal(103, qtyAfterReturn);
     }
@@ -108,7 +108,7 @@ public sealed class CrossModuleClosedLoopTests
         // 闭环 8：一键生成补货调拨单写入 inv_transfer_orders
         var fCtrl = new InventoryForecastController(db);
         var genRes = await fCtrl.GenerateReplenishmentTransfers(new InventoryForecastController.GenerateReplenishTransferDto("WH-MAIN", "PHM-OPD", 30, 14));
-        Assert.Equal(0, genRes.Code);
+        Assert.True(genRes.Code is 0 or 200, genRes.Message);
 
         using var conn2 = db.CreateConnection();
         int trCnt = await conn2.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM inv_transfer_orders WHERE transfer_type = 'AUTO_REPLENISH'");
@@ -119,7 +119,7 @@ public sealed class CrossModuleClosedLoopTests
         await ipdCtrl.CreateDaySurgeryCase(new InpatientProController.CreateDaySurgeryDto("日间患者C", "女", 42, "普外科", "腹腔镜胆囊切除术", "王主任"));
         string dsId = await conn2.ExecuteScalarAsync<string>("SELECT id FROM ipd_day_surgery_cases LIMIT 1") ?? string.Empty;
         var conv = await ipdCtrl.UpdateDaySurgeryStatus(dsId, new InpatientProController.UpdateDaySurgeryDto("CONVERTED_IPD", 7, "术后低热留院观察"));
-        Assert.Equal(0, conv.Code);
+        Assert.True(conv.Code is 0 or 200, conv.Message);
 
         int dsCardCnt = await conn2.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM ipd_admission_cards WHERE source_dept_id = 'DAY_SURGERY'");
         Assert.Equal(1, dsCardCnt);

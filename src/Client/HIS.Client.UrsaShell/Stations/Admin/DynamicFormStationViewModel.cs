@@ -329,6 +329,7 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
             return;
         }
         bool ok = await Workbench.SaveEditingFieldAndApplyAsync();
+        Workbench.SyncPrescriptionColumnsFromEditingTemplate();
         NotifyDesignerState();
         _shell?.ShowToast(Workbench.SystemNotice, ok ? "Success" : "Warning");
     }
@@ -356,6 +357,7 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
             return;
         }
 
+        Workbench.SyncPrescriptionColumnsFromEditingTemplate();
         await LoadBoTypesAsync();
         if (SelectedBoType != null) await LoadBoRecordsAsync(SelectedBoType.EntityType);
         RebuildFiltered();
@@ -510,6 +512,19 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
         set => SetField(ref _selectedBoRecord, value);
     }
 
+    private void SeedLocalDefaultBoTypes()
+    {
+        BoTypes.Clear();
+        BoTypes.Add(new BoTypeOption { EntityType = "OPD_PRESCRIPTION_ITEM", DisplayName = "门诊处方明细", TableName = "opd_prescription_items", ModuleName = "门诊医生站", BoundSchemaCount = 1 });
+        BoTypes.Add(new BoTypeOption { EntityType = "OPD_VISIT", DisplayName = "门诊就诊单", TableName = "opd_visits", ModuleName = "门诊医生站", BoundSchemaCount = 3 });
+        BoTypes.Add(new BoTypeOption { EntityType = "OPD_PRESCRIPTION", DisplayName = "门诊处方单", TableName = "opd_prescriptions", ModuleName = "门诊/药房", BoundSchemaCount = 1 });
+        BoTypes.Add(new BoTypeOption { EntityType = "IPD_ENCOUNTER", DisplayName = "住院在院记录", TableName = "ipd_encounters", ModuleName = "住院医护站", BoundSchemaCount = 1 });
+        BoTypes.Add(new BoTypeOption { EntityType = "PAT_PATIENT", DisplayName = "患者主索引档案", TableName = "pat_patients", ModuleName = "患者主索引", BoundSchemaCount = 1 });
+        BoTypes.Add(new BoTypeOption { EntityType = "MTC_SERVICE_REQUEST", DisplayName = "医技检验检查申请单", TableName = "mtc_service_requests", ModuleName = "医技工作站", BoundSchemaCount = 1 });
+        BoTypes.Add(new BoTypeOption { EntityType = "HR_EMPLOYEE", DisplayName = "医院职工人事档案", TableName = "hr_employees", ModuleName = "人力资源管理", BoundSchemaCount = 1 });
+        BoTypes.Add(new BoTypeOption { EntityType = "ORD_MEDICAL_ORDER", DisplayName = "住院临床医嘱", TableName = "ord_medical_orders", ModuleName = "住院医生站", BoundSchemaCount = 1 });
+    }
+
     private async Task LoadBoTypesAsync()
     {
         try
@@ -517,13 +532,18 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
             using var http = AuthenticatedHttpClientFactory.Create();
             var res = await http.GetFromJsonAsync<ClientApiEnvelope<List<BoTypeOption>>>("/api/v4/config/bo/types", BoJsonOpts);
             BoTypes.Clear();
-            if (res?.Data != null)
+            if (res?.Data != null && res.Data.Count > 0)
             {
                 foreach (var item in res.Data) BoTypes.Add(item);
             }
-            SyncSelectedBoTypeFromEditingTemplate();
         }
         catch { }
+
+        if (BoTypes.Count == 0)
+        {
+            SeedLocalDefaultBoTypes();
+        }
+        SyncSelectedBoTypeFromEditingTemplate();
     }
 
     private async Task LoadBoRecordsAsync(string entityType)
@@ -553,6 +573,10 @@ public sealed class DynamicFormStationViewModel : ClientModelBase, IShortcutTarg
     private void SyncSelectedBoTypeFromEditingTemplate()
     {
         string? et = Workbench.EditingTemplate?.EntityType;
+        if (string.IsNullOrWhiteSpace(et) && FilteredTemplates.Count > 0)
+        {
+            et = FilteredTemplates[0].EntityType;
+        }
         if (string.IsNullOrWhiteSpace(et) || BoTypes.Count == 0) return;
         if (string.Equals(et, "OPD", StringComparison.OrdinalIgnoreCase)) et = "OPD_VISIT";
         else if (string.Equals(et, "IPD", StringComparison.OrdinalIgnoreCase)) et = "IPD_ENCOUNTER";

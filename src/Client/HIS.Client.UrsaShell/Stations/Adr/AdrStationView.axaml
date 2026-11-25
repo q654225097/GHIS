@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.Adr"
+             x:Class="HIS.Client.UrsaShell.Stations.Adr.AdrStationView"
+             x:DataType="local:AdrStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <TextBlock Text="药品不良反应监测中心 (ADR / 药物警戒)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="上报国家监测中心" Classes="Warning" Height="30" Command="{Binding SubmitExternalCommand}"/>
+                    <Button Content="刷新" Classes="Primary" Height="30" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="380,*" ColumnSpacing="12">
+            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="14">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="新增院内 ADR 不良反应填报" FontSize="14" FontWeight="Bold"/>
+                    <TextBox Text="{Binding PatientId, Mode=TwoWay}" PlaceholderText="患者ID" Height="30"/>
+                    <TextBox Text="{Binding DrugName, Mode=TwoWay}" PlaceholderText="怀疑药品名称" Height="30"/>
+                    <TextBox Text="{Binding ReactionName, Mode=TwoWay}" PlaceholderText="不良反应症状名称" Height="30"/>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <ComboBox Grid.Column="0" ItemsSource="{Binding SeverityOptions}" SelectedItem="{Binding Severity, Mode=TwoWay}" Height="30"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding CausalityOptions}" SelectedItem="{Binding CausalityGrade, Mode=TwoWay}" Height="30"/>
+                    </Grid>
+                    <TextBox Text="{Binding Outcome, Mode=TwoWay}" PlaceholderText="转归结局" Height="30"/>
+                    <TextBox Text="{Binding ReactionDesc, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" PlaceholderText="经过及处理情况"/>
+                    <Button Content="提交ADR报告（自动关联审方知识规则）" Classes="Primary" Height="34" Command="{Binding SubmitAdrCommand}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
+                <ListBox ItemsSource="{Binding Reports}" SelectedItem="{Binding SelectedReport, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="local:AdrReportVm">
+                            <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,6">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="{Binding LineSummary}" FontSize="13" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding PatientId, StringFormat='{}患者: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding CausalityGrade, StringFormat='{}关联性评价: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

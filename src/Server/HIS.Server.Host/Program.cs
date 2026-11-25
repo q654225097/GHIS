@@ -173,6 +173,8 @@ public class Program
 		RegisterRepo<FinChargeLedger>(builder.Services, "fin_charge_ledgers");
 		RegisterRepo<FinDailyClosing>(builder.Services, "fin_daily_closings");
 		RegisterRepo<FinInpatientFeeItem>(builder.Services, "fin_inpatient_fee_items");
+		RegisterRepo<OpdPatientAccount>(builder.Services, "opd_patient_accounts");
+		RegisterRepo<OpdAccountLedger>(builder.Services, "opd_account_ledgers");
 		RegisterRepo<InvDrugTraceCode>(builder.Services, "inv_drug_trace_codes");
 		RegisterRepo<InvStockTake>(builder.Services, "inv_stock_takes");
 		RegisterRepo<InvStockTakeLine>(builder.Services, "inv_stock_take_lines");
@@ -385,6 +387,7 @@ public class Program
 		builder.Services.AddScoped<ConsumableSupplyService>();
 		builder.Services.AddScoped<HIS.Modules.Finance.Services.FinanceSettlementContract>();
 		builder.Services.AddScoped<IFinanceSettlementContract>((Func<IServiceProvider, IFinanceSettlementContract>)((IServiceProvider sp) => sp.GetRequiredService<HIS.Modules.Finance.Services.FinanceSettlementContract>()));
+		builder.Services.AddScoped<IOpdServicePaymentProofContract>((Func<IServiceProvider, IOpdServicePaymentProofContract>)((IServiceProvider sp) => sp.GetRequiredService<HIS.Modules.Finance.Services.FinanceSettlementContract>()));
 		builder.Services.AddScoped<AuditLogService>();
 		builder.Services.AddScoped((Func<IServiceProvider, IAuditTrailContract>)((IServiceProvider sp) => sp.GetRequiredService<AuditLogService>()));
 		builder.Services.AddScoped<IdempotencyService>();
@@ -492,7 +495,6 @@ public class Program
 			bool isAnonymous = HttpMethods.IsOptions(context.Request.Method)
 				|| path == "/"
 				|| path.Equals("/health", StringComparison.OrdinalIgnoreCase)
-				|| path.StartsWithSegments("/hubs")
 				|| path.Equals("/api/v4/platform/auth/login", StringComparison.OrdinalIgnoreCase)
 				|| path.Equals("/api/v4/platform/auth/refresh", StringComparison.OrdinalIgnoreCase)
 				|| path.Equals("/api/v4/platform/auth/contexts", StringComparison.OrdinalIgnoreCase);

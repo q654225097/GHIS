@@ -22,7 +22,7 @@ public class CommonOrderSetItem
     public List<(string Name, string Spec, string Dose, string Unit, string Route, string Freq, decimal Price, string SkinTest)> Items { get; set; } = new();
 }
 
-public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
+public sealed partial class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
 {
     private const int OrdersWorkspace = 0;
     private const int NotesWorkspace = 1;
@@ -106,7 +106,18 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
         GoPrevPageCommand = new RelayCommand(() => _shell?.ShowToast("当前已是第一页", "Info"));
         GoNextPageCommand = new RelayCommand(() => _shell?.ShowToast("医嘱记录已全部加载完成", "Info"));
         GoLastPageCommand = new RelayCommand(() => _shell?.ShowToast("已跳转到医嘱单最后一页", "Info"));
-        OpenOrderSettingsCommand = new RelayCommand(() => _shell?.ShowToast("已开启医嘱系统参数与快速录入默认值配置", "Info"));
+        OpenOrderSettingsCommand = new RelayCommand(() =>
+        {
+            if (SessionContext.Current.IsAdmin)
+            {
+                _shell?.NavigateToStation("dynamic_form");
+                _shell?.ShowToast("已进入医嘱与动态表单配置中心", "Success");
+            }
+            else
+            {
+                _shell?.ShowToast("提示：全院医嘱字典与频次参数由医务处及系统管理员统一维护；临床医师请在左侧选用标准化常用医嘱方案。", "Info");
+            }
+        });
         ApplyCommonOrderSetCommand = new RelayCommand(p =>
         {
             if (p is CommonOrderSetItem set)
@@ -115,6 +126,10 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
             }
         });
         InitCommonOrderSets();
+        if (SessionContext.Current.IsLoggedIn)
+        {
+            _ = Workbench.RefreshInpatientsFromServerAsync();
+        }
     }
 
     public WorkbenchModel Workbench { get; }
@@ -785,15 +800,22 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
         if (unitPriceVal <= 0) unitPriceVal = 18.00m;
         var totalPriceVal = unitPriceVal * QuantityInput;
 
+        var matchedDrug = Workbench.AvailableDrugsCatalog.FirstOrDefault(d =>
+            string.Equals(d.DrugName, OrderContentInput.Trim(), StringComparison.OrdinalIgnoreCase) ||
+            OrderContentInput.Trim().Contains(d.DrugName, StringComparison.OrdinalIgnoreCase));
+
         var order = new InpatientOrderModel
         {
             OrderNo = Workbench.NextInpatientId("ORD", patient.Orders.Count),
+            EncounterId = !string.IsNullOrWhiteSpace(patient.EncounterId) ? patient.EncounterId : patient.AdmissionNo,
+            ItemCode = matchedDrug?.DrugCode ?? string.Empty,
+            OrderSubType = SelectedOrderSubType.Code,
             OrderType = isLong ? "长期医嘱" : "临时医嘱",
             ItemCategory = SelectedItemCategory,
             IsUrgent = IsUrgentInput,
             StartTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
-            Content = OrderContentInput.Trim(),
-            Spec = !string.IsNullOrWhiteSpace(SpecInput) ? SpecInput : "常规规格",
+            Content = SelectedOrderSubType.Code == "DISCHARGE_MED" ? $"[出院带药] {OrderContentInput.Trim()}" : OrderContentInput.Trim(),
+            Spec = !string.IsNullOrWhiteSpace(SpecInput) ? SpecInput : (matchedDrug?.Spec ?? "常规规格"),
             SingleDose = SingleDoseInput.ToString("0.##"),
             Dose = $"{SingleDoseInput:0.##}{SelectedDoseUnit}",
             DoseUnit = SelectedDoseUnit,
@@ -818,7 +840,7 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
             StartExecTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
             DoctorName = Workbench.CurrentOperatorName,
             InputOperator = Workbench.CurrentOperatorName,
-            OrderDept = "普外二病区",
+            OrderDept = patient.AdmittingDept,
             StopDoctor = "--",
             StopReason = "--",
             Specimen = SelectedItemCategory.Contains("检") ? "全血" : "--",
@@ -848,36 +870,24 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
         OrderContentInput = string.Empty;
         QuickSearchCode = string.Empty;
         RemarkInput = string.Empty;
-        _shell?.ShowToast($"✓ 已下达{order.OrderType}「{order.Content}」，等待责任护士校对审签！", "Success");
         RaiseComputed();
     }
 
     private async Task PostOrderToServerAsync(InpatientRecordModel patient, InpatientOrderModel order)
     {
-        try
+        var (ok, msg) = await Workbench.PostOrderToServerVerifiedAsync(patient, order, (decimal)SingleDoseInput);
+        if (!ok)
         {
-            using var http = AuthenticatedHttpClientFactory.Create();
-            var termType = order.OrderType.Contains("长") ? 1 : 2;
-            var req = new
-            {
-                EncounterId = patient.AdmissionNo,
-                PatientId = patient.PatientId,
-                OrderIpdDeptId = "DEPT-IPD-01",
-                PatientWardId = "DEPT-WARD-02",
-                ExecTargetDeptId = "DEPT-WARD-02",
-                OrderTermType = termType,
-                GroupNo = patient.Orders.Count + 1,
-                OrderCategory = order.ItemCategory,
-                ItemCode = order.OrderNo,
-                ItemName = order.Content,
-                Dosage = (decimal)SingleDoseInput,
-                FrequencyCode = order.Frequency,
-                RouteCode = order.Route,
-                OrderDoctorId = Workbench.CurrentOperatorId
-            };
-            await http.PostAsJsonAsync("/api/v4/orders", req);
+            patient.Orders.Remove(order);
+            patient.ApplyOrderFilter();
+            Workbench.SyncInpatientBed(patient);
+            Workbench.NotifyInpatientChanged(patient);
+            _shell?.ShowToast($"医嘱被合规门禁拦截：{msg}", "Error");
+            RaiseComputed();
+            return;
         }
-        catch { }
+        _shell?.ShowToast($"✓ {msg}", "Success");
+        RaiseComputed();
     }
 
     private void ExecuteGroupSelectedOrders()
@@ -899,6 +909,7 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
             else if (i == selected.Count - 1) selected[i].GroupIcon = "┛";
             else selected[i].GroupIcon = "┃";
         }
+        _ = Workbench.PersistOrderGroupingAsync(patient, selected, isUngroup: false);
         _shell?.ShowToast($"✓ 成功将 {selected.Count} 条医嘱配伍成组 (组合号: {comboNo})", "Success");
     }
 
@@ -911,7 +922,9 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
         {
             item.GroupIcon = "-";
             item.GroupNo = string.Empty;
+            item.GroupComboNo = string.Empty;
         }
+        _ = Workbench.PersistOrderGroupingAsync(patient, selected, isUngroup: true);
         _shell?.ShowToast("已解除所选医嘱的成组标记", "Info");
     }
 
@@ -1229,6 +1242,10 @@ public sealed class IpdDoctorViewModel : ClientModelBase, IShortcutTarget
 
     private void OnWorkbenchPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(WorkbenchModel.SelectedInpatient))
+        {
+            _ = Workbench.LoadSelectedEncounterDetailsAsync(Workbench.SelectedInpatient);
+        }
         if (e.PropertyName is nameof(WorkbenchModel.SelectedInpatient)
             or nameof(WorkbenchModel.CanCreateInpatientOrder)
             or nameof(WorkbenchModel.CanSignSelectedProgressNotes)

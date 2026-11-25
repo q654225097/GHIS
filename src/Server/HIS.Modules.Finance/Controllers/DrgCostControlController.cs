@@ -131,7 +131,7 @@ INSERT INTO drg_benchmark_rules (
 
         // 实时聚合真实住院费用明细 fin_charge_ledgers
         decimal totalFee = await conn.ExecuteScalarAsync<decimal>(
-            "SELECT COALESCE(SUM(total_amount), 0) FROM fin_charge_ledgers WHERE visit_or_encounter_id = @EncId AND status <> 'VOIDED'",
+            "SELECT COALESCE(SUM(total_amount), 0) FROM fin_charge_ledgers WHERE visit_or_encounter_id = @EncId AND status = 1",
             new { EncId = encounterId });
 
         decimal benchmarkFee = Convert.ToDecimal(rule.benchmark_fee);

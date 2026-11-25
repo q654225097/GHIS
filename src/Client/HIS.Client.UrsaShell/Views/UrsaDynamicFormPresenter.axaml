@@ -71,10 +71,18 @@
                                           IsVisible="{Binding IsBooleanControl}"/>
 
                                 <!-- DatePicker Control -->
-                                <CalendarDatePicker SelectedDate="{Binding RuntimeDate}"
-                                                    IsEnabled="{Binding IsEditable}"
-                                                    IsVisible="{Binding IsDateControl}"
-                                                    HorizontalAlignment="Stretch" Height="32"/>
+                                <u:DatePicker SelectedDate="{Binding RuntimeDateTime}"
+                                              DisplayFormat="yyyy-MM-dd"
+                                              IsEnabled="{Binding IsEditable}"
+                                              IsVisible="{Binding IsDateControl}"
+                                              HorizontalAlignment="Stretch" Height="32"/>
+
+                                <!-- DateTimePicker Control -->
+                                <u:DateTimePicker SelectedDate="{Binding RuntimeDateTime}"
+                                                  DisplayFormat="yyyy-MM-dd HH:mm:ss"
+                                                  IsEnabled="{Binding IsEditable}"
+                                                  IsVisible="{Binding IsDateTimeControl}"
+                                                  HorizontalAlignment="Stretch" Height="32"/>
                             </Panel>
                         </u:FormItem>
                     </DataTemplate>

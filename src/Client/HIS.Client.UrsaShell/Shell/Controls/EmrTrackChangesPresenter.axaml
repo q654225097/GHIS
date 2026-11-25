@@ -1,0 +1,166 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
+             x:Class="HIS.Client.UrsaShell.Shell.Controls.EmrTrackChangesPresenter">
+
+    <Border Background="{DynamicResource SemiColorBackground1}"
+            BorderBrush="{DynamicResource SemiColorBorder}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="20">
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
+            <!-- Header: Title & Mode Toggle -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="📑 电子病历三级查房留痕审阅" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="6,2">
+                            <TextBlock Text="三级医师查房留痕规范" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="患者: 01床 · 张晓峰 (男 · 42岁) · 文书: 入院记录 (首次病程)" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+
+                <!-- Mode Switcher -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Name="BtnTrackMode" Content="📝 留痕对比模式" Classes="Primary" Height="30" Click="OnTrackModeClick"/>
+                    <Button Name="BtnCleanMode" Content="📄 纯净定稿模式" Classes="Secondary" Height="30" Click="OnCleanModeClick"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Revision Legend Bar -->
+            <Border Grid.Row="1"
+                    Background="{DynamicResource SemiColorBackground0}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="12,8"
+                    Margin="0,0,0,14">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Width="12" Height="12" Background="#FEE2E2" BorderBrush="#DC2626" BorderThickness="1" CornerRadius="2"/>
+                            <TextBlock Text="删除内容 (红色中划线)" FontSize="11" Foreground="#DC2626"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Width="12" Height="12" Background="#DCFCE7" BorderBrush="#059669" BorderThickness="1" CornerRadius="2"/>
+                            <TextBlock Text="新增内容 (绿色下划线)" FontSize="11" Foreground="#059669"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Width="12" Height="12" Background="#EDE9FE" BorderBrush="#7C3AED" BorderThickness="1" CornerRadius="2"/>
+                            <TextBlock Text="主任审签意见" FontSize="11" Foreground="#7C3AED"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="1" Text="符合《电子病历应用水平分级》留痕规范" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- Content Area: Track Changes vs Clean Mode -->
+            <ScrollViewer Grid.Row="2">
+                <StackPanel Name="ContentPanel" Spacing="14">
+                    <!-- Section: Chief Complaint -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="14">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="【主诉】" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                            <WrapPanel Name="ChiefComplaintTrack" Orientation="Horizontal">
+                                <TextBlock Text="活动后胸骨后闷痛 3 个月，" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                                <Border Background="#FEE2E2" CornerRadius="2" Padding="2,0" Margin="2,0">
+                                    <TextBlock Text="加重 2 天" TextDecorations="Strikethrough" Foreground="#DC2626" FontSize="13"/>
+                                </Border>
+                                <Border Background="#DCFCE7" CornerRadius="2" Padding="2,0" Margin="2,0">
+                                    <TextBlock Text="放射至左侧肩背部伴气促加重 3 天" TextDecorations="Underline" Foreground="#059669" FontWeight="SemiBold" FontSize="13"/>
+                                </Border>
+                                <TextBlock Text="。" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Section: Present Illness -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="14">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="【现病史】" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                            <WrapPanel Name="PresentIllnessTrack" Orientation="Horizontal">
+                                <TextBlock Text="患者于 3 个月前快步行走或登楼时突发胸骨后压榨样闷痛，每次持续约 3~5 分钟，休息后可自行缓解。" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                                <Border Background="#FEE2E2" CornerRadius="2" Padding="2,0" Margin="2,0">
+                                    <TextBlock Text="未予重视及系统服药治疗。" TextDecorations="Strikethrough" Foreground="#DC2626" FontSize="13"/>
+                                </Border>
+                                <Border Background="#DCFCE7" CornerRadius="2" Padding="2,0" Margin="2,0">
+                                    <TextBlock Text="自服速效救心丸每次 5 粒症状缓解不明显，入院前 3 天静息状态下亦发作，伴胸闷大汗。" TextDecorations="Underline" Foreground="#059669" FontWeight="SemiBold" FontSize="13"/>
+                                </Border>
+                                <TextBlock Text="查体：BP 148/92 mmHg，双肺呼吸音清，心界向左下扩大，HR 78 bpm，各瓣膜听诊区未闻及杂音。" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Section: Diagnosis & Attending Bubble -->
+                    <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="14">
+                        <Grid ColumnDefinitions="*,300">
+                            <StackPanel Grid.Column="0" Spacing="6" Margin="0,0,12,0">
+                                <TextBlock Text="【初步诊断】" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="1. 冠状动脉粥样硬化性心脏病" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                                    <WrapPanel Orientation="Horizontal">
+                                        <Border Background="#FEE2E2" CornerRadius="2" Padding="2,0" Margin="2,0">
+                                            <TextBlock Text="   - 稳定型心绞痛" TextDecorations="Strikethrough" Foreground="#DC2626" FontSize="13"/>
+                                        </Border>
+                                        <Border Background="#DCFCE7" CornerRadius="2" Padding="2,0" Margin="2,0">
+                                            <TextBlock Text="   - 不稳定型心绞痛 (初发劳力型，心功能 II 级)" TextDecorations="Underline" Foreground="#059669" FontWeight="SemiBold" FontSize="13"/>
+                                        </Border>
+                                    </WrapPanel>
+                                    <TextBlock Text="2. 原发性高血压 2 级 (高危组)" FontSize="13" Foreground="{DynamicResource SemiColorText0}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Revision Bubble by Attending Doctor -->
+                            <Border Grid.Column="1" Background="#F8FAFC" BorderBrush="#059669" BorderThickness="1.5" CornerRadius="6" Padding="10">
+                                <StackPanel Spacing="4">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="💬 主治医师审签批注" FontSize="11" FontWeight="Bold" Foreground="#059669"/>
+                                        <TextBlock Grid.Column="1" Text="2026-11-24 10:15" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                    </Grid>
+                                    <TextBlock Text="李华 (主治医师):" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText0}"/>
+                                    <TextBlock Text="患者近3天静息状态下频繁发作胸闷，肌钙蛋白微量升高，符合不稳定型心绞痛特征，已订正初步诊断及放射痛描述，建议尽快安排冠脉造影 (CAG)。"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SemiColorText1}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Signature Bar: Three-Level Signatures -->
+            <Border Grid.Row="3"
+                    Background="{DynamicResource SemiColorBackground0}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="14,10"
+                    Margin="0,14,0,0">
+                <Grid ColumnDefinitions="*,*,*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock Text="1. 经治医师 (住院医师):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="王明 (住院医师) ✅ 已签署" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="2. 主治医师 (查房审签):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="李华 (主治医师) ✍ 待审签" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Spacing="2">
+                        <TextBlock Text="3. 主任/副主任医师 (终审):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBlock Text="张志刚 (主任医师) ⏳ 待终审" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
+                        <Button Content="退回修改" Classes="Danger" Height="32"/>
+                        <Button Content="接受全部留痕并审签 (F4)" Classes="Primary" Height="32"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

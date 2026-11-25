@@ -25,19 +25,22 @@ public sealed class MedTechReportController : ControllerBase
     private readonly IRepository<MtcDiagnosticReport> _rptRepo;
     private readonly IUserSession? _session;
     private readonly IAuditTrailContract? _auditTrail;
+    private readonly IClinicalAlertPublisher? _alertPublisher;
 
     public MedTechReportController(
         IDbConnectionFactory connFactory,
         IRepository<MtcReportTemplate> tplRepo,
         IRepository<MtcDiagnosticReport> rptRepo,
         IUserSession? session = null,
-        IAuditTrailContract? auditTrail = null)
+        IAuditTrailContract? auditTrail = null,
+        IClinicalAlertPublisher? alertPublisher = null)
     {
         _connFactory = connFactory;
         _tplRepo = tplRepo;
         _rptRepo = rptRepo;
         _session = session;
         _auditTrail = auditTrail;
+        _alertPublisher = alertPublisher;
     }
 
     private string ActorId => _session?.UserId?.Trim() ?? "SYSTEM";
@@ -493,9 +496,12 @@ public sealed class MedTechReportController : ControllerBase
     [HttpPost("{id}/approve")]
     public async Task<ApiResponse<MtcDiagnosticReport>> ApproveAndSign(string id, [FromBody] SaveReportContentDto? req, CancellationToken ct)
     {
+        string activeRole = RoleCode.Normalize(_session?.RoleCode);
+        if (string.IsNullOrWhiteSpace(_session?.UserId) || activeRole is not (RoleCode.MedTech or RoleCode.Admin))
+            return ApiResponse<MtcDiagnosticReport>.Fail(403, "当前岗位无权审签医技报告");
         var rpt = await _rptRepo.GetByIdAsync(id, ct);
         if (rpt == null) return ApiResponse<MtcDiagnosticReport>.Fail(404, "医技报告不存在");
-        if (rpt.Status == "SIGNED") return ApiResponse<MtcDiagnosticReport>.Fail(409, "报告已审签发布");
+        if (rpt.Status != "PENDING_REVIEW") return ApiResponse<MtcDiagnosticReport>.Fail(409, "仅待审签的报告可以发布");
 
         long now = SystemTime.UtcNowMs;
         if (req != null)
@@ -506,6 +512,10 @@ public sealed class MedTechReportController : ControllerBase
             rpt.IsCriticalValue = (short)(req.IsCriticalValue ? 1 : 0);
         }
 
+        string? reportSummary = string.IsNullOrWhiteSpace(rpt.DiagnosisImpression) ? rpt.FindingsSummary : rpt.DiagnosisImpression;
+        if (string.IsNullOrWhiteSpace(reportSummary))
+            return ApiResponse<MtcDiagnosticReport>.Fail(400, "须填写实际报告所见或诊断结论后才能审签");
+
         rpt.ReviewerId = ActorId;
         rpt.ReviewerName = ActorName;
         rpt.ReviewedAtMs = now;
@@ -513,56 +523,84 @@ public sealed class MedTechReportController : ControllerBase
         rpt.SignatureHash = CryptoHelper.ComputeSm3($"{rpt.Id}|{rpt.ReportNo}|{rpt.ContentJson}|{rpt.WriterId}|{ActorId}|{now}");
         rpt.UpdatedAtMs = now;
         rpt.UpdatedBy = ActorId;
-        await _rptRepo.UpdateAsync(rpt, ct);
-
-        // 回写医技申请单状态与报告摘要
-        if (!string.IsNullOrWhiteSpace(rpt.ServiceRequestId))
+        MedtechCriticalValue? alert = null;
+        MtcServiceRequest? sourceRequest = null;
+        ApiResponse<MtcDiagnosticReport>? rejected;
+        try
         {
-            using var conn = _connFactory.CreateConnection();
-            await conn.ExecuteAsync(@"
-                UPDATE mtc_service_requests
-                SET status = 3, report_summary = @Summary, is_critical_value = @Crit,
-                    executed_at_ms = COALESCE(executed_at_ms, @Now), updated_at_ms = @Now, updated_by = @Actor
-                WHERE id = @ReqId",
-                new
-                {
-                    Summary = rpt.DiagnosisImpression ?? rpt.FindingsSummary ?? "已发布诊断报告",
-                    Crit = rpt.IsCriticalValue,
-                    Now = now,
-                    Actor = ActorId,
-                    ReqId = rpt.ServiceRequestId
-                });
-        }
-
-                // 闭环：医技诊断报告双签发布且标记危急值时，自动向 medtech_critical_values 插入临床双签工单
-        if (rpt.IsCriticalValue == 1)
-        {
-            using var cvConn = _connFactory.CreateConnection();
-            int cvExists = await cvConn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM medtech_critical_values WHERE report_id = @Rid", new { Rid = rpt.Id });
-            if (cvExists == 0)
+            rejected = await _connFactory.ExecuteInTransactionAsync<ApiResponse<MtcDiagnosticReport>?>(async token =>
             {
-                await cvConn.ExecuteAsync(@"
-                    INSERT INTO medtech_critical_values
-                    (id, report_id, source_type, visit_or_encounter_id, patient_id, item_code, item_name, critical_value_text, published_by, published_at_ms, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
-                    VALUES
-                    (@Id, @Rid, @Src, @Enc, @Pat, @Code, @Name, @Text, @Pub, @Now, 'PUBLISHED', 1, @Now, @Actor, @Now, @Actor, 1)",
-                    new
+                using var conn = _connFactory.CreateConnection();
+                var tx = _connFactory.CurrentTransaction;
+                if (!string.IsNullOrWhiteSpace(rpt.ServiceRequestId))
+                {
+                    sourceRequest = await conn.QuerySingleOrDefaultAsync<MtcServiceRequest>(new CommandDefinition(
+                        "SELECT * FROM mtc_service_requests WHERE id = @Id", new { Id = rpt.ServiceRequestId }, tx, cancellationToken: token));
+                    if (sourceRequest == null || sourceRequest.PatientId != rpt.PatientId || string.IsNullOrWhiteSpace(sourceRequest.SourceVisitId))
+                        return ApiResponse<MtcDiagnosticReport>.Fail(409, "报告、申请和患者未正确关联，请重新核对原申请");
+                    if (activeRole != RoleCode.Admin && sourceRequest.ExecMedTechDeptId != _session.ActiveDeptId)
+                        return ApiResponse<MtcDiagnosticReport>.Fail(403, "不能审签其他医技科室的申请报告");
+                    if (sourceRequest.Status != 2 || sourceRequest.IsFeeConfirmed != 1)
+                        return ApiResponse<MtcDiagnosticReport>.Fail(409, "医技申请必须完成真实核收且尚未发布报告");
+
+                    const string sourceCheck = """
+                        SELECT COUNT(*) FROM (
+                            SELECT id FROM opd_visits WHERE @Source = 'OPD' AND id = @Visit AND patient_id = @Patient
+                            UNION ALL
+                            SELECT id FROM ipd_encounters WHERE @Source = 'IPD' AND id = @Visit AND patient_id = @Patient
+                        ) AS linked_visit
+                        """;
+                    var sourceMatches = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sourceCheck,
+                        new { Source = sourceRequest.SourceType, Visit = sourceRequest.SourceVisitId, Patient = rpt.PatientId },
+                        tx, cancellationToken: token));
+                    if (sourceMatches != 1)
+                        return ApiResponse<MtcDiagnosticReport>.Fail(409, "申请未关联到同一患者的有效就诊记录");
+
+                    int updated = await conn.ExecuteAsync(new CommandDefinition("""
+                        UPDATE mtc_service_requests
+                        SET status = 3, report_summary = @Summary, is_critical_value = @Critical,
+                            executed_at_ms = @Now, updated_at_ms = @Now, updated_by = @Actor, version_no = version_no + 1
+                        WHERE id = @Id AND status = 2 AND is_fee_confirmed = 1 AND patient_id = @Patient
+                        """, new { Id = sourceRequest.Id, Summary = reportSummary, Critical = rpt.IsCriticalValue, Now = now,
+                            Actor = ActorId, Patient = rpt.PatientId }, tx, cancellationToken: token));
+                    if (updated != 1)
+                        return ApiResponse<MtcDiagnosticReport>.Fail(409, "医技申请状态已变化，请刷新后重试");
+
+                    if (rpt.IsCriticalValue == 1)
                     {
-                        Id = Guid.NewGuid().ToString("D"),
-                        Rid = rpt.Id,
-                        Src = "IPD",
-                        Enc = rpt.ServiceRequestId ?? rpt.Id,
-                        Pat = rpt.PatientId ?? rpt.PatientName,
-                        Code = rpt.ExamItemCode ?? "MTC_RPT",
-                        Name = rpt.ExamItemName,
-                        Text = rpt.DiagnosisImpression ?? rpt.FindingsSummary ?? "危急值报告待临床双签确认",
-                        Pub = ActorName,
-                        Now = now,
-                        Actor = ActorId
-                    });
+                        alert = new MedtechCriticalValue
+                        {
+                            ReportId = rpt.Id, SourceType = sourceRequest.SourceType, VisitOrEncounterId = sourceRequest.SourceVisitId,
+                            PatientId = sourceRequest.PatientId, ItemCode = sourceRequest.ServiceItemCode, ItemName = rpt.ExamItemName,
+                            CriticalValueText = reportSummary.Trim(), PublishedBy = ActorId, PublishedAtMs = now,
+                            CreatedBy = ActorId, UpdatedBy = ActorId
+                        };
+                        var alertRepo = new DapperRepository<MedtechCriticalValue>(_connFactory, "medtech_critical_values");
+                        await alertRepo.InsertAsync(alert, token);
+                    }
+                }
+                if (await _rptRepo.UpdateAsync(rpt, token) != 1)
+                    throw new DbConcurrencyException("mtc_diagnostic_reports", id, "医技报告状态已变化");
+                return null;
+            }, ct);
+        }
+        catch (DbConcurrencyException)
+        {
+            return ApiResponse<MtcDiagnosticReport>.Fail(409, "报告已被其他人处理，请刷新后重试");
+        }
+        if (rejected != null) return rejected;
+
+        if (_alertPublisher != null && alert != null && sourceRequest != null)
+        {
+            try
+            {
+                await _alertPublisher.PublishReportCriticalValueAsync(alert.Id, sourceRequest.OrderDeptId, sourceRequest.OrderWardId);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning("Critical value notification failed: {0}", ex.GetType().Name);
             }
         }
-
         // 联动预住院评估闭环：双签发布后自动更新院前检查进度；若命中危急值或P0规则则立即中断并锁停未做检查
         using (var paConn = _connFactory.CreateConnection())
         {

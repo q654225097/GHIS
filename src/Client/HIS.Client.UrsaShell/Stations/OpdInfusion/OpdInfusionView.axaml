@@ -1,0 +1,229 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.OpdInfusion"
+             xmlns:u="https://irihi.tech/ursa"
+             x:Class="HIS.Client.UrsaShell.Stations.OpdInfusion.OpdInfusionView"
+             x:DataType="local:OpdInfusionViewModel">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="14" RowSpacing="10">
+        <!-- Header & Filters -->
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                CornerRadius="8" Padding="14,10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="门诊输液室闭环工作台" FontSize="17" FontWeight="Bold"/>
+                        <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="7,2">
+                            <TextBlock Text="{Binding PendingCompoundCount, StringFormat='{}待配复核 {0}'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorWarning}"/>
+                        </Border>
+                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="7,2">
+                            <TextBlock Text="{Binding InfusingCount, StringFormat='{}输液中 {0}'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        </Border>
+                        <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4" Padding="7,2">
+                            <TextBlock Text="{Binding OccupiedSeatCount, StringFormat='{}占座 {0}/12'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBox Text="{Binding SearchKeyword, Mode=TwoWay}" PlaceholderText="患者/输液单/座位" Width="150" Height="30"/>
+                    <Button Content="全部" Classes="Tertiary" Height="30" Command="{Binding FilterStatusCommand}" CommandParameter=""/>
+                    <Button Content="待配" Classes="Tertiary" Height="30" Command="{Binding FilterStatusCommand}" CommandParameter="0"/>
+                    <Button Content="已配" Classes="Tertiary" Height="30" Command="{Binding FilterStatusCommand}" CommandParameter="1"/>
+                    <Button Content="输液" Classes="Tertiary" Height="30" Command="{Binding FilterStatusCommand}" CommandParameter="2"/>
+                    <TextBox Text="{Binding PrescriptionIdInput, Mode=TwoWay}" PlaceholderText="输入收费处方ID" Width="135" Height="30"/>
+                    <Button Content="从处方生成" Classes="Secondary" Height="30" Command="{Binding GenerateFromPrescriptionCommand}"/>
+                    <Button Content="刷新" Classes="Primary" Height="30" Padding="12,0" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Real Seat Map Strip (12 Seats derived from active Status=2/3 orders) -->
+        <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                CornerRadius="8" Padding="12,10">
+            <StackPanel Spacing="6">
+                <TextBlock Text="实时输液座位图 (点击空座填入座位号 / 点击占座切换患者)" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorText1}"/>
+                <ItemsControl ItemsSource="{Binding SeatMap}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="6" HorizontalAlignment="Stretch"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:InfusionSeatTile">
+                            <Button Classes="Tertiary" Padding="0" Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                    Command="{Binding $parent[UserControl].((local:OpdInfusionViewModel)DataContext).SelectSeatCommand}"
+                                    CommandParameter="{Binding}">
+                                <Border CornerRadius="6" Padding="8,6"
+                                        Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="2">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding SeatNo}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding PatientName}" FontSize="11" FontWeight="SemiBold"/>
+                                        </Grid>
+                                        <TextBlock Text="{Binding DetailText}" FontSize="10" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Split Workspace -->
+        <Grid Grid.Row="2" ColumnDefinitions="310,*" ColumnSpacing="12">
+            <!-- Left Order Queue -->
+            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="10">
+                <ListBox ItemsSource="{Binding Orders}" SelectedItem="{Binding SelectedOrder, Mode=TwoWay}"
+                         Background="Transparent" BorderThickness="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="local:InfusionOrderVm">
+                            <Border Margin="0,0,0,6" Padding="10,8" CornerRadius="6"
+                                    Background="{DynamicResource SemiColorBackground0}"
+                                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="4">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding PatientName}" FontSize="13" FontWeight="Bold"/>
+                                        <Border Grid.Column="1" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="3" Padding="6,1">
+                                            <TextBlock Text="{Binding StatusLabel}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="{Binding InfusionNo}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    <TextBlock Text="{Binding ProgressText}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <!-- Right Detail & 4-Step Execution Console -->
+            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="14">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="12" IsVisible="{Binding HasSelectedOrder}">
+                        <!-- Order Banner -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10"
+                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding SelectedOrder.PatientName}" FontSize="16" FontWeight="Bold"/>
+                                        <TextBlock Text="{Binding SelectedOrder.InfusionNo}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SelectedOrder.StatusLabel}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding SelectedOrder.ProgressText}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="{Binding SelectedOrder.DripRate, StringFormat='{}当前滴速 {0} 滴/分'}"
+                                           FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Bottle Stickers -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="输液瓶贴序贯条码 (点击瓶贴填入条码框)" FontSize="13" FontWeight="Bold"/>
+                            <ItemsControl ItemsSource="{Binding SelectedBottles}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:InfusionBottleVm">
+                                        <Button Classes="Tertiary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0" Margin="0,0,0,4"
+                                                Command="{Binding $parent[UserControl].((local:OpdInfusionViewModel)DataContext).PickBottleCommand}"
+                                                CommandParameter="{Binding}">
+                                            <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}"
+                                                    BorderThickness="1" CornerRadius="5" Padding="10,7">
+                                                <Grid ColumnDefinitions="60,180,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding SequenceNo, StringFormat='{}第 {0} 瓶'}" FontWeight="Bold" FontSize="12"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding BottleBarcode}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding DrugNames}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding StatusLabel}" FontSize="11" FontWeight="Bold"/>
+                                                </Grid>
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Step 1 & 2 Grid -->
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="1. 配药双人复核" FontSize="13" FontWeight="Bold"/>
+                                    <TextBox Text="{Binding CompoundNurseInput, Mode=TwoWay}" PlaceholderText="配药护士工号" Height="30"/>
+                                    <TextBox Text="{Binding CompoundCheckNurseInput, Mode=TwoWay}" PlaceholderText="复核护士工号 (须不同)" Height="30"/>
+                                    <Button Content="确认配药双签复核" Classes="Primary" Height="32" Command="{Binding CompoundCheckCommand}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="2. 三查七对穿刺上座" FontSize="13" FontWeight="Bold"/>
+                                    <TextBox Text="{Binding PatientWristbandInput, Mode=TwoWay}" PlaceholderText="患者腕带/ID核验" Height="30"/>
+                                    <TextBox Text="{Binding BottleBarcodeInput, Mode=TwoWay}" PlaceholderText="首瓶瓶贴条码" Height="30"/>
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                        <TextBox Grid.Column="0" Text="{Binding SeatNoInput, Mode=TwoWay}" PlaceholderText="座位如 INF-01" Height="30"/>
+                                        <u:NumericIntUpDown Grid.Column="1" Value="{Binding DripRateInput, Mode=TwoWay}" Minimum="10" Maximum="120" Height="30"/>
+                                    </Grid>
+                                    <Button Content="核对并开始穿刺输液" Classes="Success" Height="32" Command="{Binding PunctureCommand}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Step 3 & 4 Grid -->
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="3. 在途巡视与不良反应监测" FontSize="13" FontWeight="Bold"/>
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                        <TextBlock Grid.Column="0" Text="实时滴速(滴/分):" FontSize="12" VerticalAlignment="Center"/>
+                                        <u:NumericIntUpDown Grid.Column="1" Value="{Binding InspectDripSpeed, Mode=TwoWay}" Minimum="10" Maximum="120" Height="30"/>
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="14">
+                                        <CheckBox Content="穿刺处肿胀" IsChecked="{Binding InspectIsSwollen, Mode=TwoWay}"/>
+                                        <CheckBox Content="不良反应" IsChecked="{Binding InspectHasAdverse, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <TextBox Text="{Binding InspectNotes, Mode=TwoWay}" PlaceholderText="巡视备注" Height="30"/>
+                                    <Button Content="提交输液巡视记录" Classes="Primary" Height="32" Command="{Binding InspectCommand}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="4. 扫码接瓶与拔针完结" FontSize="13" FontWeight="Bold"/>
+                                    <TextBox Text="{Binding NextBottleBarcodeInput, Mode=TwoWay}" PlaceholderText="下一瓶条码" Height="30"/>
+                                    <Button Content="扫码换瓶继续输液" Classes="Warning" Height="32" Command="{Binding ReplaceBottleCommand}"/>
+                                    <Button Content="输液完毕 · 拔针离室闭环" Classes="Danger" Height="32" Command="{Binding CompleteInfusionCommand}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Inspection History -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="本次输液巡视时间轴" FontSize="13" FontWeight="Bold"/>
+                            <ItemsControl ItemsSource="{Binding Inspections}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:InfusionInspectionVm">
+                                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}"
+                                                BorderThickness="1" CornerRadius="5" Padding="10,6" Margin="0,0,0,4">
+                                            <Grid ColumnDefinitions="150,110,*">
+                                                <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding InspectNurseName}" FontSize="11" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding AlertSummary}" FontSize="11" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

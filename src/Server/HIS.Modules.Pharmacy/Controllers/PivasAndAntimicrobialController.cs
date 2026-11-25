@@ -293,12 +293,17 @@ WHERE id = @Id AND status = 'LABELED';", new { Compounder = compounder, Now = no
             return BadRequest(new { message = "PIVAS 严格执行双人核对制度：核对人不能与调配人相同。" });
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        await conn.ExecuteAsync(@"
+        string checker = dto.CheckerName.Trim();
+        int affected = await conn.ExecuteAsync(@"
 UPDATE pivas_orders
 SET status = 'CHECKED', checker_name = @Checker, checked_at_ms = @Now, updated_at_ms = @Now, updated_by = @Actor, version_no = version_no + 1
-WHERE id = @Id;", new { Checker = dto.CheckerName.Trim(), Now = now, Actor = ActorId, Id = id });
+WHERE id = @Id AND status = 'COMPOUNDED' AND LOWER(COALESCE(compounder_name, '')) <> LOWER(@Checker);",
+            new { Checker = checker, Now = now, Actor = ActorId, Id = id });
 
-        return Ok(new { id, status = "CHECKED", checkerName = dto.CheckerName.Trim() });
+        if (affected == 0)
+            return Conflict(new { message = "静配工单状态已变更或核对人与调配人相同，无法完成复核。" });
+
+        return Ok(new { id, status = "CHECKED", checkerName = checker });
     }
 
     [HttpPost("pivas/orders/{id}/dispatch")]

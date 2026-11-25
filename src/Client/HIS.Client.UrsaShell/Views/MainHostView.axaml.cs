@@ -27,6 +27,7 @@ public partial class MainHostView : UserControl
     private void OnLoginSucceeded()
     {
         var workbench = new WorkbenchModel();
+        _ = workbench.RefreshInpatientsFromServerAsync();
         _shellView = new MainShellView(workbench);
         _shellView.LogoutRequested += () =>
         {

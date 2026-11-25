@@ -90,26 +90,13 @@ public sealed class LoginContextOption : ClientModelBase
 		}
 	}
 
-	public IBrush CardBackground
-	{
-		get
-		{
-			IBrush result;
-			if (!IsSelected)
-			{
-				IBrush transparent = Brushes.Transparent;
-				result = transparent;
-			}
-			else
-			{
-				IBrush transparent = new SolidColorBrush(Color.Parse("#E8F3FF"));
-				result = transparent;
-			}
-			return result;
-		}
-	}
+	public IBrush CardBackground => IsSelected
+		? HIS.Client.UrsaShell.Shell.ThemeBrushes.PrimaryLight
+		: Brushes.Transparent;
 
-	public IBrush CardBorderBrush => IsSelected ? new SolidColorBrush(Color.Parse("#1677FF")) : new SolidColorBrush(Color.Parse("#D9E2EC"));
+	public IBrush CardBorderBrush => IsSelected
+		? HIS.Client.UrsaShell.Shell.ThemeBrushes.Primary
+		: HIS.Client.UrsaShell.Shell.ThemeBrushes.Border;
 
 	public string SelectionLabel
 	{

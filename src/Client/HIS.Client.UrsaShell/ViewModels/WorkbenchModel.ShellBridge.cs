@@ -77,7 +77,14 @@ public partial class WorkbenchModel
 
     public int PendingFinanceSettleCount => PharmacyRecords.Count(p => !p.IsPaidNotified && !p.IsOrderClosed);
 
-    public int PendingCriticalValueCount => CriticalValueAlert.IsAcknowledged ? 0 : 1;
+    private int _pendingCriticalValueCount;
+    public int PendingCriticalValueCount => _pendingCriticalValueCount;
+
+    internal void SetPendingCriticalValues(int count)
+    {
+        if (SetField(ref _pendingCriticalValueCount, count, nameof(PendingCriticalValueCount)))
+            OnPropertyChanged(nameof(HasActiveCriticalValue));
+    }
 
     public bool HasActiveCriticalValue => PendingCriticalValueCount > 0;
 

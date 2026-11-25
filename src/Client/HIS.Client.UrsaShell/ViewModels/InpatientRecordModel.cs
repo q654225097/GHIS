@@ -5,7 +5,7 @@ using HIS.Client.Core;
 
 namespace HIS.Client.UrsaShell.ViewModels;
 
-public class InpatientRecordModel : ClientModelBase
+public partial class InpatientRecordModel : ClientModelBase
 {
 	private string _nursingLevel = string.Empty;
 
@@ -66,9 +66,13 @@ public class InpatientRecordModel : ClientModelBase
 		}
 	}
 
-	public string CardBorderBrush => IsSelected ? "#165DFF" : "#21262D";
+	public global::Avalonia.Media.IBrush CardBorderBrush => IsSelected
+		? global::HIS.Client.UrsaShell.Shell.ThemeBrushes.Primary
+		: global::HIS.Client.UrsaShell.Shell.ThemeBrushes.Border;
 
-	public string CardBackground => IsSelected ? "#1A253A" : "#161B22";
+	public global::Avalonia.Media.IBrush CardBackground => IsSelected
+		? global::HIS.Client.UrsaShell.Shell.ThemeBrushes.PrimaryLight
+		: global::HIS.Client.UrsaShell.Shell.ThemeBrushes.Surface;
 
 	public string NursingLevel
 	{
@@ -174,8 +178,8 @@ public class InpatientRecordModel : ClientModelBase
 
 	public string BannerExpandText => IsBannerExpanded ? "收起" : "展开";
 
-	public decimal AvailableBalance { get; set; } = -23550.00m;
-	public string AvailableBalanceText => AvailableBalance < 0 ? $"-{Math.Abs(AvailableBalance):0.##}cs" : $"{AvailableBalance:0.##}cs";
+	public decimal AvailableBalance { get; set; } = 0.00m;
+	public string AvailableBalanceText => AvailableBalance < 0 ? $"欠费 ¥{Math.Abs(AvailableBalance):0.00}" : $"余 ¥{AvailableBalance:0.00}";
 	public bool IsBalanceNegative => AvailableBalance < 0;
 
 	public decimal TotalCost { get; set; } = 23550.00m;

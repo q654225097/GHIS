@@ -7,9 +7,11 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using HIS.Client.Core;
+using HIS.Client.UrsaShell.Printing;
 using HIS.Client.UrsaShell.Services;
 using HIS.Client.UrsaShell.Shell;
 
@@ -77,6 +79,8 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         AddPrepaymentCommand = new AsyncRelayCommand(AddPrepaymentAsync, () => CanTakePrepayment);
         RegisterAndCreateCardCommand = new AsyncRelayCommand(RegisterAndCreateCardAsync);
         ToggleNewPatientFormCommand = new RelayCommand(ToggleNewPatientForm);
+        PrintPrepaymentReceiptCommand = new AsyncRelayCommand(async () => await PrintReceiptAsync(null));
+        PrintRecordReceiptCommand = new AsyncRelayCommand(async p => await PrintReceiptAsync(p as PrepaymentRecordItem));
     }
 
     public AsyncRelayCommand RefreshCommand { get; }
@@ -85,6 +89,8 @@ public sealed class InpatientCashierViewModel : ClientModelBase
     public AsyncRelayCommand AddPrepaymentCommand { get; }
     public AsyncRelayCommand RegisterAndCreateCardCommand { get; }
     public RelayCommand ToggleNewPatientFormCommand { get; }
+    public ICommand PrintPrepaymentReceiptCommand { get; }
+    public ICommand PrintRecordReceiptCommand { get; }
 
     public ObservableCollection<AdmissionCardItem> Cards { get; } = new();
     public ObservableCollection<InpatientRecordItem> Encounters { get; } = new();
@@ -626,6 +632,9 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         }
     }
 
+    private string? _activePrepaymentRequestKey;
+    public PrepaymentDto? LastPrepaymentSuccess { get; private set; }
+
     public async Task AddPrepaymentAsync()
     {
         if (IsBusy)
@@ -647,6 +656,12 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         ClearError();
         try
         {
+            if (string.IsNullOrWhiteSpace(_activePrepaymentRequestKey))
+            {
+                _activePrepaymentRequestKey = "IPD-PREPAY-" + Guid.NewGuid().ToString("N");
+            }
+            string reqKey = _activePrepaymentRequestKey;
+
             using var http = CreateHttpClient();
             using var response = await http.PostAsJsonAsync(
                 "/api/v4/ipd/encounters/" + Uri.EscapeDataString(encounter.Id) + "/prepayments",
@@ -654,7 +669,7 @@ public sealed class InpatientCashierViewModel : ClientModelBase
                 {
                     Amount = AdditionalPrepayment,
                     PaymentChannel = AdditionalPaymentChannel.Code,
-                    RequestKey = "IPD-PREPAY-" + Guid.NewGuid().ToString("N"),
+                    RequestKey = reqKey,
                     Remark = string.IsNullOrWhiteSpace(PrepaymentRemark) ? "住院押金补缴" : PrepaymentRemark.Trim()
                 }, JsonOptions);
             var envelope = await ReadEnvelopeAsync<PrepaymentDto>(response);
@@ -663,7 +678,9 @@ public sealed class InpatientCashierViewModel : ClientModelBase
                 SetFailure(string.IsNullOrWhiteSpace(envelope.Message) ? "押金收取失败。" : envelope.Message);
                 return;
             }
-            Notice = "押金收取成功，单号 " + envelope.Data.PrepaymentNo + "，当前余额 ¥" + envelope.Data.BalanceAfter.ToString("N2") + "。";
+            _activePrepaymentRequestKey = null; // Clear on success
+            LastPrepaymentSuccess = envelope.Data;
+            Notice = "押金收取成功，单号 " + envelope.Data.PrepaymentNo + "，当前余额 ¥" + envelope.Data.BalanceAfter.ToString("N2") + "。可点击「打印本次收据」出具财务凭证。";
             PrepaymentRemark = string.Empty;
             await LoadEncountersAsync(encounter.Id);
             await LoadPrepaymentsAsync(encounter.Id);
@@ -675,6 +692,61 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    public async Task PrintReceiptAsync(PrepaymentRecordItem? item)
+    {
+        var encounter = SelectedEncounter;
+        string receiptNo = item?.PrepaymentNo ?? LastPrepaymentSuccess?.PrepaymentNo ?? string.Empty;
+        decimal amount = item?.Amount ?? LastPrepaymentSuccess?.Amount ?? 0m;
+        string channel = item?.PaymentChannelLabel ?? LastPrepaymentSuccess?.PaymentChannel ?? "CASH";
+        decimal balanceAfter = item?.BalanceAfter ?? LastPrepaymentSuccess?.BalanceAfter ?? (encounter?.PrepaymentBalance ?? 0m);
+
+        if (string.IsNullOrWhiteSpace(receiptNo))
+        {
+            SetValidation("未找到可打印的押金收据凭证号，请先交纳押金或在下方历史流水中选择条目打印。");
+            return;
+        }
+
+        var context = new Dictionary<string, string>
+        {
+            ["patient.fullName"] = encounter?.PatientName ?? "住院患者",
+            ["patient.admissionNo"] = encounter?.AdmissionNo ?? "",
+            ["ipd.admissionNo"] = encounter?.AdmissionNo ?? "",
+            ["ipd.patientName"] = encounter?.PatientName ?? "",
+            ["ipd.departmentName"] = encounter?.DeptName ?? "",
+            ["ipd.wardName"] = encounter?.WardName ?? "",
+            ["ipd.bedCode"] = encounter?.BedCode ?? "",
+            ["finance.prepaymentNo"] = receiptNo,
+            ["finance.receiptNo"] = receiptNo,
+            ["finance.amount"] = "¥" + amount.ToString("N2"),
+            ["finance.paymentChannel"] = channel,
+            ["finance.balanceAfter"] = "¥" + balanceAfter.ToString("N2"),
+            ["finance.cashierName"] = SessionContext.Current.DisplayName,
+            ["finance.printTime"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+        };
+
+        var tpl = new PrintTemplateDto
+        {
+            Id = "TPL_IPD_PREPAYMENT",
+            TemplateCode = "IPD_PREPAYMENT_RECEIPT",
+            TemplateName = "住院押金收据",
+            Category = "FINANCE",
+            Orientation = "LANDSCAPE",
+            PaperWidthMm = 210,
+            PaperHeightMm = 93,
+            LayoutJson = "[]"
+        };
+
+        try
+        {
+            await PrintEngineService.ExportAndPrintAsync(tpl, "button_receipt", context);
+            Notice = $"收据凭证 [{receiptNo}] 已成功调起打印。";
+        }
+        catch (Exception ex)
+        {
+            Notice = $"打印收据异常: {ex.Message}（已保留财务收款记录）";
         }
     }
 
@@ -765,10 +837,21 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         OnPropertyChanged(nameof(CardCountText));
     }
 
+    public sealed class CashierSummaryDto
+    {
+        public int TodayRegisteredCount { get; set; }
+        public decimal TodayPrepaymentAmount { get; set; }
+    }
+
     private async Task LoadEncountersAsync(string? selectId = null)
     {
         using var http = CreateHttpClient();
-        using var response = await http.GetAsync("/api/v4/ipd/encounters/active");
+        string url = "/api/v4/ipd/encounters/active";
+        if (!string.IsNullOrWhiteSpace(Keyword))
+        {
+            url += "?keyword=" + Uri.EscapeDataString(Keyword.Trim());
+        }
+        using var response = await http.GetAsync(url);
         var envelope = await ReadEnvelopeAsync<List<IpdEncounterDto>>(response);
         if (!response.IsSuccessStatusCode || envelope.Code != 200)
         {
@@ -782,12 +865,31 @@ public sealed class InpatientCashierViewModel : ClientModelBase
         }
         SelectedEncounter = Encounters.FirstOrDefault(x => x.Id == keepId)?.Encounter ?? Encounters.FirstOrDefault()?.Encounter;
         RegisteredCount = Encounters.Count;
+
+        try
+        {
+            using var summaryRes = await http.GetAsync("/api/v4/ipd/cashier/summary");
+            if (summaryRes.IsSuccessStatusCode)
+            {
+                var summaryEnv = await ReadEnvelopeAsync<CashierSummaryDto>(summaryRes);
+                if (summaryEnv?.Data != null)
+                {
+                    RegisteredCount = summaryEnv.Data.TodayRegisteredCount;
+                    TodayPrepaymentAmount = summaryEnv.Data.TodayPrepaymentAmount;
+                }
+            }
+        }
+        catch { }
+
         OnPropertyChanged(nameof(EncounterCountText));
         OnPropertyChanged(nameof(SelectedEncounter));
     }
 
     private async Task LoadPrepaymentsAsync(string encounterId)
     {
+        Prepayments.Clear();
+        OnPropertyChanged(nameof(HasPrepaymentRecords));
+
         using var http = CreateHttpClient();
         using var response = await http.GetAsync("/api/v4/ipd/prepayments?encounterId=" + Uri.EscapeDataString(encounterId));
         var envelope = await ReadEnvelopeAsync<List<PrepaymentDto>>(response);
@@ -796,17 +898,10 @@ public sealed class InpatientCashierViewModel : ClientModelBase
             SetFailure(string.IsNullOrWhiteSpace(envelope.Message) ? "押金流水加载失败。" : envelope.Message);
             return;
         }
-        Prepayments.Clear();
-        decimal todayTotal = 0m;
         foreach (var dto in envelope.Data ?? new List<PrepaymentDto>())
         {
             Prepayments.Add(new PrepaymentRecordItem(dto));
-            if (dto.PaidAtMs is long ms && DateTimeOffset.FromUnixTimeMilliseconds(ms).ToOffset(TimeSpan.FromHours(8)).Date == DateTime.Today)
-            {
-                todayTotal += dto.Amount;
-            }
         }
-        TodayPrepaymentAmount = todayTotal;
         OnPropertyChanged(nameof(HasPrepaymentRecords));
     }
 
@@ -1066,13 +1161,17 @@ public sealed class InpatientCashierViewModel : ClientModelBase
             _ => Status
         };
         public string CreatedAtText => CreatedAtMs > 0
-            ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToOffset(TimeSpan.FromHours(8)).ToString("MM-dd HH:mm")
+            ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToOffset(TimeSpan.FromHours(8)).ToString("yyyy-MM-dd HH:mm:ss")
             : "--";
         public string PatientLine => MedicalRecordNo + "  " + GenderLabel;
         public string SuggestedLine => "建议 " + SuggestedIpdDeptName + (string.IsNullOrWhiteSpace(SuggestedWardName) ? string.Empty : "  " + SuggestedWardName);
         public string RegistrationLine => EncounterNo.Length > 0 ? "住院号 " + EncounterNo : "待收费处登记";
-        public IBrush StatusForeground => new ImmutableSolidColorBrush(Color.Parse(IsPending ? "#B54708" : "#067647"));
-        public IBrush CardBackground => new ImmutableSolidColorBrush(Color.Parse(IsSelected ? "#EAF3FF" : "#FFFFFF"));
+        public IBrush StatusForeground => IsPending
+            ? HIS.Client.UrsaShell.Shell.ThemeBrushes.Warning
+            : HIS.Client.UrsaShell.Shell.ThemeBrushes.Success;
+        public IBrush CardBackground => IsSelected
+            ? HIS.Client.UrsaShell.Shell.ThemeBrushes.PrimaryLight
+            : HIS.Client.UrsaShell.Shell.ThemeBrushes.Surface;
         public bool IsSelected
         {
             get => _isSelected;
@@ -1129,7 +1228,9 @@ public sealed class InpatientCashierViewModel : ClientModelBase
                 }
             }
         }
-        public IBrush CardBackground => new ImmutableSolidColorBrush(Color.Parse(IsSelected ? "#EAF3FF" : "#FFFFFF"));
+        public IBrush CardBackground => IsSelected
+            ? HIS.Client.UrsaShell.Shell.ThemeBrushes.PrimaryLight
+            : HIS.Client.UrsaShell.Shell.ThemeBrushes.Surface;
     }
 
     public sealed class PrepaymentRecordItem
@@ -1163,7 +1264,7 @@ public sealed class InpatientCashierViewModel : ClientModelBase
             _ => PaymentChannel
         };
         public string PaidAtText => PaidAtMs is long ms && ms > 0
-            ? DateTimeOffset.FromUnixTimeMilliseconds(ms).ToOffset(TimeSpan.FromHours(8)).ToString("MM-dd HH:mm")
+            ? DateTimeOffset.FromUnixTimeMilliseconds(ms).ToOffset(TimeSpan.FromHours(8)).ToString("yyyy-MM-dd HH:mm:ss")
             : "--";
     }
 }

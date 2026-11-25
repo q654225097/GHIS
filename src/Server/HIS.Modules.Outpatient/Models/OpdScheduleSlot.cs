@@ -30,5 +30,7 @@ public class OpdScheduleSlot : BaseEntity
 
 	public int ReservedCount { get; set; } = 0;
 
+	public int SlotIntervalMinutes { get; set; } = 0;
+
 	public int SlotStatus { get; set; } = 1;
 }

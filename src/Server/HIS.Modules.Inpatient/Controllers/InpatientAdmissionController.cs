@@ -480,11 +480,36 @@ ORDER BY u.display_name";
         return ApiResponse<IReadOnlyList<IpdStaffView>>.Success(staff.ToList());
     }
 
+    public sealed record IpdCashierSummaryDto(int TodayRegisteredCount, decimal TodayPrepaymentAmount);
+
+    [HttpGet("cashier/summary")]
+    public async Task<ApiResponse<IpdCashierSummaryDto>> GetCashierSummary([FromQuery] string? cashierId = null)
+    {
+        using var conn = _connFactory.CreateConnection();
+        long dayStart = SystemTime.TodayStartUtcMs;
+        long dayEnd = SystemTime.TomorrowStartUtcMs;
+
+        int registeredCount = await conn.ExecuteScalarAsync<int>(@"
+            SELECT COUNT(1) FROM ipd_encounters
+            WHERE created_at_ms >= @DayStart AND created_at_ms < @DayEnd",
+            new { DayStart = dayStart, DayEnd = dayEnd });
+
+        decimal prepaymentTotal = await conn.ExecuteScalarAsync<decimal>(@"
+            SELECT COALESCE(SUM(amount), 0) FROM ipd_prepayments
+            WHERE paid_at_ms >= @DayStart AND paid_at_ms < @DayEnd
+              AND (@Cashier IS NULL OR cashier_id = @Cashier)",
+            new { DayStart = dayStart, DayEnd = dayEnd, Cashier = NullIfBlank(cashierId) });
+
+        return ApiResponse<IpdCashierSummaryDto>.Success(new IpdCashierSummaryDto(registeredCount, prepaymentTotal));
+    }
+
     [HttpGet("encounters/active")]
     public async Task<ApiResponse<IReadOnlyList<IpdEncounterView>>> GetActiveEncounters(
         [FromQuery] string? admitDeptId = null,
-        [FromQuery] string? admitWardId = null)
+        [FromQuery] string? admitWardId = null,
+        [FromQuery] string? keyword = null)
     {
+        string? kw = string.IsNullOrWhiteSpace(keyword) ? null : "%" + keyword.Trim() + "%";
         const string sql = @"
 SELECT e.*, COALESCE(p.full_name, e.patient_id) AS patient_name,
        COALESCE(p.medical_record_no, '') AS medical_record_no,
@@ -501,12 +526,14 @@ LEFT JOIN sys_users nur ON nur.id = e.primary_nurse_id
 WHERE e.status = 1
   AND (@DeptId IS NULL OR e.admit_dept_id = @DeptId)
   AND (@WardId IS NULL OR e.admit_ward_id = @WardId)
+  AND (@Kw IS NULL OR e.admission_no LIKE @Kw OR p.full_name LIKE @Kw OR p.medical_record_no LIKE @Kw OR e.bed_code LIKE @Kw)
 ORDER BY e.triage_status, e.created_at_ms DESC";
         using var conn = _connFactory.CreateConnection();
         var encounters = await conn.QueryAsync<IpdEncounterView>(sql, new
         {
             DeptId = NullIfBlank(admitDeptId),
-            WardId = NullIfBlank(admitWardId)
+            WardId = NullIfBlank(admitWardId),
+            Kw = kw
         });
         return ApiResponse<IReadOnlyList<IpdEncounterView>>.Success(encounters.ToList());
     }
@@ -752,6 +779,11 @@ ORDER BY pp.paid_at_ms DESC";
                     "SELECT * FROM ipd_prepayments WHERE request_key = @Key", new { Key = requestKey }, ct);
                 if (old != null)
                 {
+                    if (old.EncounterId != encounterId || Math.Abs(old.Amount - req.Amount) > 0.001m ||
+                        !string.Equals(old.PaymentChannel, req.PaymentChannel.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException("请求幂等键冲突：已存在相同键但参数不同的押金记录");
+                    }
                     return old;
                 }
                 var currentEnc = await _encounterRepo.GetByIdAsync(encounterId, ct);

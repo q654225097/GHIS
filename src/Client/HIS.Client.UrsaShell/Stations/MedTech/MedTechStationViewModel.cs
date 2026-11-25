@@ -32,10 +32,6 @@ public class SurgeryScheduleItemModel : ClientModelBase
     private string _surgeonName = string.Empty;
     private string _anesthesiologistName = string.Empty;
     private int _status;
-    private bool _whoSignInOk;
-    private bool _whoTimeoutOk;
-    private bool _whoSignOutOk;
-    private bool _instrumentCountBalanced;
 
     public string Id { get => _id; set => SetField(ref _id, value); }
     public string ScheduleNo { get => _scheduleNo; set => SetField(ref _scheduleNo, value); }
@@ -48,13 +44,8 @@ public class SurgeryScheduleItemModel : ClientModelBase
     public string SurgeonName { get => _surgeonName; set => SetField(ref _surgeonName, value); }
     public string AnesthesiologistName { get => _anesthesiologistName; set => SetField(ref _anesthesiologistName, value); }
     public int Status { get => _status; set { if (SetField(ref _status, value)) { OnPropertyChanged(nameof(StatusText)); OnPropertyChanged(nameof(CanStart)); OnPropertyChanged(nameof(CanFinish)); } } }
-    public bool WhoSignInOk { get => _whoSignInOk; set { if (SetField(ref _whoSignInOk, value)) OnPropertyChanged(nameof(WhoStatusText)); } }
-    public bool WhoTimeoutOk { get => _whoTimeoutOk; set { if (SetField(ref _whoTimeoutOk, value)) OnPropertyChanged(nameof(WhoStatusText)); } }
-    public bool WhoSignOutOk { get => _whoSignOutOk; set { if (SetField(ref _whoSignOutOk, value)) OnPropertyChanged(nameof(WhoStatusText)); } }
-    public bool InstrumentCountBalanced { get => _instrumentCountBalanced; set { if (SetField(ref _instrumentCountBalanced, value)) OnPropertyChanged(nameof(WhoStatusText)); } }
 
     public string StatusText => Status switch { 0 => "待手术", 1 => "手术中", 2 => "已完成", _ => "已取消" };
-    public string WhoStatusText => (WhoSignInOk && WhoTimeoutOk && WhoSignOutOk && InstrumentCountBalanced) ? "WHO三方核查已通过" : "WHO核查未完成";
     public bool CanStart => Status == 0;
     public bool CanFinish => Status == 1;
 }
@@ -127,7 +118,7 @@ public class LabTrendItemModel : ClientModelBase
     public string AbnormalFlag { get; set; } = string.Empty;
     public int IsCritical { get; set; }
     public long CreatedAtMs { get; set; }
-    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("MM-dd HH:mm") : "-";
+    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "-";
 }
 
 public class LabHistoryItemModel : ClientModelBase
@@ -140,10 +131,10 @@ public class LabHistoryItemModel : ClientModelBase
     public string RefRange { get; set; } = string.Empty;
     public string AbnormalFlag { get; set; } = string.Empty;
     public long CreatedAtMs { get; set; }
-    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-";
+    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "-";
 }
 
-public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, IPrintContextProvider
+public sealed partial class MedTechStationViewModel : ClientModelBase, IShortcutTarget, IPrintContextProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly ShellViewModel? _shell;
@@ -155,11 +146,11 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
     // Surgery & Anesthesia fields
     private SurgeryScheduleItemModel? _selectedSchedule;
     private string _anesthesiaRecordId = string.Empty;
-    private string _asaGrade = "I";
-    private string _anesthesiaType = "全麻 (气管插管)";
-    private decimal _bloodLossMl = 50;
-    private decimal _urineOutputMl = 200;
-    private decimal _fluidInputMl = 500;
+    private string _asaGrade = string.Empty;
+    private string _anesthesiaType = string.Empty;
+    private decimal _bloodLossMl;
+    private decimal _urineOutputMl;
+    private decimal _fluidInputMl;
     private bool _anesthesiaCompleted;
 
     // Med form
@@ -185,13 +176,13 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
         _shell = shell;
 
         OpenCriticalValueCommand = new RelayCommand(() => _shell?.OpenCriticalValueDrawerCommand.Execute(null));
-        OpenWhoSurgeryDrawerCommand = new RelayCommand(OpenWhoSurgeryDrawer);
+        OpenWhoSurgeryDrawerCommand = new AsyncRelayCommand(p => OpenSurgerySafetyAsync(p as SurgeryScheduleItemModel ?? SelectedSchedule));
         OpenRefundProofDrawerCommand = new RelayCommand(OpenRefundProofDrawer);
         FilterByStatusCommand = new RelayCommand(p => ApplyFilter(p as string ?? "ALL"));
-        ConfirmFeeCommand = new RelayCommand(p => ExecuteConfirmFee(p as MedTechOrderItemModel));
-        PublishReportCommand = new RelayCommand(p => ExecutePublishReport(p as MedTechOrderItemModel));
-        CancelOrderCommand = new RelayCommand(p => ConfirmCancelOrder(p as MedTechOrderItemModel));
         RefreshCommand = new RelayCommand(RefreshList);
+        ConfirmFeeCommand = new AsyncRelayCommand(p => ConfirmFeeAsync(p as MedTechOrderItemModel));
+        CancelOrderCommand = new AsyncRelayCommand(p => CancelOrderAsync(p as MedTechOrderItemModel));
+        OpenReportStationCommand = new RelayCommand(p => OpenReportStation(p as MedTechOrderItemModel));
 
         // P1-B LIS/PACS commands
         SyncLisCommand = new AsyncRelayCommand(SyncLisAsync);
@@ -199,9 +190,6 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
 
         // P1-C Surgery & Anesthesia commands
         LoadSchedulesCommand = new AsyncRelayCommand(LoadSchedulesAsync);
-        StartSurgeryCommand = new AsyncRelayCommand(p => StartSurgeryAsync(p as SurgeryScheduleItemModel));
-        WhoChecklistCommand = new AsyncRelayCommand(p => ExecuteWhoChecklistAsync(p as SurgeryScheduleItemModel));
-        FinishSurgeryCommand = new AsyncRelayCommand(p => FinishSurgeryAsync(p as SurgeryScheduleItemModel));
         SelectScheduleCommand = new AsyncRelayCommand(p => SelectScheduleAsync(p as SurgeryScheduleItemModel));
         SaveAnesthesiaCommand = new AsyncRelayCommand(SaveAnesthesiaAsync);
         AddMedicationCommand = new AsyncRelayCommand(AddMedicationAsync);
@@ -220,13 +208,33 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
         LoadLabHistoryCommand = new AsyncRelayCommand(LoadLabHistoryAsync);
 
         RebuildFiltered();
+        _ = LoadMedTechRequestsAsync();
         _ = LoadSchedulesAsync();
         _ = LoadExamSlotsAsync();
+        _ = LoadSpecimenHandoversAsync();
+        _ = LoadDicomStudiesAsync();
     }
 
     public WorkbenchModel Workbench { get; }
 
     public ObservableCollection<MedTechOrderItemModel> FilteredOrders { get; } = new();
+    private MedTechOrderItemModel? _selectedOrderItem;
+    public MedTechOrderItemModel? SelectedOrderItem
+    {
+        get => _selectedOrderItem;
+        set
+        {
+            if (SetField(ref _selectedOrderItem, value) && value != null)
+            {
+                ScheduleRequestId = value.RequestId;
+                SchedulePatientId = value.PatientId;
+                CheckPatientId = value.PatientId;
+                CheckItemCode = value.ItemName;
+                AutoVerifyReqId = value.RequestId;
+                TrendPatientId = value.PatientId;
+            }
+        }
+    }
     public ObservableCollection<SurgeryScheduleItemModel> SurgerySchedules { get; } = new();
     public ObservableCollection<AnesthesiaMedicationItemModel> AnesthesiaMedications { get; } = new();
 
@@ -360,18 +368,15 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
     public ICommand OpenWhoSurgeryDrawerCommand { get; }
     public ICommand OpenRefundProofDrawerCommand { get; }
     public ICommand FilterByStatusCommand { get; }
-    public ICommand ConfirmFeeCommand { get; }
-    public ICommand PublishReportCommand { get; }
-    public ICommand CancelOrderCommand { get; }
     public ICommand RefreshCommand { get; }
+    public ICommand ConfirmFeeCommand { get; }
+    public ICommand CancelOrderCommand { get; }
+    public ICommand OpenReportStationCommand { get; }
 
     // P1-B & P1-C commands
     public ICommand SyncLisCommand { get; }
     public ICommand SyncPacsCommand { get; }
     public ICommand LoadSchedulesCommand { get; }
-    public ICommand StartSurgeryCommand { get; }
-    public ICommand WhoChecklistCommand { get; }
-    public ICommand FinishSurgeryCommand { get; }
     public ICommand SelectScheduleCommand { get; }
     public ICommand SaveAnesthesiaCommand { get; }
     public ICommand AddMedicationCommand { get; }
@@ -437,170 +442,116 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
 
     public async Task LoadSchedulesAsync()
     {
+        var context = SurgeryContext();
+        var generation = ++_scheduleLoadGeneration;
         try
         {
             using var http = AuthenticatedHttpClientFactory.Create();
             var res = await http.GetFromJsonAsync<ApiResponse<List<SurgeryScheduleItemModel>>>("/api/v4/medtech/surgeries/schedules", JsonOptions);
-            if (res?.Data != null)
+            if (context != SurgeryContext() || generation != _scheduleLoadGeneration) return;
+            if (res is { Code: 200, Data: not null })
             {
                 SurgerySchedules.Clear();
                 foreach (var s in res.Data)
                 {
                     SurgerySchedules.Add(s);
                 }
-                if (SelectedSchedule == null && SurgerySchedules.Count > 0)
-                {
-                    await SelectScheduleAsync(SurgerySchedules[0]);
-                }
+                if (SelectedSchedule != null && !SurgerySchedules.Any(x => x.Id == SelectedSchedule.Id))
+                    await SelectScheduleAsync(null);
             }
+            else _shell?.ShowToast(res?.Message ?? "未取得手术排班", "Warning");
         }
         catch
         {
-            // fallback gracefully
+            if (context == SurgeryContext() && generation == _scheduleLoadGeneration)
+                _shell?.ShowToast("无法刷新手术排班，请重试。", "Warning");
         }
     }
 
     public async Task SelectScheduleAsync(SurgeryScheduleItemModel? schedule)
     {
-        if (schedule == null) return;
         SelectedSchedule = schedule;
-
-        try
-        {
-            using var http = AuthenticatedHttpClientFactory.Create();
-            var res = await http.GetAsync($"/api/v4/medtech/anesthesia/records/by-schedule/{schedule.Id}");
-            if (res.IsSuccessStatusCode)
-            {
-                var json = await res.Content.ReadAsStringAsync();
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
-                {
-                    _anesthesiaRecordId = data.GetProperty("id").GetString() ?? "";
-                    AsaGrade = data.GetProperty("asaGrade").GetString() ?? "I";
-                    AnesthesiaType = data.GetProperty("anesthesiaType").GetString() ?? "全麻";
-                    BloodLossMl = data.GetProperty("bloodLossMl").GetDecimal();
-                    UrineOutputMl = data.GetProperty("urineOutputMl").GetDecimal();
-                    FluidInputMl = data.GetProperty("fluidInputMl").GetDecimal();
-                    AnesthesiaCompleted = data.GetProperty("status").GetInt32() == 1;
-
-                    // Load medications
-                    var medRes = await http.GetFromJsonAsync<ApiResponse<List<AnesthesiaMedicationItemModel>>>(
-                        $"/api/v4/medtech/anesthesia/records/{_anesthesiaRecordId}/medications", JsonOptions);
-                    if (medRes?.Data != null)
-                    {
-                        AnesthesiaMedications.Clear();
-                        foreach (var m in medRes.Data) AnesthesiaMedications.Add(m);
-                    }
-                }
-            }
-            else
-            {
-                _anesthesiaRecordId = string.Empty;
-                AnesthesiaCompleted = false;
-                AnesthesiaMedications.Clear();
-            }
-        }
-        catch { }
-    }
-
-    public async Task StartSurgeryAsync(SurgeryScheduleItemModel? schedule)
-    {
+        var context = SurgeryContext();
+        var generation = ++_anesthesiaSelectionGeneration;
+        bool Current() => generation == _anesthesiaSelectionGeneration && SurgeryContext() == context;
+        _anesthesiaRecordId = string.Empty;
+        AsaGrade = AnesthesiaType = string.Empty;
+        BloodLossMl = UrineOutputMl = FluidInputMl = 0;
+        AnesthesiaCompleted = false;
+        AnesthesiaMedications.Clear();
         if (schedule == null) return;
-        try
-        {
-            using var http = AuthenticatedHttpClientFactory.Create();
-            var res = await http.PostAsync($"/api/v4/medtech/surgeries/{schedule.Id}/start", null);
-            if (res.IsSuccessStatusCode)
-            {
-                schedule.Status = 1;
-                _shell?.ShowToast($"手术 [{schedule.ScheduleNo}] 已开台，开始进入术中监护与麻醉记录", "Success");
-            }
-            else
-            {
-                var err = await res.Content.ReadAsStringAsync();
-                _shell?.ShowToast($"开台失败: {err}", "Warning");
-            }
-        }
-        catch (Exception ex)
-        {
-            _shell?.ShowToast($"开台异常: {ex.Message}", "Error");
-        }
-    }
 
-    public async Task ExecuteWhoChecklistAsync(SurgeryScheduleItemModel? schedule)
-    {
-        if (schedule == null) return;
         try
         {
             using var http = AuthenticatedHttpClientFactory.Create();
-            var payload = new { SignInOk = true, TimeOutOk = true, SignOutOk = true, InstrumentCountBalanced = true };
-            var res = await http.PostAsJsonAsync($"/api/v4/medtech/surgeries/{schedule.Id}/who-checklist", payload);
-            if (res.IsSuccessStatusCode)
+            using var res = await http.GetAsync($"/api/v4/medtech/anesthesia/records/by-schedule/{Uri.EscapeDataString(schedule.Id)}");
+            var result = await res.Content.ReadFromJsonAsync<ApiResponse<AnesthesiaReceipt>>(JsonOptions);
+            if (!Current()) return;
+            if (res.IsSuccessStatusCode && result is { Code: 200, Data: { } data } && data.ScheduleId == schedule.Id)
             {
-                schedule.WhoSignInOk = true;
-                schedule.WhoTimeoutOk = true;
-                schedule.WhoSignOutOk = true;
-                schedule.InstrumentCountBalanced = true;
-                _shell?.ShowToast("WHO 手术安全三方核查（Sign-in/Time-out/Sign-out）全员签署通过", "Success");
+                _anesthesiaRecordId = data.Id;
+                AsaGrade = data.AsaGrade;
+                AnesthesiaType = data.AnesthesiaType;
+                BloodLossMl = data.BloodLossMl;
+                UrineOutputMl = data.UrineOutputMl;
+                FluidInputMl = data.FluidInputMl;
+                AnesthesiaCompleted = data.Status == 1;
+                var medRes = await http.GetFromJsonAsync<ApiResponse<List<AnesthesiaMedicationItemModel>>>(
+                    $"/api/v4/medtech/anesthesia/records/{data.Id}/medications", JsonOptions);
+                if (Current() && medRes is { Code: 200, Data: not null })
+                    foreach (var m in medRes.Data) AnesthesiaMedications.Add(m);
             }
-            else
-            {
-                _shell?.ShowToast("WHO 核查更新失败", "Warning");
-            }
+            else if (result?.Code != 404) _shell?.ShowToast(result?.Message ?? "未取得匹配的麻醉记录", "Warning");
         }
-        catch (Exception ex)
+        catch
         {
-            _shell?.ShowToast($"WHO 核查异常: {ex.Message}", "Error");
+            if (Current()) _shell?.ShowToast("麻醉记录查询未确认，请重新选择排班。", "Warning");
         }
     }
 
     public async Task SaveAnesthesiaAsync()
     {
-        if (SelectedSchedule == null) return;
+        if (SelectedSchedule is not { } schedule) return;
+        var context = SurgeryContext();
+        var generation = _anesthesiaSelectionGeneration;
+        bool Current() => generation == _anesthesiaSelectionGeneration && context == SurgeryContext();
+        var updateReq = new { AsaGrade, AnesthesiaType, BloodLossMl, UrineOutputMl, FluidInputMl, MarkCompleted = AnesthesiaCompleted };
+        if (string.IsNullOrWhiteSpace(AsaGrade) || string.IsNullOrWhiteSpace(AnesthesiaType))
+        {
+            _shell?.ShowToast("请填写实际 ASA 分级和麻醉方式。", "Warning");
+            return;
+        }
         try
         {
             using var http = AuthenticatedHttpClientFactory.Create();
             if (string.IsNullOrWhiteSpace(_anesthesiaRecordId))
             {
-                var createReq = new
+                using var createRes = await http.PostAsJsonAsync("/api/v4/medtech/anesthesia/records", new { ScheduleId = schedule.Id, AsaGrade, AnesthesiaType });
+                var result = await createRes.Content.ReadFromJsonAsync<ApiResponse<AnesthesiaReceipt>>(JsonOptions);
+                if (!Current()) return;
+                if (!createRes.IsSuccessStatusCode || result is not { Code: 200, Data: { } receipt } || receipt.ScheduleId != schedule.Id || string.IsNullOrWhiteSpace(receipt.Id))
                 {
-                    ScheduleId = SelectedSchedule.Id,
-                    AsaGrade,
-                    AnesthesiaType,
-                    PreopDiagnosis = SelectedSchedule.SurgeryName,
-                    AirwayAssessment = "Mallampati I 级，气道通畅",
-                    AnesthesiologistId = "DOC-ANES-01",
-                    AnesthesiologistName = SelectedSchedule.AnesthesiologistName
-                };
-                var createRes = await http.PostAsJsonAsync("/api/v4/medtech/anesthesia/records", createReq);
-                if (createRes.IsSuccessStatusCode)
-                {
-                    var doc = await createRes.Content.ReadFromJsonAsync<ApiResponse<JsonElement>>(JsonOptions);
-                    _anesthesiaRecordId = doc?.Data.GetProperty("id").GetString() ?? "";
+                    _shell?.ShowToast(result?.Message ?? "未确认麻醉记录创建，请查询原记录。", "Warning");
+                    return;
                 }
+                _anesthesiaRecordId = receipt.Id;
             }
 
             if (!string.IsNullOrWhiteSpace(_anesthesiaRecordId))
             {
-                var updateReq = new
-                {
-                    AsaGrade,
-                    AnesthesiaType,
-                    BloodLossMl,
-                    UrineOutputMl,
-                    FluidInputMl,
-                    MarkCompleted = AnesthesiaCompleted
-                };
-                var updateRes = await http.PutAsJsonAsync($"/api/v4/medtech/anesthesia/records/{_anesthesiaRecordId}", updateReq);
-                if (updateRes.IsSuccessStatusCode)
-                {
-                    _shell?.ShowToast("麻醉记录保存成功" + (AnesthesiaCompleted ? "（已标记完成归档）" : ""), "Success");
-                }
+                var id = _anesthesiaRecordId;
+                using var updateRes = await http.PutAsJsonAsync($"/api/v4/medtech/anesthesia/records/{id}", updateReq);
+                var result = await updateRes.Content.ReadFromJsonAsync<ApiResponse<AnesthesiaReceipt>>(JsonOptions);
+                if (!Current()) return;
+                if (updateRes.IsSuccessStatusCode && result is { Code: 200, Data: { } saved } && saved.Id == id &&
+                    saved.ScheduleId == schedule.Id && saved.Status == (updateReq.MarkCompleted ? 1 : 0))
+                    _shell?.ShowToast(result.Message, "Success");
+                else _shell?.ShowToast(result?.Code != 200 ? result?.Message ?? "麻醉记录保存未确认。" : "未取得匹配回执，请查询原记录。", "Warning");
             }
         }
         catch (Exception ex)
         {
-            _shell?.ShowToast($"保存麻醉记录异常: {ex.Message}", "Error");
+            if (Current()) _shell?.ShowToast($"麻醉记录结果待核对，请先查询原记录。{ex.Message}", "Warning");
         }
     }
 
@@ -709,30 +660,6 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
         }
     }
 
-    public async Task FinishSurgeryAsync(SurgeryScheduleItemModel? schedule)
-    {
-        if (schedule == null) return;
-        try
-        {
-            using var http = AuthenticatedHttpClientFactory.Create();
-            var res = await http.PostAsync($"/api/v4/medtech/surgeries/{schedule.Id}/finish-surgery", null);
-            if (res.IsSuccessStatusCode)
-            {
-                schedule.Status = 2;
-                _shell?.ShowToast($"手术 [{schedule.ScheduleNo}] 顺利完成并准予转入 PACU 复苏", "Success");
-            }
-            else
-            {
-                var body = await res.Content.ReadAsStringAsync();
-                _shell?.ShowToast($"结束手术失败: {body}", "Warning");
-            }
-        }
-        catch (Exception ex)
-        {
-            _shell?.ShowToast($"结束手术异常: {ex.Message}", "Error");
-        }
-    }
-
     public void Attach()
     {
         if (!_subscribed)
@@ -760,7 +687,7 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
         switch (keyGesture)
         {
             case "F2":
-                OpenWhoSurgeryDrawer();
+                OpenWhoSurgeryDrawerCommand.Execute(null);
                 return true;
             case "F3":
             case "Ctrl+F":
@@ -796,12 +723,143 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
 
     private void ApplyFilter(string mode) => StatusFilter = mode;
 
+    private sealed class MtcServiceRequestRow
+    {
+        public string Id { get; set; } = string.Empty;
+        public string RequestNo { get; set; } = string.Empty;
+        public string PatientId { get; set; } = string.Empty;
+        public string OrderDeptId { get; set; } = string.Empty;
+        public string ServiceItemCode { get; set; } = string.Empty;
+        public string ExecRoomCode { get; set; } = string.Empty;
+        public decimal FeeAmount { get; set; }
+        public short IsFeeConfirmed { get; set; }
+        public short Status { get; set; }
+    }
+
+    public async Task LoadMedTechRequestsAsync()
+    {
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            var res = await http.GetFromJsonAsync<ClientApiEnvelope<List<MtcServiceRequestRow>>>("/api/v4/medtech/requests", JsonOptions);
+            if ((res?.Code is 200 or 0) && res.Data != null && res.Data.Count > 0)
+            {
+                Workbench.MedTechOrders.Clear();
+                foreach (var r in res.Data)
+                {
+                    bool isLocked = r.IsFeeConfirmed == 1;
+                    string status = r.Status switch
+                    {
+                        0 => "待核收确费",
+                        1 => "核收中",
+                        2 => "已核收确费 (待出报告)",
+                        3 => "已出报告",
+                        4 => "已撤单退回",
+                        _ => "未知状态"
+                    };
+                    string statusClass = r.Status switch
+                    {
+                        2 => "Primary",
+                        3 => "Success",
+                        4 => "Secondary",
+                        _ => "Warning"
+                    };
+                    Workbench.MedTechOrders.Add(new MedTechOrderItemModel
+                    {
+                        RequestId = r.Id,
+                        RequestNo = r.RequestNo,
+                        PatientId = r.PatientId,
+                        ItemName = r.ServiceItemCode,
+                        DeptName = r.OrderDeptId,
+                        ExecLocation = string.IsNullOrWhiteSpace(r.ExecRoomCode) ? "医技科室" : r.ExecRoomCode,
+                        Fee = $"¥{r.FeeAmount:0.00}",
+                        IsFeeLocked = isLocked,
+                        Status = status,
+                        StatusClass = statusClass
+                    });
+                }
+            }
+        }
+        catch { }
+        RebuildFiltered();
+        RaiseCounts();
+    }
+
+    public async Task ConfirmFeeAsync(MedTechOrderItemModel? order)
+    {
+        if (order == null) return;
+        if (order.IsFeeLocked)
+        {
+            _shell?.ShowToast($"申请单 [{order.RequestNo}] 已经完成核收确费锁单", "Info");
+            return;
+        }
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            string targetId = !string.IsNullOrWhiteSpace(order.RequestId) ? order.RequestId : order.RequestNo;
+            var resp = await http.PostAsync($"/api/v4/medtech/requests/{Uri.EscapeDataString(targetId)}/confirm-fee-and-receive", null);
+            var res = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<MtcServiceRequestRow>>(JsonOptions);
+            if (resp.IsSuccessStatusCode && (res?.Code is 200 or 0))
+            {
+                order.IsFeeLocked = true;
+                order.Status = "已核收确费 (待出报告)";
+                order.StatusClass = "Primary";
+                _shell?.ShowToast($"申请单 [{order.RequestNo}] 已成功核收确费并锁单，现可出具报告", "Success");
+                RebuildFiltered();
+                RaiseCounts();
+            }
+            else
+            {
+                string msg = res?.Message ?? $"核收失败 ({resp.StatusCode})";
+                _shell?.ShowToast($"核收确费拦截: {msg}", "Warning");
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"确费异常: {ex.Message}", "Error");
+        }
+    }
+
+    public async Task CancelOrderAsync(MedTechOrderItemModel? order)
+    {
+        if (order == null) return;
+        try
+        {
+            using var http = AuthenticatedHttpClientFactory.Create();
+            string targetId = !string.IsNullOrWhiteSpace(order.RequestId) ? order.RequestId : order.RequestNo;
+            var resp = await http.PostAsync($"/api/v4/medtech/requests/{Uri.EscapeDataString(targetId)}/cancel", null);
+            var res = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<bool>>(JsonOptions);
+            if (resp.IsSuccessStatusCode && (res?.Code is 200 or 0))
+            {
+                order.Status = "已撤单退回";
+                order.StatusClass = "Secondary";
+                _shell?.ShowToast($"申请单 [{order.RequestNo}] 已成功撤单", "Success");
+                RebuildFiltered();
+                RaiseCounts();
+            }
+            else
+            {
+                string msg = res?.Message ?? $"撤单失败 ({resp.StatusCode})";
+                _shell?.ShowToast($"撤单拦截: {msg}", "Warning");
+            }
+        }
+        catch (Exception ex)
+        {
+            _shell?.ShowToast($"撤单异常: {ex.Message}", "Error");
+        }
+    }
+
+    private void OpenReportStation(MedTechOrderItemModel? order)
+    {
+        _shell?.NavigateToStation("medtech_report");
+        _shell?.ShowToast($"已切换到「医技报告与审签」工作站，请核对患者与申请并录入报告结论。", "Info");
+    }
+
     private void RefreshList()
     {
         SearchKeyword = string.Empty;
         StatusFilter = "ALL";
-        RebuildFiltered();
-        RaiseCounts();
+        _ = LoadMedTechRequestsAsync();
         _shell?.ShowToast($"已刷新医技申请列表（共 {TotalCount} 条）。", "Info");
     }
 
@@ -837,66 +895,6 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
         OnPropertyChanged(nameof(ReportedCount));
     }
 
-    private async void ExecuteConfirmFee(MedTechOrderItemModel? item)
-    {
-        if (item == null) return;
-        try
-        {
-            using var http = AuthenticatedHttpClientFactory.Create();
-            _ = await http.PostAsync($"/api/v4/medtech/requests/{item.RequestNo}/confirm-fee-and-receive", null);
-        }
-        catch { }
-        Workbench.ConfirmMedTechFee(item);
-        RebuildFiltered();
-        RaiseCounts();
-        _shell?.ShowToast($"已确认收费并锁单：{item.ItemName} ({item.RequestNo})", "Success");
-    }
-
-    private async void ExecutePublishReport(MedTechOrderItemModel? item)
-    {
-        if (item == null) return;
-        if (!item.CanPublishReport)
-        {
-            _shell?.ShowToast($"{item.ItemName} 需先完成确费锁单后才可出具报告。", "Warning");
-            return;
-        }
-        try
-        {
-            using var http = AuthenticatedHttpClientFactory.Create();
-            var body = new { ReportSummary = "医技检查检验指标正常，未见明显异常改变。", IsCriticalValue = false };
-            _ = await http.PostAsJsonAsync($"/api/v4/medtech/requests/{item.RequestNo}/publish-report", body);
-        }
-        catch { }
-        Workbench.PublishMedTechReport(item);
-        RebuildFiltered();
-        RaiseCounts();
-        _shell?.ShowToast($"已签发医技报告：{item.ItemName} ({item.RequestNo})", "Success");
-    }
-
-    private void ConfirmCancelOrder(MedTechOrderItemModel? item)
-    {
-        if (item == null) return;
-        if (item.IsFeeLocked)
-        {
-            Workbench.TryCancelMedTechOrder(item);
-            OpenRefundProofDrawer();
-            _shell?.ShowToast("该申请已完成确费锁单，不可直接撤单。", "Warning");
-            return;
-        }
-
-        _shell?.RequestConfirm(
-            "确认撤销医技申请",
-            $"确定撤销 {item.ItemName}（申请单 {item.RequestNo}）？撤单后需临床医生重新开单。",
-            "确认撤单",
-            () =>
-            {
-                Workbench.TryCancelMedTechOrder(item);
-                RebuildFiltered();
-                RaiseCounts();
-                _shell?.ShowToast($"已撤回医技申请：{item.RequestNo}", "Info");
-            });
-    }
-
     private void OpenRefundProofDrawer()
     {
         var panel = new StackPanel { Spacing = 12 };
@@ -923,60 +921,6 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
             }
         });
         _shell?.OpenDrawer("医技确费锁单与退费依据", "防误退费审计规范", panel, 460);
-    }
-
-    private void OpenWhoSurgeryDrawer()
-    {
-        var who = Workbench.WhoSurgeryCheck;
-        var panel = new StackPanel { Spacing = 12, DataContext = who };
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"{who.SurgeryName} · {who.AnesthesiaType}",
-            FontSize = 15,
-            FontWeight = Avalonia.Media.FontWeight.Bold,
-            TextWrapping = Avalonia.Media.TextWrapping.Wrap
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"患者: {who.PatientName} ({who.AdmissionNo}) | 状态: {who.CheckStatus}",
-            FontSize = 12,
-            TextWrapping = Avalonia.Media.TextWrapping.Wrap
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"主刀: {who.Surgeon} | 麻醉: {who.Anesthesiologist} | 巡回护士: {who.CirculatingNurse}",
-            FontSize = 12,
-            TextWrapping = Avalonia.Media.TextWrapping.Wrap
-        });
-
-        panel.Children.Add(CreateCheckCard($"阶段 A · 麻醉实施前 ({who.Stage1Badge})",
-            $"身份核对={who.SignInIdentityOk} | 手术部位标识={who.SignInSiteMarked} | 麻醉安全检查={who.SignInAnesthesiaSafetyCheck}"));
-        panel.Children.Add(CreateCheckCard($"阶段 B · 切开皮肤前 ({who.Stage2Badge})",
-            $"三方共同确认={who.TimeOutAllTeamAgreed} | 预防抗菌药={who.TimeOutAntibioticGiven} | 影像资料到位={who.TimeOutImagingDisplayed}"));
-        panel.Children.Add(CreateCheckCard($"阶段 C · 患者离室前 ({who.Stage3Badge})",
-            $"器械敷料清点一致={who.SignOutInstrumentCountMatched} | 病理标本标记={who.SignOutSpecimenLabeled}"));
-
-        var btn = new Button
-        {
-            Content = "三方核验并签发允许手术",
-            Height = 36,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Command = new RelayCommand(() =>
-            {
-                who.Stage1Confirmed = true;
-                who.Stage2Confirmed = true;
-                who.Stage3Confirmed = true;
-                who.CheckStatus = "✓ 三方全员核验签署完毕 · 允许实施切开与器械离室";
-                Workbench.SystemNotice = "✓ WHO 手术安全核查三方签署完毕！";
-                _shell?.CloseDrawer();
-                _shell?.ShowToast("WHO 手术安全三方核查已签发。", "Success");
-            })
-        };
-        btn.Classes.Add("Primary");
-        panel.Children.Add(btn);
-
-        _shell?.OpenDrawer("WHO 手术安全三方核查", $"{who.PatientName} ({who.AdmissionNo})", panel, 520);
     }
 
     public async Task LoadExamSlotsAsync()
@@ -1247,26 +1191,6 @@ public sealed class MedTechStationViewModel : ClientModelBase, IShortcutTarget, 
         {
             _shell?.ShowToast($"获取检验历史异常: {ex.Message}", "Error");
         }
-    }
-
-    private static Border CreateCheckCard(string title, string detail)
-    {
-        return new Border
-        {
-            Padding = new Avalonia.Thickness(12),
-            CornerRadius = new Avalonia.CornerRadius(6),
-            BorderBrush = ThemeBrushes.Border,
-            BorderThickness = new Avalonia.Thickness(1),
-            Child = new StackPanel
-            {
-                Spacing = 4,
-                Children =
-                {
-                    new TextBlock { Text = title, FontWeight = Avalonia.Media.FontWeight.Bold, FontSize = 13 },
-                    new TextBlock { Text = detail, FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap }
-                }
-            }
-        };
     }
 
     public Dictionary<string, string> BuildPrintContext(object? rowContext = null)

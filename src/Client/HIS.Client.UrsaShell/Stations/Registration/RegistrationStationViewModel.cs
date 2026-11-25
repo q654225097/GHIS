@@ -7,7 +7,7 @@ using HIS.Client.UrsaShell.ViewModels;
 
 namespace HIS.Client.UrsaShell.Stations.Registration;
 
-public sealed class RegistrationStationViewModel : ClientModelBase, IStationLifecycle, IShortcutTarget
+public sealed partial class RegistrationStationViewModel : ClientModelBase, IStationLifecycle, IShortcutTarget
 {
     private readonly ShellViewModel? _shell;
     private string _notice = string.Empty;
@@ -148,6 +148,7 @@ public sealed class RegistrationStationViewModel : ClientModelBase, IStationLife
     public void Activate()
     {
         _ = LoadAsync();
+        _ = Registration.LoadReservedAppointmentsAsync();
     }
 
     public void Deactivate()
@@ -328,6 +329,10 @@ public sealed class RegistrationStationViewModel : ClientModelBase, IStationLife
 
     private void OnRegistrationPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(RegistrationCashierViewModel.SelectedPatient))
+        {
+            _ = Registration.RefreshSelectedPatientBalanceAsync();
+        }
         if (e.PropertyName is nameof(RegistrationCashierViewModel.SelectedPatient)
             or nameof(RegistrationCashierViewModel.SelectedSlot)
             or nameof(RegistrationCashierViewModel.SelectedPaymentChannel)

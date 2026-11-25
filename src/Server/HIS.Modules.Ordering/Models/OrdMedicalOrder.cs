@@ -23,6 +23,10 @@ public class OrdMedicalOrder : BaseEntity
 
 	public string OrderCategory { get; set; } = "DRUG";
 
+	public string OrderSubType { get; set; } = "NORMAL";
+
+	public string? ParentOrderId { get; set; }
+
 	public string ItemCode { get; set; } = string.Empty;
 
 	public string ItemName { get; set; } = string.Empty;
@@ -46,6 +50,12 @@ public class OrdMedicalOrder : BaseEntity
 	public string? StopDoctorId { get; set; }
 
 	public long? ActualStopAtMs { get; set; }
+
+	public string? VoidReason { get; set; }
+
+	public string? VoidDoctorId { get; set; }
+
+	public long? VoidAtMs { get; set; }
 
 	public string ApprovalStatus { get; set; } = "DRAFT";
 

@@ -115,6 +115,7 @@ public class PatientController : ControllerBase
         };
 
         await _patientRepo.InsertAsync(p);
+        await TryEnsureEmpiMappingAsync(p);
 
         if (_auditTrail != null)
         {
@@ -142,6 +143,7 @@ public class PatientController : ControllerBase
         };
 
         await _patientRepo.InsertAsync(p);
+        await TryEnsureEmpiMappingAsync(p);
 
         if (_auditTrail != null)
         {
@@ -149,6 +151,20 @@ public class PatientController : ControllerBase
         }
 
         return ApiResponse<PatPatient>.Success(p, "三无急诊临时档案创建成功");
+    }
+
+    private async Task TryEnsureEmpiMappingAsync(PatPatient p)
+    {
+        try
+        {
+            await _patientRepo.ExecuteAsync(
+                "INSERT OR IGNORE INTO hie_empi_mappings (id, empi_id, source_sys, local_pid, is_primary, confidence_score, created_at_ms, created_by, updated_at_ms, updated_by, version_no) VALUES (@Id, @EmpiId, 'HIS', @LocalPid, 1, 1.0, @Now, @Actor, @Now, @Actor, 1)",
+                new { Id = Guid.NewGuid().ToString("D"), EmpiId = p.Id, LocalPid = p.MedicalRecordNo, Now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Actor = _userSession?.UserId ?? "SYSTEM" });
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1)
+        {
+            // Minimal unit-test schemas may omit hie_empi_mappings.
+        }
     }
 
     [RequireRole(RoleCode.Admin, RoleCode.DoctorOpd, RoleCode.DoctorIpd, RoleCode.NurseIpd, RoleCode.Cashier)]

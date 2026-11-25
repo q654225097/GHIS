@@ -67,6 +67,9 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS opd_schedule_templates (id VARCHAR(36) PRIMARY KEY, campus_id VARCHAR(36) NOT NULL, opd_dept_id VARCHAR(36) NOT NULL, clinic_room_id VARCHAR(36), doctor_id VARCHAR(36) NOT NULL, template_name VARCHAR(128) NOT NULL, weekday_codes VARCHAR(20) NOT NULL, slot_period_code VARCHAR(32) NOT NULL, start_minute INT NOT NULL, end_minute INT NOT NULL, reg_level_code VARCHAR(32) NOT NULL, registration_fee DECIMAL(18,4) NOT NULL, total_capacity INT NOT NULL, is_active SMALLINT NOT NULL, ext_data_json VARCHAR(4000), schema_version INT NOT NULL, created_at_ms BIGINT NOT NULL, created_by VARCHAR(36), updated_at_ms BIGINT NOT NULL, updated_by VARCHAR(36), version_no INT NOT NULL)");
 		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_opd_schedule_slots_date_dept ON opd_schedule_slots (schedule_date_int, opd_dept_id)");
 		await EnsureRegistrationColumnsAsync(conn);
+		await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS mte_surgery_safety_entries (id VARCHAR(36) PRIMARY KEY, schedule_id VARCHAR(36) NOT NULL, schedule_version INT NOT NULL, step_code VARCHAR(48) NOT NULL, duty_code VARCHAR(24) NOT NULL, operator_id VARCHAR(36) NOT NULL, operator_name VARCHAR(128) NOT NULL, recorded_at_ms BIGINT NOT NULL, evidence_json TEXT NOT NULL, passed SMALLINT NOT NULL, note VARCHAR(500))");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_mte_surgery_safety_schedule ON mte_surgery_safety_entries (schedule_id, schedule_version, recorded_at_ms)");
+		await conn.ExecuteAsync("CREATE UNIQUE INDEX IF NOT EXISTS ux_fin_charge_ledgers_source_service ON fin_charge_ledgers (source_service_request_id) WHERE source_service_request_id IS NOT NULL");
 		await EnsureSchemaExtensionsAsync(conn);
 		await EnsureEmrLevel7SchemaAsync(conn);
 		await EnsureWorkflowSchemaAsync(conn);
@@ -78,16 +81,35 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await InitializeCheckupProTablesAsync(conn);
 		await InitializeClinicalCompleteTablesAsync(conn);
 		await InitializeMasterDictTablesAsync(conn);
+		await InitializeMasterDataCompleteAsync(conn);
+		await InitializeMasterDataPhase2Async(conn);
 		await InitializeAimsTablesAsync(conn);
 		await InitializeMedNursingAdminTablesAsync(conn);
 		await InitializeClinicalP0P1TablesAsync(conn);
+		await InitializeGapClosure2026TablesAsync(conn);
+		await conn.ExecuteAsync("""
+			CREATE TABLE IF NOT EXISTS mte_surgery_safety_entries (
+			    id VARCHAR(36) PRIMARY KEY,
+			    schedule_id VARCHAR(36) NOT NULL,
+			    schedule_version INT NOT NULL,
+			    step_code VARCHAR(32) NOT NULL,
+			    duty_code VARCHAR(24) NOT NULL,
+			    operator_id VARCHAR(36) NOT NULL,
+			    operator_name VARCHAR(128) NOT NULL,
+			    recorded_at_ms BIGINT NOT NULL,
+			    evidence_json TEXT NOT NULL,
+			    passed SMALLINT NOT NULL,
+			    note VARCHAR(500),
+			    UNIQUE (schedule_id, schedule_version)
+			);
+			""");
 		await CleanUpDirtyDataAsync(conn);
 	}
 
 	private static async Task EnsureColumnAsync(DbConnection conn, string tableName, string columnName, string columnDef)
 	{
 		string connTypeName = conn.GetType().FullName ?? string.Empty;
-		bool exists;
+		bool exists = false;
 		if (connTypeName.Contains("DmConnection", StringComparison.OrdinalIgnoreCase))
 		{
 			int cnt = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM USER_TAB_COLUMNS WHERE UPPER(TABLE_NAME) = UPPER(@Tbl) AND UPPER(COLUMN_NAME) = UPPER(@Col)", new { Tbl = tableName, Col = columnName });
@@ -100,12 +122,38 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		}
 		else
 		{
-			var cols = await conn.QueryAsync<TableColumnInfo>($"PRAGMA table_info({tableName})");
-			exists = cols.Any(c => string.Equals(c.Name, columnName, StringComparison.OrdinalIgnoreCase));
+			using var checkTblCmd = conn.CreateCommand();
+			checkTblCmd.CommandText = "SELECT COUNT(1) FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(@Tbl)";
+			var p = checkTblCmd.CreateParameter();
+			p.ParameterName = "@Tbl";
+			p.Value = tableName;
+			checkTblCmd.Parameters.Add(p);
+			long tblExists = Convert.ToInt64(await checkTblCmd.ExecuteScalarAsync());
+			if (tblExists == 0) return;
+
+			using var cmd = conn.CreateCommand();
+			cmd.CommandText = $"PRAGMA table_info({tableName})";
+			using var reader = await cmd.ExecuteReaderAsync();
+			while (await reader.ReadAsync())
+			{
+				string col = reader["name"]?.ToString() ?? string.Empty;
+				if (string.Equals(col, columnName, StringComparison.OrdinalIgnoreCase))
+				{
+					exists = true;
+					break;
+				}
+			}
 		}
 		if (!exists)
 		{
-			await conn.ExecuteAsync($"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnDef}");
+			try
+			{
+				await conn.ExecuteAsync($"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnDef}");
+			}
+			catch (Exception ex) when (ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
+			{
+				// Column already added by concurrent connection
+			}
 		}
 	}
 
@@ -121,6 +169,7 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_fin_charge_ledgers_visit ON fin_charge_ledgers (visit_or_encounter_id)");
 		await EnsureColumnAsync(conn, "fin_charge_ledgers", "payment_order_id", "VARCHAR(36)");
 		await EnsureColumnAsync(conn, "fin_charge_ledgers", "source_service_request_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "cpw_stage_items", "sort_order", "INT NOT NULL DEFAULT 1");
 		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_fin_charge_ledgers_payment ON fin_charge_ledgers (payment_order_id)");
 		await EnsureColumnAsync(conn, "inv_stock_ledgers", "payment_order_id", "VARCHAR(36)");
 		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_inv_stock_ledgers_payment ON inv_stock_ledgers (payment_order_id)");
@@ -162,6 +211,7 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await EnsureColumnAsync(conn, "ipd_encounters", "triage_status", "INT NOT NULL DEFAULT 0");
 		await EnsureColumnAsync(conn, "ipd_encounters", "accepted_at_ms", "BIGINT");
 		await EnsureColumnAsync(conn, "ipd_encounters", "accepted_by", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "ipd_encounters", "admit_time_ms", "BIGINT NOT NULL DEFAULT 0");
 		await conn.ExecuteAsync(@"
 CREATE TABLE IF NOT EXISTS ipd_admission_cards (
     id VARCHAR(36) PRIMARY KEY,
@@ -1325,7 +1375,224 @@ CREATE TABLE IF NOT EXISTS emr_user_templates (
 );
 CREATE INDEX IF NOT EXISTS ix_emr_user_templates_user ON emr_user_templates (user_id, emr_scene);
 CREATE INDEX IF NOT EXISTS ix_emr_user_templates_dept ON emr_user_templates (dept_id, emr_scene);
+
+-- Outpatient Infusion Closed-Loop Tables
+CREATE TABLE IF NOT EXISTS opd_infusion_orders (
+    id VARCHAR(36) PRIMARY KEY,
+    infusion_no VARCHAR(40) NOT NULL UNIQUE,
+    prescription_id VARCHAR(36) NOT NULL,
+    visit_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    patient_name VARCHAR(128) NOT NULL,
+    seat_no VARCHAR(32),
+    status INT NOT NULL DEFAULT 0,
+    compound_nurse_id VARCHAR(36),
+    compound_check_nurse_id VARCHAR(36),
+    compounded_at_ms BIGINT,
+    puncture_nurse_id VARCHAR(36),
+    punctured_at_ms BIGINT,
+    drip_rate INT DEFAULT 60,
+    total_bottles INT NOT NULL DEFAULT 1,
+    completed_bottles INT NOT NULL DEFAULT 0,
+    completed_at_ms BIGINT,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_opd_infusion_patient ON opd_infusion_orders (patient_id, status);
+CREATE INDEX IF NOT EXISTS ix_opd_infusion_rx ON opd_infusion_orders (prescription_id);
+
+CREATE TABLE IF NOT EXISTS opd_infusion_bottles (
+    id VARCHAR(36) PRIMARY KEY,
+    infusion_order_id VARCHAR(36) NOT NULL,
+    bottle_barcode VARCHAR(64) NOT NULL UNIQUE,
+    sequence_no INT NOT NULL,
+    drug_names VARCHAR(500) NOT NULL,
+    spec VARCHAR(256),
+    dosage_text VARCHAR(128),
+    status INT NOT NULL DEFAULT 0,
+    start_time_ms BIGINT,
+    end_time_ms BIGINT,
+    puncture_nurse_id VARCHAR(36),
+    replace_nurse_id VARCHAR(36),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    updated_at_ms BIGINT NOT NULL,
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_opd_infusion_bottles_order ON opd_infusion_bottles (infusion_order_id);
+
+CREATE TABLE IF NOT EXISTS opd_infusion_inspections (
+    id VARCHAR(36) PRIMARY KEY,
+    infusion_order_id VARCHAR(36) NOT NULL,
+    bottle_id VARCHAR(36),
+    inspect_nurse_id VARCHAR(36) NOT NULL,
+    inspect_nurse_name VARCHAR(128) NOT NULL,
+    drip_speed INT NOT NULL,
+    is_swollen SMALLINT NOT NULL DEFAULT 0,
+    has_adverse_reaction SMALLINT NOT NULL DEFAULT 0,
+    notes VARCHAR(500),
+    inspected_at_ms BIGINT NOT NULL
+);
+
+-- TCM Herbal Prescriptions
+CREATE TABLE IF NOT EXISTS opd_tcm_prescriptions (
+    id VARCHAR(36) PRIMARY KEY,
+    prescription_no VARCHAR(40) NOT NULL UNIQUE,
+    visit_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    doctor_id VARCHAR(36) NOT NULL,
+    dept_id VARCHAR(36) NOT NULL,
+    tcm_diagnosis VARCHAR(256) NOT NULL,
+    tcm_syndrome VARCHAR(256),
+    dose_count INT NOT NULL DEFAULT 7,
+    usage_route VARCHAR(64) NOT NULL DEFAULT '水煎服',
+    frequency VARCHAR(64) NOT NULL DEFAULT '每日1剂早晚分服',
+    is_decoction_required SMALLINT NOT NULL DEFAULT 0,
+    decoction_pack_count INT NOT NULL DEFAULT 2,
+    decoction_unit_fee DECIMAL(18,4) NOT NULL DEFAULT 3.0000,
+    total_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    payment_order_id VARCHAR(36),
+    status INT NOT NULL DEFAULT 0,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_opd_tcm_rx_visit ON opd_tcm_prescriptions (visit_id, status);
+
+CREATE TABLE IF NOT EXISTS opd_tcm_prescription_items (
+    id VARCHAR(36) PRIMARY KEY,
+    tcm_prescription_id VARCHAR(36) NOT NULL,
+    herb_id VARCHAR(36) NOT NULL,
+    herb_name VARCHAR(128) NOT NULL,
+    single_dose_g DECIMAL(18,4) NOT NULL,
+    total_weight_g DECIMAL(18,4) NOT NULL,
+    unit_price_per_g DECIMAL(18,4) NOT NULL,
+    total_item_price DECIMAL(18,4) NOT NULL,
+    special_usage VARCHAR(64),
+    sort_order INT NOT NULL DEFAULT 1,
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    updated_at_ms BIGINT NOT NULL,
+    version_no INT NOT NULL DEFAULT 1
+);
+
+-- Infectious Disease Mandatory Rules
+CREATE TABLE IF NOT EXISTS cfg_infectious_diseases (
+    id VARCHAR(36) PRIMARY KEY,
+    disease_code VARCHAR(64) NOT NULL UNIQUE,
+    disease_name VARCHAR(128) NOT NULL,
+    category VARCHAR(16) NOT NULL,
+    icd10_prefix VARCHAR(32) NOT NULL,
+    report_time_limit_hours INT NOT NULL,
+    is_active SMALLINT NOT NULL DEFAULT 1
+);
 ");
+
+		// Column additions for Specimen Rejection & Critical Value Closure & Campus ID
+		await EnsureColumnAsync(conn, "mtc_service_requests", "rejection_reason", "VARCHAR(256)");
+		await EnsureColumnAsync(conn, "mtc_service_requests", "rejected_by", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "mtc_service_requests", "rejected_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "mtc_service_requests", "recollection_task_id", "VARCHAR(36)");
+
+		await EnsureColumnAsync(conn, "mtc_diagnostic_reports", "clinical_intervention_action", "VARCHAR(500)");
+		await EnsureColumnAsync(conn, "mtc_diagnostic_reports", "intervention_doctor_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "mtc_diagnostic_reports", "intervention_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "mtc_diagnostic_reports", "patient_outcome", "VARCHAR(64)");
+		await EnsureColumnAsync(conn, "mtc_diagnostic_reports", "is_closed", "SMALLINT NOT NULL DEFAULT 0");
+
+		await EnsureColumnAsync(conn, "fin_payment_orders", "campus_id", "VARCHAR(36) NOT NULL DEFAULT 'CAMPUS-01'");
+		await EnsureColumnAsync(conn, "fin_refund_orders", "campus_id", "VARCHAR(36) NOT NULL DEFAULT 'CAMPUS-01'");
+		await EnsureColumnAsync(conn, "fin_daily_closings", "campus_id", "VARCHAR(36) NOT NULL DEFAULT 'CAMPUS-01'");
+
+		// Seed initial infectious diseases if empty
+		await conn.ExecuteAsync(@"
+INSERT OR IGNORE INTO cfg_infectious_diseases (id, disease_code, disease_name, category, icd10_prefix, report_time_limit_hours, is_active)
+VALUES 
+('INF-01', 'CHOLERA', '霍乱', 'CLASS_A', 'A00', 2, 1),
+('INF-02', 'PLAGUE', '鼠疫', 'CLASS_A', 'A20', 2, 1),
+('INF-03', 'COVID19', '新型冠状病毒感染', 'CLASS_B', 'U07.1', 24, 1),
+('INF-04', 'TUBERCULOSIS', '肺结核', 'CLASS_B', 'A15', 24, 1),
+('INF-05', 'HEPATITIS_B', '病毒性乙型肝炎', 'CLASS_B', 'B16', 24, 1),
+('INF-06', 'MEASLES', '麻疹', 'CLASS_B', 'B05', 24, 1),
+('INF-07', 'HIV', '艾滋病', 'CLASS_B', 'B24', 24, 1),
+('INF-08', 'DYSENTERY', '细菌性阿米巴性痢疾', 'CLASS_B', 'A06', 24, 1),
+('INF-09', 'INFLUENZA', '流行性感冒', 'CLASS_C', 'J10', 24, 1);
+");
+
+		// Benchmark GAP Remediation: Inpatient Order Nesting, Outpatient Accounts, Transfusion Monitoring, Ward Transfer SBAR
+		await EnsureColumnAsync(conn, "ord_medical_orders", "order_sub_type", "VARCHAR(32) NOT NULL DEFAULT 'NORMAL'");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "parent_order_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "void_reason", "VARCHAR(256)");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "void_doctor_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "ord_medical_orders", "void_at_ms", "BIGINT");
+		await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_ord_group_term ON ord_medical_orders (encounter_id, group_no, order_term_type)");
+
+		await conn.ExecuteAsync(@"
+CREATE TABLE IF NOT EXISTS opd_patient_accounts (
+    id VARCHAR(36) PRIMARY KEY,
+    patient_id VARCHAR(36) NOT NULL UNIQUE,
+    account_no VARCHAR(32) NOT NULL UNIQUE,
+    card_no VARCHAR(32),
+    balance DECIMAL(18,4) NOT NULL DEFAULT 0,
+    frozen_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    status INT NOT NULL DEFAULT 1,
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS opd_account_ledgers (
+    id VARCHAR(36) PRIMARY KEY,
+    account_id VARCHAR(36) NOT NULL,
+    patient_id VARCHAR(36) NOT NULL,
+    trans_type VARCHAR(32) NOT NULL,
+    amount DECIMAL(18,4) NOT NULL,
+    balance_after DECIMAL(18,4) NOT NULL,
+    payment_channel VARCHAR(32),
+    operator_id VARCHAR(36) NOT NULL,
+    prescription_id VARCHAR(36),
+    payment_order_id VARCHAR(36),
+    remark VARCHAR(256),
+    ext_data_json VARCHAR(4000),
+    schema_version INT NOT NULL DEFAULT 1,
+    created_at_ms BIGINT NOT NULL,
+    created_by VARCHAR(36),
+    updated_at_ms BIGINT NOT NULL,
+    updated_by VARCHAR(36),
+    version_no INT NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_opd_account_ledgers_patient ON opd_account_ledgers (patient_id, created_at_ms);
+");
+
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "bag_barcode", "VARCHAR(80)");
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "patient_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "status", "VARCHAR(32) NOT NULL DEFAULT 'TRANSFUSING'");
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "termination_reason", "VARCHAR(500)");
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "fifteen_min_checked_at_ms", "BIGINT");
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "fifteen_min_nurse_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "bag_recovered_by_id", "VARCHAR(36)");
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "bag_storage_location", "VARCHAR(128)");
+		await EnsureColumnAsync(conn, "bld_transfusion_executions", "retention_hours", "INT NOT NULL DEFAULT 24");
+
+		await EnsureColumnAsync(conn, "ipd_transfer_logs", "sbar_situation", "VARCHAR(1000)");
+		await EnsureColumnAsync(conn, "ipd_transfer_logs", "sbar_background", "VARCHAR(1000)");
+		await EnsureColumnAsync(conn, "ipd_transfer_logs", "sbar_assessment", "VARCHAR(1000)");
+		await EnsureColumnAsync(conn, "ipd_transfer_logs", "sbar_recommendation", "VARCHAR(1000)");
+		await EnsureColumnAsync(conn, "ipd_transfer_logs", "orders_reorganized", "SMALLINT NOT NULL DEFAULT 0");
+		await EnsureColumnAsync(conn, "ipd_transfer_logs", "reorganized_count", "INT NOT NULL DEFAULT 0");
 	}
 
 	private static async Task CleanUpDirtyDataAsync(DbConnection conn)

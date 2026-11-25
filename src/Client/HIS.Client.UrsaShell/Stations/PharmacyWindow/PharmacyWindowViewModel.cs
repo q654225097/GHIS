@@ -18,7 +18,7 @@ public class SampledPrescriptionModel : ClientModelBase
     public string Id { get; set; } = string.Empty;
     public string PatientId { get; set; } = string.Empty;
     public long CreatedAtMs { get; set; }
-    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-";
+    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "-";
 }
 
 public class MedicationReconciliationModel : ClientModelBase
@@ -30,10 +30,10 @@ public class MedicationReconciliationModel : ClientModelBase
     public string Decision { get; set; } = string.Empty;
     public string ReconciledBy { get; set; } = string.Empty;
     public long CreatedAtMs { get; set; }
-    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-";
+    public string TimeText => CreatedAtMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "-";
 }
 
-public sealed class PharmacyWindowViewModel : ClientModelBase, IShortcutTarget
+public sealed partial class PharmacyWindowViewModel : ClientModelBase, IShortcutTarget
 {
     private readonly ShellViewModel? _shell;
     private int _localTabIndex;
@@ -201,6 +201,7 @@ public sealed class PharmacyWindowViewModel : ClientModelBase, IShortcutTarget
         Pharmacy.SelectedTabIndex = MapLocalTabToSharedIndex(_localTabIndex);
         ApplyPrescriptionFilter();
         RaiseAllComputed();
+        _ = LoadPivasOrdersAsync();
     }
 
     public void OnDetached()

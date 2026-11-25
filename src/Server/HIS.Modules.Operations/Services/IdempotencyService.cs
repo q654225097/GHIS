@@ -38,7 +38,13 @@ public class IdempotencyService : IIdempotencyContract
 			throw new ArgumentOutOfRangeException(nameof(ttl), "Idempotency TTL must be positive.");
 		if (_connFactory == null)
 			return await TryAcquireLegacyAsync(key, hash, ttlMs, ct);
-		if (_connFactory is SqliteConnectionFactory sqliteFactory && !sqliteFactory.IsAmbientTransaction)
+		SqliteConnectionFactory? sqliteFactory = _connFactory switch
+		{
+			SqliteConnectionFactory sf => sf,
+			MultiDbConnectionFactory mcf when mcf.ProviderKind == HisDbProviderKind.Sqlite => mcf.SqliteDelegate,
+			_ => null
+		};
+		if (sqliteFactory != null && !sqliteFactory.IsAmbientTransaction)
 			return await TryAcquireSqliteAsync(sqliteFactory, key, hash, ttlMs, ct);
 		await using DbConnection conn = _connFactory.CreateConnection();
 		for (int attempt = 0; attempt < 100; attempt++)
@@ -54,8 +60,8 @@ public class IdempotencyService : IIdempotencyContract
 				return (IsDuplicate: true, CachedResponseJson: existing.ResponseJson, IsConflict: false);
 			}
 			int inserted = await ExecuteWithLockRetryAsync(conn, () => conn.ExecuteAsync(new CommandDefinition(
-				"INSERT OR IGNORE INTO ops_idempotency_keys (id, request_key, request_sha256, response_json, expires_at_ms, created_at_ms, updated_at_ms, version_no) " +
-				"VALUES (@Id, @Key, @Hash, NULL, @ExpiresAtMs, @NowMs, @NowMs, 1)",
+				"INSERT OR IGNORE INTO ops_idempotency_keys (id, request_key, request_sha256, response_json, expires_at_ms, schema_version, created_at_ms, updated_at_ms, version_no) " +
+				"VALUES (@Id, @Key, @Hash, NULL, @ExpiresAtMs, 1, @NowMs, @NowMs, 1)",
 				new { Id = Guid.NewGuid().ToString("D"), Key = key, Hash = hash, ExpiresAtMs = nowMs + ttlMs, NowMs = nowMs },
 				cancellationToken: ct)), ct);
 			if (inserted == 1)

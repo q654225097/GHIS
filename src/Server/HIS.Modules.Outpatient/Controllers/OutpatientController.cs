@@ -92,7 +92,8 @@ public partial class OutpatientController : ControllerBase
         decimal RegistrationFee,
         int TotalCapacity,
         int IsActive = 1,
-        string? CampusId = null);
+        string? CampusId = null,
+        int SlotIntervalMinutes = 0);
 
     public sealed record GenerateScheduleRequestDto(
         string TemplateId,
@@ -180,9 +181,26 @@ public partial class OutpatientController : ControllerBase
         var validation = ApplyTemplateRequest(template, req);
         if (validation != null)
             return ApiResponse<OpdScheduleTemplate>.Fail(400, validation);
+        if (template.RegistrationFee <= 0m)
+        {
+            using var mdmConn = _connFactory.CreateConnection();
+            decimal stdFee = await mdmConn.ExecuteScalarAsync<decimal>(
+                "SELECT COALESCE(reg_fee, 0) FROM mdm_reg_levels WHERE UPPER(reg_level_code) = UPPER(@Code) AND is_active = 1 LIMIT 1",
+                new { Code = template.RegLevelCode });
+            if (stdFee > 0m) template.RegistrationFee = stdFee;
+        }
         validation = await ValidateTemplateReferencesAsync(template);
         if (validation != null)
             return ApiResponse<OpdScheduleTemplate>.Fail(400, validation);
+        if (!string.IsNullOrWhiteSpace(template.ClinicRoomId))
+        {
+            using var locConn = _connFactory.CreateConnection();
+            int? locActive = await locConn.QueryFirstOrDefaultAsync<int?>(
+                "SELECT is_active FROM mdm_locations WHERE location_code = @Code OR id = @Code LIMIT 1",
+                new { Code = template.ClinicRoomId.Trim() });
+            if (locActive == 0)
+                return ApiResponse<OpdScheduleTemplate>.Fail(409, $"物理空间/诊室主数据 [{template.ClinicRoomId}] 已停用，禁止排班");
+        }
 
         await _templateRepo.InsertAsync(template);
         await RecordScheduleAuditAsync("OPD_SCHEDULE_TEMPLATE_CREATE", template.Id,
@@ -207,9 +225,26 @@ public partial class OutpatientController : ControllerBase
         var validation = ApplyTemplateRequest(template, req);
         if (validation != null)
             return ApiResponse<OpdScheduleTemplate>.Fail(400, validation);
+        if (template.RegistrationFee <= 0m)
+        {
+            using var mdmConn = _connFactory.CreateConnection();
+            decimal stdFee = await mdmConn.ExecuteScalarAsync<decimal>(
+                "SELECT COALESCE(reg_fee, 0) FROM mdm_reg_levels WHERE UPPER(reg_level_code) = UPPER(@Code) AND is_active = 1 LIMIT 1",
+                new { Code = template.RegLevelCode });
+            if (stdFee > 0m) template.RegistrationFee = stdFee;
+        }
         validation = await ValidateTemplateReferencesAsync(template);
         if (validation != null)
             return ApiResponse<OpdScheduleTemplate>.Fail(400, validation);
+        if (!string.IsNullOrWhiteSpace(template.ClinicRoomId))
+        {
+            using var locConn = _connFactory.CreateConnection();
+            int? locActive = await locConn.QueryFirstOrDefaultAsync<int?>(
+                "SELECT is_active FROM mdm_locations WHERE location_code = @Code OR id = @Code LIMIT 1",
+                new { Code = template.ClinicRoomId.Trim() });
+            if (locActive == 0)
+                return ApiResponse<OpdScheduleTemplate>.Fail(409, $"物理空间/诊室主数据 [{template.ClinicRoomId}] 已停用，禁止排班");
+        }
         template.UpdatedBy = CurrentOperatorId;
 
         await _templateRepo.UpdateAsync(template);
@@ -256,56 +291,127 @@ public partial class OutpatientController : ControllerBase
         var daysMatched = 0;
         await _connFactory.ExecuteInTransactionAsync(async ct =>
         {
+            var interval = template.SlotIntervalMinutes >= 10 ? template.SlotIntervalMinutes : 0;
             for (var date = start; date <= end; date = date.AddDays(1))
             {
                 if (!weekdays.Contains((int)date.DayOfWeek == 0 ? 7 : (int)date.DayOfWeek))
                     continue;
                 daysMatched++;
                 var dateInt = date.Year * 10000 + date.Month * 100 + date.Day;
-                var existing = await _slotRepo.QueryAsync(
-                    """
-                    SELECT * FROM opd_schedule_slots
-                    WHERE opd_dept_id = @DeptId
-                      AND doctor_id = @DoctorId
-                      AND schedule_date_int = @DateInt
-                      AND slot_period_code = @Period
-                      AND reg_level_code = @Level
-                    """,
-                    new
-                    {
-                        DeptId = template.OpdDeptId,
-                        DoctorId = template.DoctorId,
-                        DateInt = dateInt,
-                        Period = template.SlotPeriodCode,
-                        Level = template.RegLevelCode
-                    }, ct);
-                if (existing.Count > 0)
-                {
-                    skipped++;
-                    continue;
-                }
-
                 var dateStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(8));
-                var slot = new OpdScheduleSlot
+
+                if (interval == 0)
                 {
-                    CampusId = template.CampusId,
-                    OpdDeptId = template.OpdDeptId,
-                    ClinicRoomId = template.ClinicRoomId,
-                    DoctorId = template.DoctorId,
-                    ScheduleDateInt = dateInt,
-                    SlotPeriodCode = template.SlotPeriodCode,
-                    StartsAtMs = dateStart.AddMinutes(template.StartMinute).ToUnixTimeMilliseconds(),
-                    EndsAtMs = dateStart.AddMinutes(template.EndMinute).ToUnixTimeMilliseconds(),
-                    RegLevelCode = template.RegLevelCode,
-                    RegistrationFee = template.RegistrationFee,
-                    TotalCapacity = template.TotalCapacity,
-                    ReservedCount = 0,
-                    SlotStatus = 1,
-                    CreatedBy = CurrentOperatorId,
-                    UpdatedBy = CurrentOperatorId
-                };
-                await _slotRepo.InsertAsync(slot, ct);
-                created++;
+                    var existing = await _slotRepo.QueryAsync(
+                        """
+                        SELECT * FROM opd_schedule_slots
+                        WHERE opd_dept_id = @DeptId
+                          AND doctor_id = @DoctorId
+                          AND schedule_date_int = @DateInt
+                          AND slot_period_code = @Period
+                          AND reg_level_code = @Level
+                        """,
+                        new
+                        {
+                            DeptId = template.OpdDeptId,
+                            DoctorId = template.DoctorId,
+                            DateInt = dateInt,
+                            Period = template.SlotPeriodCode,
+                            Level = template.RegLevelCode
+                        }, ct);
+                    if (existing.Count > 0)
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    var slot = new OpdScheduleSlot
+                    {
+                        CampusId = template.CampusId,
+                        OpdDeptId = template.OpdDeptId,
+                        ClinicRoomId = template.ClinicRoomId,
+                        DoctorId = template.DoctorId,
+                        ScheduleDateInt = dateInt,
+                        SlotPeriodCode = template.SlotPeriodCode,
+                        StartsAtMs = dateStart.AddMinutes(template.StartMinute).ToUnixTimeMilliseconds(),
+                        EndsAtMs = dateStart.AddMinutes(template.EndMinute).ToUnixTimeMilliseconds(),
+                        RegLevelCode = template.RegLevelCode,
+                        RegistrationFee = template.RegistrationFee,
+                        TotalCapacity = template.TotalCapacity,
+                        ReservedCount = 0,
+                        SlotIntervalMinutes = 0,
+                        SlotStatus = 1,
+                        CreatedBy = CurrentOperatorId,
+                        UpdatedBy = CurrentOperatorId
+                    };
+                    await _slotRepo.InsertAsync(slot, ct);
+                    created++;
+                }
+                else
+                {
+                    var windows = new List<(int StartMin, int EndMin, string PeriodCode)>();
+                    for (int cur = template.StartMinute; cur < template.EndMinute; cur += interval)
+                    {
+                        int subEnd = Math.Min(cur + interval, template.EndMinute);
+                        string subCode = $"{template.SlotPeriodCode}_{cur / 60:D2}{cur % 60:D2}";
+                        windows.Add((cur, subEnd, subCode));
+                    }
+
+                    int baseCap = template.TotalCapacity / Math.Max(1, windows.Count);
+                    int remCap = template.TotalCapacity % Math.Max(1, windows.Count);
+
+                    for (int idx = 0; idx < windows.Count; idx++)
+                    {
+                        int subCapacity = baseCap + (idx < remCap ? 1 : 0);
+                        if (subCapacity <= 0)
+                            continue;
+                        var w = windows[idx];
+                        var existing = await _slotRepo.QueryAsync(
+                            """
+                            SELECT * FROM opd_schedule_slots
+                            WHERE opd_dept_id = @DeptId
+                              AND doctor_id = @DoctorId
+                              AND schedule_date_int = @DateInt
+                              AND slot_period_code = @Period
+                              AND reg_level_code = @Level
+                            """,
+                            new
+                            {
+                                DeptId = template.OpdDeptId,
+                                DoctorId = template.DoctorId,
+                                DateInt = dateInt,
+                                Period = w.PeriodCode,
+                                Level = template.RegLevelCode
+                            }, ct);
+                        if (existing.Count > 0)
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        var slot = new OpdScheduleSlot
+                        {
+                            CampusId = template.CampusId,
+                            OpdDeptId = template.OpdDeptId,
+                            ClinicRoomId = template.ClinicRoomId,
+                            DoctorId = template.DoctorId,
+                            ScheduleDateInt = dateInt,
+                            SlotPeriodCode = w.PeriodCode,
+                            StartsAtMs = dateStart.AddMinutes(w.StartMin).ToUnixTimeMilliseconds(),
+                            EndsAtMs = dateStart.AddMinutes(w.EndMin).ToUnixTimeMilliseconds(),
+                            RegLevelCode = template.RegLevelCode,
+                            RegistrationFee = template.RegistrationFee,
+                            TotalCapacity = subCapacity,
+                            ReservedCount = 0,
+                            SlotIntervalMinutes = interval,
+                            SlotStatus = 1,
+                            CreatedBy = CurrentOperatorId,
+                            UpdatedBy = CurrentOperatorId
+                        };
+                        await _slotRepo.InsertAsync(slot, ct);
+                        created++;
+                    }
+                }
             }
             return 0;
         });
@@ -722,6 +828,7 @@ public partial class OutpatientController : ControllerBase
         template.RegLevelCode = req.RegLevelCode?.Trim().ToUpperInvariant() ?? string.Empty;
         template.RegistrationFee = req.RegistrationFee;
         template.TotalCapacity = req.TotalCapacity;
+        template.SlotIntervalMinutes = Math.Clamp(req.SlotIntervalMinutes, 0, 240);
         template.IsActive = req.IsActive == 0 ? 0 : 1;
         return ValidateTemplate(template);
     }
@@ -750,6 +857,8 @@ public partial class OutpatientController : ControllerBase
             return "挂号费范围无效";
         if (template.TotalCapacity < 1 || template.TotalCapacity > 9999)
             return "号源容量必须在1至9999之间";
+        if (template.SlotIntervalMinutes != 0 && (template.SlotIntervalMinutes < 10 || template.SlotIntervalMinutes > 240))
+            return "分时段号源步长须为 0（整班次）或 10-240 分钟";
         return null;
     }
 
@@ -1198,6 +1307,19 @@ public partial class OutpatientController : ControllerBase
             await _visitRepo.UpdateAsync(visit, ct);
         });
 
+        if (_alertPublisher != null)
+        {
+            var pat = await (_patientContract?.GetPatientSummaryAsync(visit.PatientId) ?? Task.FromResult<PatientSummaryDto?>(null));
+            var room = !string.IsNullOrWhiteSpace(visit.ClinicRoomId) ? visit.ClinicRoomId : "门诊诊室";
+            _ = _alertPublisher.PublishOpdQueueCallAsync(
+                visit.OpdDeptId,
+                room,
+                _userSession?.DisplayName ?? "门诊医师",
+                (int)(nextQueue.CheckinAtMs / 1000 % 1000),
+                pat?.FullName ?? "患者",
+                "CALL");
+        }
+
         if (_auditTrail != null)
             await _auditTrail.RecordAuditAsync(
                 "OPD_CALL_NEXT",
@@ -1208,6 +1330,156 @@ public partial class OutpatientController : ControllerBase
                 _userSession.DisplayName,
                 _userSession.ActiveDeptId);
         return ApiResponse<OpdVisit>.Success(visit, $"已顺呼就诊号 [{visit.VisitNo}] 进入诊室接诊");
+    }
+
+    [HttpPost("queue/recall")]
+    public async Task<ApiResponse<OpdVisit>> RecallPatient([FromQuery] string visitId)
+    {
+        if (!IsOpdClinicalDoctor() && !IsAdmin())
+            return ApiResponse<OpdVisit>.Fail(403, "仅门诊医师可以重新呼叫患者");
+        var visit = await _visitRepo.GetByIdAsync(visitId);
+        if (visit == null) return ApiResponse<OpdVisit>.Fail(404, "就诊记录不存在");
+        
+        var queue = await _queueRepo.QuerySingleOrDefaultAsync(
+            "SELECT * FROM opd_triage_queues WHERE visit_id = @VisitId ORDER BY checkin_at_ms DESC LIMIT 1",
+            new { VisitId = visitId });
+        if (queue == null) return ApiResponse<OpdVisit>.Fail(404, "排队记录不存在");
+
+        queue.CalledAtMs = SystemTime.UtcNowMs;
+        await _queueRepo.UpdateAsync(queue);
+
+        if (_alertPublisher != null)
+        {
+            var pat = await (_patientContract?.GetPatientSummaryAsync(visit.PatientId) ?? Task.FromResult<PatientSummaryDto?>(null));
+            var room = !string.IsNullOrWhiteSpace(visit.ClinicRoomId) ? visit.ClinicRoomId : "门诊诊室";
+            _ = _alertPublisher.PublishOpdQueueCallAsync(
+                visit.OpdDeptId,
+                room,
+                _userSession?.DisplayName ?? "门诊医师",
+                (int)(queue.CheckinAtMs / 1000 % 1000),
+                pat?.FullName ?? "患者",
+                "RECALL");
+        }
+
+        return ApiResponse<OpdVisit>.Success(visit, $"已重新呼叫患者 [{visit.VisitNo}]");
+    }
+
+    [HttpPost("queue/pass")]
+    public async Task<ApiResponse<bool>> PassPatient([FromQuery] string queueId)
+    {
+        if (!IsOpdClinicalDoctor() && !IsAdmin())
+            return ApiResponse<bool>.Fail(403, "仅门诊医师可以执行过号操作");
+        var queue = await _queueRepo.GetByIdAsync(queueId);
+        if (queue == null) return ApiResponse<bool>.Fail(404, "排队记录不存在");
+
+        queue.QueueStatus = 3; // Passed (过号)
+        queue.PassCount++;
+        queue.PriorityScore = Math.Max(0, queue.PriorityScore - 50); // 降级排队
+        queue.UpdatedAtMs = SystemTime.UtcNowMs;
+        queue.UpdatedBy = _userSession?.UserId ?? "SYSTEM";
+        await _queueRepo.UpdateAsync(queue);
+
+        var visit = await _visitRepo.GetByIdAsync(queue.VisitId);
+        if (visit != null && _alertPublisher != null)
+        {
+            var pat = await (_patientContract?.GetPatientSummaryAsync(visit.PatientId) ?? Task.FromResult<PatientSummaryDto?>(null));
+            _ = _alertPublisher.PublishOpdQueueCallAsync(
+                queue.OpdDeptId,
+                queue.ClinicRoomId ?? "诊室",
+                _userSession?.DisplayName ?? "门诊医师",
+                (int)(queue.CheckinAtMs / 1000 % 1000),
+                pat?.FullName ?? "患者",
+                "PASS");
+        }
+
+        return ApiResponse<bool>.Success(true, "患者已设置为过号状态，顺延后续就诊");
+    }
+
+    public sealed record OpdScreenDisplayDto(
+        string DeptId,
+        string DeptName,
+        IReadOnlyList<OpdScreenCallingItem> CallingList,
+        IReadOnlyList<OpdScreenWaitingItem> WaitingList,
+        IReadOnlyList<OpdScreenPassedItem> PassedList
+    );
+
+    public sealed record OpdScreenCallingItem(
+        string RoomName,
+        string DoctorName,
+        string PatientName,
+        string TicketNo
+    );
+
+    public sealed record OpdScreenWaitingItem(
+        string PatientName,
+        string TicketNo,
+        string DoctorName
+    );
+
+    public sealed record OpdScreenPassedItem(
+        string PatientName,
+        string TicketNo
+    );
+
+    [HttpGet("queue/screen/{deptId}")]
+    public async Task<ApiResponse<OpdScreenDisplayDto>> GetScreenDisplayData(string deptId)
+    {
+        using var conn = _connFactory.CreateConnection();
+        var deptName = await conn.QuerySingleOrDefaultAsync<string>(
+            "SELECT dept_name FROM sys_departments WHERE id = @Id", new { Id = deptId }) ?? "门诊诊区";
+
+        var callingRows = (await conn.QueryAsync<dynamic>(@"
+            SELECT q.clinic_room_id, u.display_name AS doctor_name, p.full_name AS patient_name, q.checkin_at_ms
+            FROM opd_triage_queues q
+            JOIN opd_visits v ON v.id = q.visit_id
+            JOIN pat_patients p ON p.id = v.patient_id
+            LEFT JOIN sys_users u ON u.id = v.doctor_id
+            WHERE q.opd_dept_id = @DeptId AND q.queue_status = 2
+            ORDER BY q.called_at_ms DESC LIMIT 10", new { DeptId = deptId })).ToList();
+
+        var waitingRows = (await conn.QueryAsync<dynamic>(@"
+            SELECT p.full_name AS patient_name, u.display_name AS doctor_name, q.checkin_at_ms
+            FROM opd_triage_queues q
+            JOIN opd_visits v ON v.id = q.visit_id
+            JOIN pat_patients p ON p.id = v.patient_id
+            LEFT JOIN sys_users u ON u.id = v.doctor_id
+            WHERE q.opd_dept_id = @DeptId AND q.queue_status = 1
+            ORDER BY q.priority_score DESC, q.checkin_at_ms ASC LIMIT 20", new { DeptId = deptId })).ToList();
+
+        var passedRows = (await conn.QueryAsync<dynamic>(@"
+            SELECT p.full_name AS patient_name, q.checkin_at_ms
+            FROM opd_triage_queues q
+            JOIN opd_visits v ON v.id = q.visit_id
+            JOIN pat_patients p ON p.id = v.patient_id
+            WHERE q.opd_dept_id = @DeptId AND q.queue_status = 3
+            ORDER BY q.updated_at_ms DESC LIMIT 10", new { DeptId = deptId })).ToList();
+
+        var calling = callingRows.Select(r => new OpdScreenCallingItem(
+            RoomName: (string?)r.clinic_room_id ?? "诊室",
+            DoctorName: (string?)r.doctor_name ?? "主治医师",
+            PatientName: MaskName((string)r.patient_name),
+            TicketNo: $"{((long)r.checkin_at_ms / 1000 % 1000):000}号"
+        )).ToList();
+
+        var waiting = waitingRows.Select(r => new OpdScreenWaitingItem(
+            PatientName: MaskName((string)r.patient_name),
+            TicketNo: $"{((long)r.checkin_at_ms / 1000 % 1000):000}号",
+            DoctorName: (string?)r.doctor_name ?? "普诊"
+        )).ToList();
+
+        var passed = passedRows.Select(r => new OpdScreenPassedItem(
+            PatientName: MaskName((string)r.patient_name),
+            TicketNo: $"{((long)r.checkin_at_ms / 1000 % 1000):000}号"
+        )).ToList();
+
+        return ApiResponse<OpdScreenDisplayDto>.Success(new OpdScreenDisplayDto(deptId, deptName, calling, waiting, passed));
+    }
+
+    private static string MaskName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "患者";
+        if (name.Length <= 2) return name[0] + "*";
+        return name[0] + "*" + name[^1];
     }
 
     public sealed record CompleteVisitRequestDto(
@@ -1249,16 +1521,26 @@ public partial class OutpatientController : ControllerBase
         visit.UpdatedBy = _userSession!.UserId;
         await _visitRepo.UpdateAsync(visit);
 
+        string ybNotice = "";
+        using (var mdmConn = _connFactory.CreateConnection())
+        {
+            var ybDisease = await mdmConn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT disease_code, disease_name, disease_category, quota_limit_amount FROM mdm_yb_diseases WHERE is_active = 1 AND (UPPER(disease_code) = UPPER(@Code) OR disease_name LIKE @NameLike) LIMIT 1",
+                new { Code = visit.PrimaryDiagCode ?? "", NameLike = $"%{diagnosisName}%" });
+            if (ybDisease != null)
+                ybNotice = $"（匹配医保病种 [{ybDisease.disease_code} {ybDisease.disease_name}]，限额 ¥{ybDisease.quota_limit_amount:0.00}）";
+        }
+
         if (_auditTrail != null)
             await _auditTrail.RecordAuditAsync(
                 "OPD_DIAGNOSIS_SAVE",
                 nameof(OpdVisit),
                 visit.Id,
-                $"保存主诊断 [{visit.PrimaryDiagCode ?? "-"}] {visit.PrimaryDiagName}",
+                $"保存主诊断 [{visit.PrimaryDiagCode ?? "-"}] {visit.PrimaryDiagName}{ybNotice}",
                 _userSession.UserId,
                 _userSession.DisplayName,
                 _userSession.ActiveDeptId);
-        return ApiResponse<OpdVisit>.Success(visit, "主诊断已保存");
+        return ApiResponse<OpdVisit>.Success(visit, "主诊断已保存" + ybNotice);
     }
 
     [HttpPost("visits/{visitId}/complete")]
@@ -1276,10 +1558,67 @@ public partial class OutpatientController : ControllerBase
         if (string.IsNullOrWhiteSpace(req?.PrimaryDiagName) && string.IsNullOrWhiteSpace(req?.PrimaryDiagCode))
             return ApiResponse<OpdVisit>.Fail(400, "完成门诊接诊必须填写主诊断");
         var incompletePrescription = await _rxRepo.QuerySingleOrDefaultAsync(
-            "SELECT * FROM opd_prescriptions WHERE visit_id = @VisitId AND status IN (0, 1, 2) LIMIT 1",
+            "SELECT * FROM opd_prescriptions WHERE visit_id = @VisitId AND status IN (0, 2, 6) LIMIT 1",
             new { VisitId = visit.Id });
         if (incompletePrescription != null)
-            return ApiResponse<OpdVisit>.Fail(409, "该就诊仍有草稿或已驳回处方，不能完成诊疗");
+        {
+            string reason = incompletePrescription.Status switch
+            {
+                0 => "该就诊仍有未签发的草稿处方，请先提交签署或作废后再完成诊疗",
+                2 => "该就诊处方被药师驳回，请修改或撤销后再完成诊疗",
+                6 => "该就诊处方尚在药师人工前置审方中，请等待审方结果后再完成诊疗",
+                _ => "该就诊仍有未完成的处方流程，不能完成诊疗"
+            };
+            return ApiResponse<OpdVisit>.Fail(409, reason);
+        }
+
+        // 法定传染病报告卡门禁拦截
+        var diagCode = (req?.PrimaryDiagCode ?? string.Empty).Trim().ToUpperInvariant();
+        if (!string.IsNullOrWhiteSpace(diagCode))
+        {
+            using var connCheck = _connFactory.CreateConnection();
+            var matchedRule = await connCheck.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT disease_code, disease_name FROM cfg_infectious_diseases
+                WHERE is_active = 1 AND @Code LIKE (icd10_prefix || '%')",
+                new { Code = diagCode });
+
+            if (matchedRule != null)
+            {
+                var card = await connCheck.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT id, status FROM ph_report_cards
+                    WHERE visit_or_encounter_id = @VisitId AND status IN ('SUBMITTED', 'AUDITED', 'COMPLETED')",
+                    new { VisitId = visit.Id });
+
+                if (card == null)
+                {
+                    return ApiResponse<OpdVisit>.Fail(409,
+                        $"【法定传染病报告门禁】当前主诊断属于国家法定传染病 [{matchedRule.disease_code} {matchedRule.disease_name}]，法规强制要求必须先填报并提交《传染病报告卡》方可完成诊疗！");
+                }
+            }
+        }
+
+        string? emrDocId = req?.EmrDocumentId ?? visit.EmrDocumentId;
+        if (!string.IsNullOrWhiteSpace(emrDocId))
+        {
+            using var conn = _connFactory.CreateConnection();
+            var doc = await conn.QuerySingleOrDefaultAsync<dynamic>(
+                "SELECT id, patient_id, visit_or_encounter_id, latest_ofd_archive_id, status FROM emr_documents WHERE id = @DocId OR doc_no = @DocId",
+                new { DocId = emrDocId.Trim() });
+            if (doc != null)
+            {
+                string docPatientId = (string)doc.patient_id;
+                string docVisitId = (string)doc.visit_or_encounter_id;
+                if (!string.Equals(docPatientId, visit.PatientId, StringComparison.OrdinalIgnoreCase))
+                    return ApiResponse<OpdVisit>.Fail(400, "关联的电子病历所属患者与当前就诊患者不一致，禁止将他人病历归档为此就诊");
+                if (!string.IsNullOrWhiteSpace(docVisitId) &&
+                    !string.Equals(docVisitId, visit.Id, StringComparison.OrdinalIgnoreCase))
+                    return ApiResponse<OpdVisit>.Fail(400, "关联的电子病历所属就诊与当前门诊就诊不一致");
+                if (string.IsNullOrWhiteSpace(req?.OfdArchiveId) && !string.IsNullOrWhiteSpace((string?)doc.latest_ofd_archive_id))
+                {
+                    visit.OfdArchiveId = (string)doc.latest_ofd_archive_id;
+                }
+            }
+        }
 
         var (diagName, diagnosisError) = await ResolveDiagnosisAsync(
             visit, req.PrimaryDiagCode, req.PrimaryDiagName);

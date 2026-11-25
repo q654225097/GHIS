@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
+             xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
              x:Class="HIS.Client.UrsaShell.Views.InpatientSettlementView"
              x:DataType="vm:InpatientSettlementViewModel">
     <UserControl.Styles>
@@ -24,7 +25,7 @@
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,*" Margin="0,8,0,0" MinHeight="0">
-        <Border Grid.Row="0" Classes="SettlementCard" Margin="0,0,0,10">
+        <Border Grid.Row="0" Classes="SettlementCard" Margin="0,0,0,10" IsEnabled="{Binding IsConfirmationClosed}">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Grid.Column="0" Spacing="3">
                     <TextBlock Text="住院出院财务结算" FontSize="18" FontWeight="Bold"
@@ -40,7 +41,7 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" ColumnDefinitions="270,*" ColumnSpacing="10" MinHeight="0">
+        <Grid Grid.Row="1" ColumnDefinitions="270,*" ColumnSpacing="10" MinHeight="0" IsEnabled="{Binding IsConfirmationClosed}">
             <Border Grid.Column="0" Classes="SettlementCard" Padding="12" MinHeight="0">
                 <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="8" MinHeight="0">
                     <Grid Grid.Row="0" ColumnDefinitions="*,88" ColumnSpacing="6">
@@ -57,6 +58,7 @@
                                Foreground="{DynamicResource SemiColorText0}" Margin="0,3,0,0"/>
                     <ListBox Grid.Row="3" ItemsSource="{Binding Requests}"
                              SelectedItem="{Binding SelectedRequest, Mode=TwoWay}"
+                             IsEnabled="{Binding IsNotBusy}"
                              Background="Transparent" BorderThickness="0"
                              MinHeight="0"
                              ScrollViewer.VerticalScrollBarVisibility="Auto">
@@ -109,24 +111,32 @@
                             </Border>
                         </Grid>
 
-                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
                             <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground0}"
                                     CornerRadius="6" Padding="10,8">
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="住院费用合计" Classes="SettlementLabel"/>
-                                    <TextBlock Text="{Binding ChargeTotalText}" FontSize="19" FontWeight="Bold"
+                                    <TextBlock Text="{Binding ChargeTotalText}" FontSize="18" FontWeight="Bold"
                                                Foreground="{DynamicResource SemiColorDanger}"/>
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground0}"
                                     CornerRadius="6" Padding="10,8">
                                 <StackPanel Spacing="2">
-                                    <TextBlock Text="预交金余额" Classes="SettlementLabel"/>
-                                    <TextBlock Text="{Binding PrepaymentBalanceText}" FontSize="19" FontWeight="Bold"
+                                    <TextBlock Text="预交金总额" Classes="SettlementLabel"/>
+                                    <TextBlock Text="{Binding PrepaymentBalanceText}" FontSize="18" FontWeight="Bold"
                                                Foreground="{DynamicResource SemiColorSuccess}"/>
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="2" Background="{DynamicResource SemiColorBackground0}"
+                                    CornerRadius="6" Padding="10,8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="可用结余/欠费" Classes="SettlementLabel"/>
+                                    <TextBlock Text="{Binding AvailableBalanceText}" FontSize="18" FontWeight="Bold"
+                                               Foreground="{Binding ArrearsBrush}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="3" Background="{DynamicResource SemiColorBackground0}"
                                     CornerRadius="6" Padding="10,8">
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="费用项目" Classes="SettlementLabel"/>
@@ -135,6 +145,12 @@
                                 </StackPanel>
                             </Border>
                         </Grid>
+
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{Binding ArrearsBrush}"
+                                BorderThickness="1.5" CornerRadius="6" Padding="10,8"
+                                IsVisible="{Binding HasArrearsWarning}">
+                            <TextBlock Text="{Binding ArrearsWarningText}" FontSize="12" FontWeight="Bold" Foreground="{Binding ArrearsBrush}"/>
+                        </Border>
 
                         <Border Background="{DynamicResource SemiColorDangerLight}" CornerRadius="6" Padding="10,8"
                                 IsVisible="{Binding HasClinicalBlockers}">
@@ -196,6 +212,37 @@
                                                IsVisible="{Binding !HasCharges}"/>
                                 </StackPanel>
                             </Border>
+
+                            <!-- Unified Inpatient Daily Cost Sheet -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6"
+                                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                                    Padding="10,8" Margin="0,6,0,0">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="住院一日清单实时核对（药费/医技/床位费全口径）" FontSize="12" FontWeight="Bold"/>
+                                        <Button Grid.Column="1" Content="核对今日一日清单" Classes="Secondary" Height="26" Padding="10,0" FontSize="11"
+                                                Command="{Binding LoadDailyCostSheetCommand}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding DailyCostSheetSummary}" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>
+                                    <ItemsControl ItemsSource="{Binding DailyCostCategories}" IsVisible="{Binding HasDailyCostSheet}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:InpatientDailyCostCategoryDto">
+                                                <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="8,4" Margin="0,2,6,2">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding CategoryName}" FontSize="11" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding AmountText}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
                         <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6"
@@ -251,5 +298,12 @@
                 </ScrollViewer>
             </Border>
         </Grid>
+        <controls:ConfirmDialog Grid.RowSpan="2"
+                                IsOpen="{Binding IsConfirmationOpen}"
+                                Title="核对患者及出院结算金额"
+                                Message="{Binding ConfirmationText}"
+                                ConfirmText="确认结算"
+                                ConfirmCommand="{Binding ConfirmSettlementCommand}"
+                                CancelCommand="{Binding CancelSettlementCommand}"/>
     </Grid>
 </UserControl>

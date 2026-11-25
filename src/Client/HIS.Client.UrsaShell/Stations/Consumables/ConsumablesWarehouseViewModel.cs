@@ -74,7 +74,7 @@ public sealed class ConsumableRequisitionItemModel : ClientModelBase
         _ => "#64748B"
     };
     public long CreatedAtMs { get; set; }
-    public string CreatedAtText => DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+    public string CreatedAtText => DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
     public string StatusLabel => Status switch
     {
         "PENDING" => "待审核",
@@ -191,7 +191,30 @@ public sealed class ConsumablesWarehouseViewModel : ClientModelBase, IShortcutTa
     public int StockInQty { get => _stockInQty; set => SetField(ref _stockInQty, value); }
     public decimal StockInCost { get => _stockInCost; set => SetField(ref _stockInCost, value); }
     public string StockInBatchNo { get => _stockInBatchNo; set => SetField(ref _stockInBatchNo, value); }
-    public string StockInExpiry { get => _stockInExpiry; set => SetField(ref _stockInExpiry, value); }
+    public string StockInExpiry
+    {
+        get => _stockInExpiry;
+        set
+        {
+            if (SetField(ref _stockInExpiry, value))
+            {
+                OnPropertyChanged(nameof(StockInExpiryDateTime));
+            }
+        }
+    }
+
+    public DateTime? StockInExpiryDateTime
+    {
+        get => DateTime.TryParse(StockInExpiry, out var date) ? date.Date : DateTime.Today.AddYears(2);
+        set
+        {
+            var next = (value ?? DateTime.Today.AddYears(2)).ToString("yyyy-MM-dd");
+            if (StockInExpiry != next)
+            {
+                StockInExpiry = next;
+            }
+        }
+    }
 
     // CSSD Form Properties
     public string NewPackageCode { get => _newPackageCode; set => SetField(ref _newPackageCode, value); }
@@ -384,30 +407,49 @@ public sealed class ConsumablesWarehouseViewModel : ClientModelBase, IShortcutTa
         }
     }
 
+    public ObservableCollection<string> SterilizeMethods { get; } = new() { "HIGH_PRESSURE_STEAM", "PLASMA", "ETHYLENE_OXIDE" };
+    private string _selectedSterilizeMethod = "HIGH_PRESSURE_STEAM";
+    public string SelectedSterilizeMethod { get => _selectedSterilizeMethod; set => SetField(ref _selectedSterilizeMethod, value); }
+
+    public ObservableCollection<string> TargetWards { get; } = new() { "DEPT-WARD-01", "DEPT-WARD-02", "DEPT-OR-01", "DEPT-ICU-01" };
+    private string _selectedTargetWard = "DEPT-WARD-01";
+    public string SelectedTargetWard { get => _selectedTargetWard; set => SetField(ref _selectedTargetWard, value); }
+
     private async Task CreatePackageAsync()
     {
-        if (string.IsNullOrWhiteSpace(NewPackageCode) || string.IsNullOrWhiteSpace(NewPackageName))
+        if (string.IsNullOrWhiteSpace(NewPackageName))
         {
-            _shell?.ShowToast("消毒包编号与名称必填", "Warning");
+            _shell?.ShowToast("消毒包名称必填", "Warning");
             return;
         }
 
         try
         {
             using var http = AuthenticatedHttpClientFactory.Create();
+            var contents = new List<object>
+            {
+                new { ItemName = $"{NewPackageName.Trim()} 标准主器械", Quantity = 1, Unit = "套" },
+                new { ItemName = "医用止血钳 (14cm)", Quantity = 2, Unit = "把" },
+                new { ItemName = "医用包布与高阻隔灭菌袋", Quantity = 1, Unit = "份" }
+            };
             var payload = new
             {
-                PackageCode = NewPackageCode.Trim(),
                 PackageName = NewPackageName.Trim(),
-                ContentsJson = "[]"
+                CurrentLocation = "CSSD",
+                Contents = contents
             };
             var res = await http.PostAsJsonAsync("/api/v4/csm/cssd/packages", payload, JsonOptions);
             if (res.IsSuccessStatusCode)
             {
-                _shell?.ShowToast($"无菌器械包 [{NewPackageName}] 组包成功", "Success");
+                _shell?.ShowToast($"无菌器械包 [{NewPackageName}] 组包成功（含3件实物器械/敷料明细）", "Success");
                 NewPackageCode = string.Empty;
                 NewPackageName = string.Empty;
                 await RefreshAsync();
+            }
+            else
+            {
+                var err = await res.Content.ReadAsStringAsync();
+                _shell?.ShowToast($"组包被拒绝: {err}", "Warning");
             }
         }
         catch (Exception ex)
@@ -421,19 +463,34 @@ public sealed class ConsumablesWarehouseViewModel : ClientModelBase, IShortcutTa
         if (pkg == null) return;
         try
         {
+            string method = SelectedSterilizeMethod ?? "HIGH_PRESSURE_STEAM";
+            int validDays = method == "HIGH_PRESSURE_STEAM" ? 180 : (method == "PLASMA" ? 90 : 180);
+            string methodLabel = method switch
+            {
+                "HIGH_PRESSURE_STEAM" => "高压蒸汽灭菌",
+                "PLASMA" => "过氧化氢低温等离子",
+                "ETHYLENE_OXIDE" => "环氧乙烷灭菌",
+                _ => method
+            };
+
             using var http = AuthenticatedHttpClientFactory.Create();
             var payload = new
             {
                 PackageId = pkg.Id,
-                BatchNo = $"ST-{DateTime.Now:yyyyMMdd}-{pkg.Id[..Math.Min(4, pkg.Id.Length)]}",
-                Method = "HIGH_PRESSURE_STEAM",
-                ValidDays = 180
+                BatchNo = $"STB-{DateTime.Now:yyyyMMdd}-{pkg.Id[..Math.Min(4, pkg.Id.Length)]}",
+                Method = method,
+                ValidDays = validDays
             };
             var res = await http.PostAsJsonAsync("/api/v4/csm/cssd/sterilize", payload, JsonOptions);
             if (res.IsSuccessStatusCode)
             {
-                _shell?.ShowToast($"器械包 [{pkg.PackageName}] 高压蒸汽灭菌合格，有效期 180 天", "Success");
+                _shell?.ShowToast($"器械包 [{pkg.PackageName}] {methodLabel} 合格，有效期 {validDays} 天", "Success");
                 await RefreshAsync();
+            }
+            else
+            {
+                var err = await res.Content.ReadAsStringAsync();
+                _shell?.ShowToast($"灭菌登记被拦截: {err}", "Warning");
             }
         }
         catch (Exception ex)
@@ -447,19 +504,25 @@ public sealed class ConsumablesWarehouseViewModel : ClientModelBase, IShortcutTa
         if (pkg == null) return;
         try
         {
+            string targetWard = SelectedTargetWard ?? "DEPT-WARD-01";
             using var http = AuthenticatedHttpClientFactory.Create();
             var payload = new
             {
                 PackageId = pkg.Id,
-                ToLocation = "DEPT-WARD-01",
+                ToLocation = targetWard,
                 MovementType = "ISSUE",
-                Remark = "手术室/病区借用领发"
+                Remark = $"调拨发放到科室/病区 [{targetWard}]"
             };
             var res = await http.PostAsJsonAsync("/api/v4/csm/cssd/dispatch", payload, JsonOptions);
             if (res.IsSuccessStatusCode)
             {
-                _shell?.ShowToast($"器械包 [{pkg.PackageName}] 已成功调拨发放到病区", "Success");
+                _shell?.ShowToast($"器械包 [{pkg.PackageName}] 已成功发往 [{targetWard}]", "Success");
                 await RefreshAsync();
+            }
+            else
+            {
+                var err = await res.Content.ReadAsStringAsync();
+                _shell?.ShowToast($"发放拦截: {err}", "Warning");
             }
         }
         catch (Exception ex)

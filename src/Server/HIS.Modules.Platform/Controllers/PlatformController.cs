@@ -629,6 +629,15 @@ public class PlatformController : ControllerBase
 			IsDefaultContext = 1
 		});
 
+		long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		string staffCat = deptCategory switch { "IPD" or "OPD" => "DOCTOR", "NURSE" or "WARD" => "NURSE", "PHARMACY" => "PHARMACIST", "MEDTECH" => "TECHNICIAN", _ => "ADMIN" };
+		await _userRepo.ExecuteAsync(@"
+INSERT INTO hr_employees (id, employee_no, user_id, full_name, hire_date_int, staff_category, primary_dept_id, prescribe_level, employment_status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+SELECT @EmpId, @EmpNo, @UserId, @FullName, @HireDate, @StaffCat, @DeptId, @Rx, 'ACTIVE', 1, @Now, @Actor, @Now, @Actor, 1
+WHERE NOT EXISTS (SELECT 1 FROM hr_employees WHERE employee_no = @EmpNo OR user_id = @UserId);
+UPDATE hr_employees SET user_id = COALESCE(user_id, @UserId), full_name = @FullName, primary_dept_id = COALESCE(primary_dept_id, @DeptId), prescribe_level = @Rx, updated_at_ms = @Now, updated_by = @Actor WHERE employee_no = @EmpNo;",
+			new { EmpId = Guid.NewGuid().ToString("D"), EmpNo = dto.EmployeeNo.Trim(), UserId = newId, FullName = dto.DisplayName.Trim(), HireDate = int.Parse(DateTime.UtcNow.AddHours(8).ToString("yyyyMMdd")), StaffCat = staffCat, DeptId = dto.DeptId, Rx = dto.PrescribeLevel, Now = nowMs, Actor = _userSession?.UserId ?? "SYSTEM" });
+
 		if (_auditTrail != null)
 		{
 			await _auditTrail.RecordAuditAsync("USER_CREATE", "SysUser", newId, $"管理员创建用户 [{dto.UserName} - {dto.DisplayName}]，工号: {dto.EmployeeNo}", _userSession?.UserId, _userSession?.DisplayName, dto.DeptId);
@@ -693,6 +702,19 @@ public class PlatformController : ControllerBase
 				NowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 			});
 		}
+
+		await _userRepo.ExecuteAsync(@"
+UPDATE hr_employees
+SET full_name = @FullName,
+    employee_no = @EmpNo,
+    prescribe_level = @Rx,
+    primary_dept_id = COALESCE(@DeptId, primary_dept_id),
+    employment_status = CASE WHEN @IsActive IS NULL THEN employment_status WHEN @IsActive = 1 THEN 'ACTIVE' ELSE 'INACTIVE' END,
+    updated_at_ms = @Now,
+    updated_by = @Actor,
+    version_no = version_no + 1
+WHERE user_id = @UserId OR employee_no = @EmpNo",
+			new { FullName = user.DisplayName, EmpNo = user.EmployeeNo, Rx = user.PrescribeLevel, DeptId = string.IsNullOrWhiteSpace(dto.DeptId) ? null : dto.DeptId, IsActive = dto.IsActive.HasValue ? (dto.IsActive.Value ? 1 : 0) : (int?)null, Now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Actor = _userSession?.UserId ?? "SYSTEM", UserId = id });
 
 		if (_auditTrail != null)
 		{

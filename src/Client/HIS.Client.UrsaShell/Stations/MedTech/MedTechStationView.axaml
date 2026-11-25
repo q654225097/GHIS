@@ -31,9 +31,9 @@
                                 Command="{Binding SyncPacsCommand}"/>
                         <Button Grid.Column="3" Content="刷新 (F5)" Classes="Tertiary" Height="32" Margin="0,0,8,0"
                                 Command="{Binding RefreshCommand}"/>
-                        <Button Grid.Column="4" Content="WHO 手术安全核查 (F2)" Classes="Warning" Height="32" Margin="0,0,8,0"
+                        <Button Grid.Column="4" Content="手术核查提示" Classes="Warning" Height="32" Margin="0,0,8,0"
                                 Command="{Binding OpenWhoSurgeryDrawerCommand}"/>
-                        <Button Grid.Column="5" Content="危急值处置" Classes="Danger" Height="32" Margin="0,0,8,0"
+                        <Button Grid.Column="5" Content="危急值提醒" Classes="Danger" Height="32" Margin="0,0,8,0"
                                 Command="{Binding OpenCriticalValueCommand}"/>
                         <controls:DynamicPrintTriggerBar Grid.Column="6" PageKey="medtech" TriggerSlot="TOP_TOOLBAR"/>
                     </Grid>
@@ -92,47 +92,44 @@
                             <TextBlock Grid.Column="6" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
                         </Grid>
 
-                        <ScrollViewer Grid.Row="1">
-                            <ItemsControl ItemsSource="{Binding FilteredOrders}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:MedTechOrderItemModel">
-                                        <Border Margin="0,3" Padding="10" CornerRadius="6"
-                                                Background="{DynamicResource SemiColorBackground0}"
-                                                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                            <Grid ColumnDefinitions="130,210,120,*,75,95,330">
-                                                <TextBlock Grid.Column="0" Text="{Binding RequestNo}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding ItemName}" FontWeight="Bold" TextWrapping="Wrap"/>
-                                                    <controls:StatusTag Text="{Binding FeeLockBadge}" Kind="Warning" IsVisible="{Binding IsFeeLocked}" HorizontalAlignment="Left"/>
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="2" Text="{Binding DeptName}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="3" Text="{Binding ExecLocation}" FontSize="12" Foreground="{DynamicResource SemiColorText1}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="4" Text="{Binding Fee}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                <controls:StatusTag Grid.Column="5" Text="{Binding Status}" Kind="{Binding StatusClass}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
-                                                <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                                    <Button Content="确费锁单" Classes="Primary" Height="28" FontSize="12"
-                                                            IsEnabled="{Binding CanConfirmFee}"
-                                                            ToolTip.Tip="确认执行科室扣费并锁定申请单"
-                                                            Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).ConfirmFeeCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="发布报告" Classes="Success" Height="28" FontSize="12"
-                                                            IsEnabled="{Binding CanPublishReport}"
-                                                            ToolTip.Tip="仅已确费锁单项目可发布检查检验报告"
-                                                            Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).PublishReportCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="撤单" Classes="Danger" Height="28" FontSize="12"
-                                                            IsEnabled="{Binding CanCancelOrder}"
-                                                            ToolTip.Tip="已确费项目不可直接撤单，需走主任签章退费冲正"
-                                                            Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).CancelOrderCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <controls:DynamicPrintTriggerBar PageKey="medtech" TriggerSlot="LIST_ROW" RowContext="{Binding}" Compact="True"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                        <ListBox Grid.Row="1" ItemsSource="{Binding FilteredOrders}"
+                                 SelectedItem="{Binding SelectedOrderItem, Mode=TwoWay}"
+                                 Background="Transparent" BorderThickness="0">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MedTechOrderItemModel">
+                                    <Border Margin="0,2" Padding="10" CornerRadius="6"
+                                            Background="{DynamicResource SemiColorBackground0}"
+                                            BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="130,210,120,*,75,95,330">
+                                            <TextBlock Grid.Column="0" Text="{Binding RequestNo}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding ItemName}" FontWeight="Bold" TextWrapping="Wrap"/>
+                                                <controls:StatusTag Text="{Binding FeeLockBadge}" Kind="Warning" IsVisible="{Binding IsFeeLocked}" HorizontalAlignment="Left"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding DeptName}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding ExecLocation}" FontSize="12" Foreground="{DynamicResource SemiColorText1}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding Fee}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <controls:StatusTag Grid.Column="5" Text="{Binding Status}" Kind="{Binding StatusClass}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                            <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                <Button Content="扫码核收确费" Classes="Primary" Height="28" Padding="8,2"
+                                                        Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).ConfirmFeeCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        IsEnabled="{Binding CanConfirmFee}"/>
+                                                <Button Content="出具审签报告" Classes="Success" Height="28" Padding="8,2"
+                                                        Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).OpenReportStationCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        IsEnabled="{Binding CanPublishReport}"/>
+                                                <Button Content="撤单" Classes="Danger" Height="28" Padding="8,2"
+                                                        Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).CancelOrderCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        IsEnabled="{Binding CanCancelOrder}"/>
+                                                <controls:DynamicPrintTriggerBar PageKey="medtech" TriggerSlot="LIST_ROW" RowContext="{Binding}" Compact="True"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </Grid>
                 </Border>
             </Grid>
@@ -149,22 +146,9 @@
                         <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
                             <StackPanel Spacing="3">
                                 <TextBlock Text="手术室日程与排班看板" FontSize="16" FontWeight="Bold"/>
-                                <TextBlock Text="严格遵循 WHO 三方核查红线：未完成三方核查与麻醉归档严禁结束转出" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
                             </StackPanel>
                             <Button Grid.Column="1" Content="刷新排班" Classes="Tertiary" Height="32"
                                     Command="{Binding LoadSchedulesCommand}"/>
-                        </Grid>
-
-                        <Grid Grid.Row="1" ColumnDefinitions="110,90,140,70,80,90,90,90,*" Margin="8,4,8,8">
-                            <TextBlock Grid.Column="0" Text="排班单号" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBlock Grid.Column="1" Text="患者" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBlock Grid.Column="2" Text="手术名称" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBlock Grid.Column="3" Text="台次" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBlock Grid.Column="4" Text="主刀" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBlock Grid.Column="5" Text="麻醉师" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBlock Grid.Column="6" Text="手术状态" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBlock Grid.Column="7" Text="WHO核查" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBlock Grid.Column="8" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText2}"/>
                         </Grid>
 
                         <ScrollViewer Grid.Row="2">
@@ -174,31 +158,23 @@
                                         <Border Margin="0,3" Padding="8,10" CornerRadius="6"
                                                 Background="{DynamicResource SemiColorBackground0}"
                                                 BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                            <Grid ColumnDefinitions="110,90,140,70,80,90,90,90,*">
-                                                <TextBlock Grid.Column="0" Text="{Binding ScheduleNo}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding PatientName}" FontWeight="Bold" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="2" Text="{Binding SurgeryName}" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="3" Text="{Binding TableSeq, StringFormat=第{0}台}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="4" Text="{Binding SurgeonName}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="5" Text="{Binding AnesthesiologistName}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="6" Text="{Binding StatusText}" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                <TextBlock Grid.Column="7" Text="{Binding WhoStatusText}" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource SemiColorSuccess}"/>
-                                                <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                                    <Button Content="选择" Classes="Tertiary" Height="26" FontSize="11"
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <StackPanel Spacing="3">
+                                                    <TextBlock Text="{Binding PatientName}" FontWeight="Bold" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding SurgeryName}" TextWrapping="Wrap"/>
+                                                    <WrapPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding ScheduleNo}" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,10,0"/>
+                                                        <TextBlock Text="{Binding OrRoomId}" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,8,0"/>
+                                                        <TextBlock Text="{Binding TableSeq, StringFormat=第{0}台}" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,8,0"/>
+                                                        <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="5" VerticalAlignment="Center">
+                                                    <Button Content="选择排班" Classes="Tertiary" HorizontalAlignment="Stretch"
                                                             Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).SelectScheduleCommand}"
                                                             CommandParameter="{Binding}"/>
-                                                    <Button Content="开台" Classes="Primary" Height="26" FontSize="11"
-                                                            IsEnabled="{Binding CanStart}"
-                                                            Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).StartSurgeryCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="WHO核查" Classes="Warning" Height="26" FontSize="11"
-                                                            Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).WhoChecklistCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="完成手术" Classes="Success" Height="26" FontSize="11"
-                                                            IsEnabled="{Binding CanFinish}"
-                                                            Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).FinishSurgeryCommand}"
+                                                    <Button Content="安全核查" Classes="Primary" HorizontalAlignment="Stretch"
+                                                            Command="{Binding $parent[UserControl].((local:MedTechStationViewModel)DataContext).OpenWhoSurgeryDrawerCommand}"
                                                             CommandParameter="{Binding}"/>
                                                 </StackPanel>
                                             </Grid>
@@ -491,6 +467,41 @@
                                             Command="{Binding ScanStageCommand}"/>
                                 </StackPanel>
                             </Border>
+
+                            <!-- 标本外勤运送与检验科核收/退回闭环 -->
+                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="标本物流交接链 (采集→转运→核收/拒收)" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1" Content="刷新" Height="26" Padding="10,0" Command="{Binding LoadSpecimenHandoversCommand}"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                        <TextBox Text="{Binding SpecimenDrawRequestId, Mode=TwoWay}" PlaceholderText="医技申请单号"/>
+                                        <TextBox Grid.Column="1" Text="{Binding SpecimenDrawPatientId, Mode=TwoWay}" PlaceholderText="患者编号"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                        <TextBox Text="{Binding SpecimenDrawBarcode, Mode=TwoWay}" PlaceholderText="标本管条码"/>
+                                        <Button Grid.Column="1" Content="1. 采集打包" Classes="Primary" Height="30" Command="{Binding DrawSpecimenCommand}"/>
+                                    </Grid>
+                                    <ListBox MaxHeight="135" ItemsSource="{Binding SpecimenHandovers}" SelectedItem="{Binding SelectedSpecimenHandover, Mode=TwoWay}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="local:SpecimenHandoverItemVm">
+                                                <TextBlock Text="{Binding SummaryLine}" FontSize="11" TextWrapping="Wrap"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                        <TextBox Text="{Binding SpecimenCourierId, Mode=TwoWay}" PlaceholderText="转运员工号"/>
+                                        <Button Grid.Column="1" Content="2. 外勤发出" Classes="Warning" Height="30" Command="{Binding DispatchSpecimenCommand}"/>
+                                        <Button Grid.Column="2" Content="3. 检验核收" Classes="Success" Height="30" Command="{Binding ReceiveSpecimenCommand}"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                        <TextBox Text="{Binding SpecimenRejectReason, Mode=TwoWay}" PlaceholderText="退回原因 (如溶血/凝血/量少)"/>
+                                        <Button Grid.Column="1" Content="不合格退回" Classes="Danger" Height="30" Command="{Binding RejectSpecimenCommand}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding SpecimenHandoverStatusText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
@@ -588,6 +599,36 @@
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- Tab 6: PACS 影像检查与序列元数据 -->
+        <TabItem Header="PACS 影像研究">
+            <Grid RowDefinitions="Auto,*" Margin="0,12,0,0" RowSpacing="10">
+                <Border Grid.Row="0" Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <Grid ColumnDefinitions="240,*,Auto" ColumnSpacing="10">
+                        <TextBox Text="{Binding DicomFilterPatientId, Mode=TwoWay}" PlaceholderText="按患者ID筛选 DICOM Study"/>
+                        <TextBlock Grid.Column="1" Text="{Binding DicomStatusText}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                        <Button Grid.Column="2" Content="查询影像序列" Classes="Primary" Height="30" Command="{Binding LoadDicomStudiesCommand}"/>
+                    </Grid>
+                </Border>
+                <Border Grid.Row="1" Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <ListBox ItemsSource="{Binding DicomStudies}" SelectedItem="{Binding SelectedDicomStudy, Mode=TwoWay}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:DicomStudySummaryVm">
+                                <Border Padding="10,8" Margin="0,2" CornerRadius="6"
+                                        Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <TextBlock Text="{Binding SummaryLine}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Border>
             </Grid>
         </TabItem>

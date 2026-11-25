@@ -136,7 +136,7 @@ public sealed class BoDynamicFormPanel : UserControl
             using var http = AuthenticatedHttpClientFactory.Create();
             string url = $"/api/v4/config/bo/instance/{Uri.EscapeDataString(EntityType)}/{Uri.EscapeDataString(EntityId)}";
             var res = await http.GetFromJsonAsync<ClientApiEnvelope<BoFormInstanceEnvelope>>(url, JsonOpts);
-            if (res?.Code != 0 || res.Data == null)
+            if (res == null || (res.Code != 0 && res.Code != 200) || res.Data == null)
             {
                 _statusText.Text = res?.Message ?? "未加载到 BO 扩展表单。";
                 return;

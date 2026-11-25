@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
              xmlns:local="using:HIS.Client.UrsaShell.Stations.Consumables"
              x:Class="HIS.Client.UrsaShell.Stations.Consumables.ConsumablesWarehouseView"
              x:DataType="local:ConsumablesWarehouseViewModel">
@@ -134,7 +135,7 @@
                             <TextBlock Text="生产批号" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
                             <TextBox Text="{Binding StockInBatchNo, Mode=TwoWay}" PlaceholderText="生产批次号"/>
                             <TextBlock Text="有效期至" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
-                            <TextBox Text="{Binding StockInExpiry, Mode=TwoWay}" PlaceholderText="yyyy-MM-dd"/>
+                            <u:DatePicker SelectedDate="{Binding StockInExpiryDateTime, Mode=TwoWay}" DisplayFormat="yyyy-MM-dd" Height="32"/>
                             <Button Content="确认入库并更新库存" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding StockInCommand}"/>
                         </StackPanel>
                     </Border>

@@ -61,7 +61,7 @@ public class WorkflowTrackDisplayModel : ClientModelBase
         "REJECT" => "#DC2626",
         "RETURN_PREV" or "RETURN_START" => "#D97706",
         "TRANSFER" => "#2563EB",
-        "CC" => "#9333EA",
+        "CC" => "#0284C7",
         "WITHDRAW" => "#64748B",
         _ => "#0284C7"
     };

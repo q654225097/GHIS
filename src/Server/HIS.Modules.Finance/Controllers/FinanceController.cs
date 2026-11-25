@@ -27,6 +27,36 @@ public class FinanceController : ControllerBase
 
 	public sealed record DailyStatementItemDto(int FeeDateInt, int ItemCount, decimal TotalAmount, decimal SelfPayAmount, IReadOnlyList<FinInpatientFeeItem> Items);
 
+	public sealed record OpdRechargeRequestDto(string PatientId, decimal Amount, string PaymentChannel = "CASH", string? CardNo = null, string? OperatorId = null);
+
+	public sealed record OpdInClinicSettleRequestDto(string PatientId, string PrescriptionId, string? DoctorId = null);
+
+	public sealed record InpatientDailyCostSheetDto(
+		string EncounterId,
+		string PatientId,
+		string PatientName,
+		string BedCode,
+		string DeptName,
+		int FeeDateInt,
+		decimal TodayTotalAmount,
+		decimal CumulativeTotalAmount,
+		decimal PrepaymentBalance,
+		decimal AvailableBalance,
+		string ArrearsStatus,
+		string ArrearsStatusText,
+		IReadOnlyList<CategorizedFeeSummaryDto> Categories,
+		IReadOnlyList<FinInpatientFeeItem> TodayItems);
+
+	public sealed record CategorizedFeeSummaryDto(string CategoryCode, string CategoryName, decimal Amount, int ItemCount);
+	private sealed class MedTechChargeRow
+	{
+		public string Id { get; set; } = string.Empty;
+		public string PatientId { get; set; } = string.Empty;
+		public string ServiceItemCode { get; set; } = string.Empty;
+		public string ExecMedTechDeptId { get; set; } = string.Empty;
+		public decimal FeeAmount { get; set; }
+	}
+
 	private readonly IRepository<FinPaymentOrder> _paymentRepo;
 
 	private readonly IRepository<FinRefundOrder> _refundRepo;
@@ -95,16 +125,16 @@ public class FinanceController : ControllerBase
 		if (string.IsNullOrWhiteSpace(req.PatientId) || string.IsNullOrWhiteSpace(req.VisitOrEncounterId))
 			return ApiResponse<FinPaymentOrder>.Fail(400, "患者与门诊就诊号不能为空");
 		string normalizedChannel = string.IsNullOrWhiteSpace(req.PaymentChannel) ? "CASH" : req.PaymentChannel.Trim().ToUpperInvariant();
-		if (req.SelfPayAmount > 0m && normalizedChannel != "CASH")
+		if (req.SelfPayAmount > 0m && normalizedChannel is not ("CASH" or "WECHAT" or "ALIPAY" or "BANK_CARD" or "UNIONPAY"))
 		{
-			return ApiResponse<FinPaymentOrder>.Fail(400, $"当前版本支付渠道仅开放现金（CASH）实收，不支持渠道 [{normalizedChannel}]");
+			return ApiResponse<FinPaymentOrder>.Fail(400, $"当前版本支付渠道仅开放现金（CASH）、微信（WECHAT）、支付宝（ALIPAY）、银行卡（BANK_CARD），不支持渠道 [{normalizedChannel}]");
 		}
 		decimal cashTendered = req.CashTendered ?? req.SelfPayAmount;
-		if (req.SelfPayAmount > 0m && cashTendered < req.SelfPayAmount)
+		if (normalizedChannel == "CASH" && req.SelfPayAmount > 0m && cashTendered < req.SelfPayAmount)
 		{
 			return ApiResponse<FinPaymentOrder>.Fail(400, $"现金实收金额 (¥{cashTendered:0.00}) 小于应收自付金额 (¥{req.SelfPayAmount:0.00})");
 		}
-		decimal changeAmount = req.SelfPayAmount > 0m ? Math.Round(cashTendered - req.SelfPayAmount, 2) : 0m;
+		decimal changeAmount = (normalizedChannel == "CASH" && req.SelfPayAmount > 0m) ? Math.Round(cashTendered - req.SelfPayAmount, 2) : 0m;
 		if (req.InsuranceAmount < 0 || req.PrepaymentDeduct < 0 || req.SelfPayAmount < 0)
 			return ApiResponse<FinPaymentOrder>.Fail(400, "医保、预交和自费金额不能为负数");
 		decimal componentSum = req.InsuranceAmount + req.PrepaymentDeduct + req.SelfPayAmount;
@@ -218,34 +248,51 @@ public class FinanceController : ControllerBase
 				InsuranceAmount = req.InsuranceAmount,
 				PrepaymentDeduct = req.PrepaymentDeduct,
 				SelfPayAmount = req.SelfPayAmount,
-				PaymentChannel = req.SelfPayAmount > 0m ? "CASH" : normalizedChannel,
-			ExtDataJson = JsonSerializer.Serialize(new { cashTendered, changeAmount, paymentMode = "CASH_ONLY" }),
+				PaymentChannel = normalizedChannel,
+				ExtDataJson = JsonSerializer.Serialize(new { cashTendered, changeAmount, paymentMode = normalizedChannel }),
 				PrepaymentId = req.PrepaymentDeduct > 0m ? req.PrepaymentId : null,
 				Status = 1,
 				PaidAtMs = SystemTime.UtcNowMs,
 				InvoiceOfdId = FinanceSettlementContract.GenerateFiscalInvoiceNo("BILL"),
+				CampusId = _userSession?.CampusId ?? "CAMPUS-01",
 				CreatedBy = cashierId,
 				UpdatedBy = cashierId
 			};
 			await _paymentRepo.InsertAsync(payment, ct);
-			var ledger = new FinChargeLedger
-			{
-				PatientId = req.PatientId,
-				VisitOrEncounterId = req.VisitOrEncounterId,
-				PaymentOrderId = payment.Id,
-				OrderDeptId = string.IsNullOrWhiteSpace(visit.OpdDeptId) ? "DEPT-OPD-01" : visit.OpdDeptId,
-				ExecDeptId = string.IsNullOrWhiteSpace(visit.OpdDeptId) ? "DEPT-OPD-01" : visit.OpdDeptId,
-				ItemCode = "OPD_PRESCRIPTION",
-				ItemName = "门诊处方药品费",
-				Quantity = 1,
-				UnitPrice = current.Amount,
-				TotalAmount = current.Amount,
-				Status = 1,
-				CreatedBy = cashierId,
-				UpdatedBy = cashierId
-			};
-			await _chargeRepo.InsertAsync(ledger, ct);
 			long nowMs = SystemTime.UtcNowMs;
+			string chargeDept = string.IsNullOrWhiteSpace(visit.OpdDeptId) ? "DEPT-OPD-01" : visit.OpdDeptId;
+			var reviewedForLedger = (await conn.QueryAsync<ReviewedPrescriptionRow>(new CommandDefinition("""
+				SELECT id, prescription_no, visit_id, patient_id, target_pharmacy_id, total_amount, status,
+					payment_order_id, reviewer_pharmacist_id
+				FROM opd_prescriptions WHERE visit_id = @VisitId AND status = 1 ORDER BY created_at_ms
+				""", new { VisitId = req.VisitOrEncounterId }, _connFactory.CurrentTransaction, cancellationToken: ct))).ToList();
+			foreach (var rx in reviewedForLedger)
+			{
+				await _chargeRepo.InsertAsync(new FinChargeLedger
+				{
+					PatientId = req.PatientId, VisitOrEncounterId = req.VisitOrEncounterId, PaymentOrderId = payment.Id,
+					OrderDeptId = chargeDept, ExecDeptId = rx.TargetPharmacyId, ItemCode = "OPD_PRESCRIPTION",
+					ItemName = "处方 " + rx.PrescriptionNo, Quantity = 1, UnitPrice = rx.TotalAmount,
+					TotalAmount = rx.TotalAmount, Status = 1, CreatedBy = cashierId, UpdatedBy = cashierId
+				}, ct);
+			}
+			var medTechToClaim = (await conn.QueryAsync<MedTechChargeRow>(new CommandDefinition("""
+				SELECT id, patient_id, service_item_code, exec_med_tech_dept_id, fee_amount
+				FROM mtc_service_requests
+				WHERE source_visit_id = @VisitId AND patient_id = @PatientId AND source_type = 'OPD' AND status = 0 AND is_fee_confirmed = 0
+				ORDER BY created_at_ms
+				""", new { VisitId = req.VisitOrEncounterId, req.PatientId }, _connFactory.CurrentTransaction, cancellationToken: ct))).ToList();
+			foreach (var service in medTechToClaim)
+			{
+				await _chargeRepo.InsertAsync(new FinChargeLedger
+				{
+					PatientId = req.PatientId, VisitOrEncounterId = req.VisitOrEncounterId, PaymentOrderId = payment.Id,
+					SourceServiceRequestId = service.Id, OrderDeptId = chargeDept, ExecDeptId = service.ExecMedTechDeptId,
+					ItemCode = service.ServiceItemCode, ItemName = service.ServiceItemCode, Quantity = 1,
+					UnitPrice = service.FeeAmount, TotalAmount = service.FeeAmount, Status = 1,
+					CreatedBy = cashierId, UpdatedBy = cashierId
+				}, ct);
+			}
 			var (paidPrescriptions, claimError) = await FinanceSettlementService.ClaimReviewedPrescriptionsAsync(
 				conn, req.VisitOrEncounterId, _connFactory.CurrentTransaction, nowMs, cashierId, paymentId, ct);
 			if (claimError != null) throw new InvalidOperationException(claimError);
@@ -319,10 +366,11 @@ public class FinanceController : ControllerBase
 						Now = nowMs,
 						Cashier = cashierId
 					}, _connFactory.CurrentTransaction, cancellationToken: ct));
-				notifiedPrescriptionNos.Add(rx.PrescriptionNo);
+					notifiedPrescriptionNos.Add(rx.PrescriptionNo);
+				await TryAutoCreateInfusionOrderAsync(conn, _connFactory.CurrentTransaction, rx.Id, rx.VisitId, rx.PatientId, cashierId, nowMs, ct);
 			}
 
-			await conn.ExecuteAsync(new CommandDefinition(
+			int claimedMedTech = await conn.ExecuteAsync(new CommandDefinition(
 				"""
 				UPDATE mtc_service_requests
 				SET status = 1, updated_at_ms = @Now, updated_by = @Cashier, version_no = version_no + 1
@@ -330,14 +378,25 @@ public class FinanceController : ControllerBase
 				""",
 				new { VisitId = req.VisitOrEncounterId, Now = nowMs, Cashier = cashierId },
 				_connFactory.CurrentTransaction, cancellationToken: ct));
+			if (claimedMedTech != medTechToClaim.Count)
+				throw new InvalidOperationException("医技申请已被其他收费操作变更，请刷新核对后重试");
+
+			if (req.InsuranceAmount > 0m && _insuranceAdapter != null)
+			{
+				string insTrace = await _insuranceAdapter.SettleAsync(req.PatientId, payment.TotalAmount, ct);
+				payment.ExtDataJson = JsonSerializer.Serialize(new { insTrace });
+				await conn.ExecuteAsync(new CommandDefinition(
+					"UPDATE fin_payment_orders SET ext_data_json = @Ext WHERE id = @Id",
+					new { Ext = payment.ExtDataJson, Id = payment.Id },
+					_connFactory.CurrentTransaction, cancellationToken: ct));
+			}
 
 			return payment;
 		});
 		string insTraceText = "";
-		if (pay.InsuranceAmount > 0m && _insuranceAdapter != null)
+		if (!string.IsNullOrWhiteSpace(pay.ExtDataJson) && pay.InsuranceAmount > 0m)
 		{
-			string insTrace = await _insuranceAdapter.SettleAsync(req.PatientId, pay.TotalAmount, CancellationToken.None);
-			insTraceText = $"（医保统筹结算流水: {insTrace}）";
+			insTraceText = $"（医保统筹结算流水已入账）";
 		}
 
 		if (_auditTrail != null)
@@ -397,7 +456,7 @@ public class FinanceController : ControllerBase
 			{
 			using DbConnection conn = _connFactory.CreateConnection();
 			pay = (await conn.QuerySingleOrDefaultAsync<FinPaymentOrder>(new CommandDefinition(
-				"SELECT * FROM fin_payment_orders WHERE id = @Id",
+				"SELECT * FROM fin_payment_orders WHERE id = @Id OR payment_no = @Id",
 				new { Id = req.PaymentOrderId }, _connFactory.CurrentTransaction, cancellationToken: ct)))!;
 			if (pay == null) throw new InvalidOperationException("原结算单据不存在");
 			if (pay.Scene != "OPD")
@@ -501,6 +560,7 @@ public class FinanceController : ControllerBase
 				ApprovedBy = cashierId,
 				RefundedAtMs = now,
 				Status = 1,
+				CampusId = pay.CampusId ?? _userSession?.CampusId ?? "CAMPUS-01",
 				ReissuedInvoiceOfdId = FinanceSettlementContract.GenerateFiscalInvoiceNo("RED-BILL"),
 				CreatedBy = cashierId,
 				UpdatedBy = cashierId
@@ -528,28 +588,40 @@ public class FinanceController : ControllerBase
 	public async Task<ApiResponse<IReadOnlyList<FinDailyClosing>>> GetDailyClosings(
 		[FromQuery] string? cashierUserId = null,
 		[FromQuery] int? startDateInt = null,
-		[FromQuery] int? endDateInt = null)
+		[FromQuery] int? endDateInt = null,
+		[FromQuery] string? campusId = null)
 	{
 		return ApiResponse<IReadOnlyList<FinDailyClosing>>.Success(await _closingRepo.QueryAsync(@"
 SELECT * FROM fin_daily_closings
 WHERE (@Cashier IS NULL OR cashier_user_id = @Cashier)
   AND (@StartDate IS NULL OR closing_date_int >= @StartDate)
   AND (@EndDate IS NULL OR closing_date_int <= @EndDate)
+  AND (@CampusId IS NULL OR campus_id = @CampusId)
 ORDER BY closing_date_int DESC, created_at_ms DESC", new
 		{
 			Cashier = string.IsNullOrWhiteSpace(cashierUserId) ? null : cashierUserId.Trim(),
 			StartDate = startDateInt,
-			EndDate = endDateInt
+			EndDate = endDateInt,
+			CampusId = string.IsNullOrWhiteSpace(campusId) ? null : campusId.Trim()
 		}));
 	}
 
 	[HttpGet("payments")]
-	public async Task<ApiResponse<IReadOnlyList<FinPaymentOrder>>> GetPayments([FromQuery] string? patientId = null, [FromQuery] string? visitOrEncounterId = null)
+	public async Task<ApiResponse<IReadOnlyList<FinPaymentOrder>>> GetPayments(
+		[FromQuery] string? patientId = null,
+		[FromQuery] string? visitOrEncounterId = null,
+		[FromQuery] string? campusId = null)
 	{
-		return ApiResponse<IReadOnlyList<FinPaymentOrder>>.Success(await _paymentRepo.QueryAsync("SELECT * FROM fin_payment_orders\nWHERE (@PatientId IS NULL OR patient_id = @PatientId)\n  AND (@VisitId IS NULL OR visit_or_encounter_id = @VisitId)\nORDER BY created_at_ms DESC", new
+		return ApiResponse<IReadOnlyList<FinPaymentOrder>>.Success(await _paymentRepo.QueryAsync(@"
+SELECT * FROM fin_payment_orders
+WHERE (@PatientId IS NULL OR patient_id = @PatientId)
+  AND (@VisitId IS NULL OR visit_or_encounter_id = @VisitId)
+  AND (@CampusId IS NULL OR campus_id = @CampusId)
+ORDER BY created_at_ms DESC", new
 		{
 			PatientId = patientId,
-			VisitId = visitOrEncounterId
+			VisitId = visitOrEncounterId,
+			CampusId = string.IsNullOrWhiteSpace(campusId) ? null : campusId.Trim()
 		}));
 	}
 
@@ -576,7 +648,7 @@ ORDER BY closing_date_int DESC, created_at_ms DESC", new
 				"""
 				SELECT COALESCE(SUM(total_amount), 0) FROM fin_payment_orders
 				WHERE paid_at_ms >= @DayStart AND paid_at_ms < @DayEnd
-				  AND created_by = @Cashier AND status = 1
+				  AND created_by = @Cashier AND status IN (1, 2)
 				""",
 				new { DayStart = dayStart, DayEnd = dayEnd, Cashier = cashierId },
 				_connFactory.CurrentTransaction, cancellationToken: ct));
@@ -603,6 +675,7 @@ ORDER BY closing_date_int DESC, created_at_ms DESC", new
 				TotalIncome = income + prepaid,
 				TotalRefund = refunded,
 				NetAmount = income + prepaid - refunded,
+				CampusId = _userSession?.CampusId ?? "CAMPUS-01",
 				ReconciledStatus = 1,
 				CreatedBy = cashierId,
 				UpdatedBy = cashierId
@@ -622,8 +695,31 @@ ORDER BY closing_date_int DESC, created_at_ms DESC", new
 	{
 		if (string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.PatientId))
 			return ApiResponse<FinInpatientFeeItem>.Fail(400, "就诊 ID 与患者 ID 不能为空");
+		if (req.Quantity <= 0m)
+			return ApiResponse<FinInpatientFeeItem>.Fail(400, "费用数量必须大于 0");
+		if (req.UnitPrice < 0m)
+			return ApiResponse<FinInpatientFeeItem>.Fail(400, "费用单价不能为负数");
 
 		string userId = _userSession?.UserId ?? "USER-NURSE";
+		decimal selfPayRatio = req.SelfPayRatio;
+		string reimburseType = req.ReimburseType ?? "CLASS_A";
+		if (!string.IsNullOrWhiteSpace(req.ItemCode))
+		{
+			using var mdmConn = _connFactory.CreateConnection();
+			int todayInt = SystemTime.TodayInt;
+			var mapping = await mdmConn.QueryFirstOrDefaultAsync<dynamic>(@"
+				SELECT m.ins_grade AS InsGrade, m.self_pay_ratio AS SelfPayRatio, m.is_active AS IsActive
+				FROM cfg_charge_item_mappings m
+				INNER JOIN cfg_price_items p ON p.id = m.charge_item_id
+				WHERE p.item_code = @Code AND m.eff_date_int <= @Today AND m.exp_date_int >= @Today
+				ORDER BY m.eff_date_int DESC LIMIT 1",
+				new { Code = req.ItemCode.Trim(), Today = todayInt });
+			if (mapping != null && Convert.ToInt32(mapping.IsActive) == 1)
+			{
+				if (selfPayRatio == 0m) selfPayRatio = Convert.ToDecimal(mapping.SelfPayRatio);
+				if (string.IsNullOrWhiteSpace(req.ReimburseType)) reimburseType = (string)mapping.InsGrade;
+			}
+		}
 		decimal total = req.Quantity * req.UnitPrice;
 
 		var item = new FinInpatientFeeItem
@@ -639,8 +735,8 @@ ORDER BY closing_date_int DESC, created_at_ms DESC", new
 			UnitPrice = req.UnitPrice,
 			Quantity = req.Quantity,
 			TotalAmount = total,
-			SelfPayRatio = req.SelfPayRatio,
-			ReimburseType = req.ReimburseType ?? "CLASS_A",
+			SelfPayRatio = selfPayRatio,
+			ReimburseType = reimburseType,
 			ChargeDeptId = req.ChargeDeptId,
 			ExecDeptId = req.ExecDeptId,
 			OrderId = req.OrderId,
@@ -714,11 +810,28 @@ ORDER BY fee_date_int DESC, created_at_ms DESC";
 			GROUP BY scene",
 			new { StartMs = startMs, EndMs = endMs })).ToList();
 
-		decimal cashSum = orders.Sum(o => Convert.ToDecimal(o.CashTotal));
-		decimal prepaySum = orders.Sum(o => Convert.ToDecimal(o.PrepayTotal));
-		decimal insSum = orders.Sum(o => Convert.ToDecimal(o.InsTotal));
-		decimal opdGross = orders.Where(o => string.Equals((string?)o.Scene, "OPD", StringComparison.OrdinalIgnoreCase)).Sum(o => Convert.ToDecimal(o.GrossTotal));
-		decimal ipdGross = orders.Where(o => !string.Equals((string?)o.Scene, "OPD", StringComparison.OrdinalIgnoreCase)).Sum(o => Convert.ToDecimal(o.GrossTotal));
+		decimal cashSum = 0m;
+		decimal prepaySum = 0m;
+		decimal insSum = 0m;
+		decimal opdGross = 0m;
+		decimal ipdGross = 0m;
+
+		foreach (var o in orders)
+		{
+			cashSum += Convert.ToDecimal((object)o.CashTotal);
+			prepaySum += Convert.ToDecimal((object)o.PrepayTotal);
+			insSum += Convert.ToDecimal((object)o.InsTotal);
+			decimal gross = Convert.ToDecimal((object)o.GrossTotal);
+			string? scene = (string?)o.Scene;
+			if (string.Equals(scene, "OPD", StringComparison.OrdinalIgnoreCase))
+			{
+				opdGross += gross;
+			}
+			else
+			{
+				ipdGross += gross;
+			}
+		}
 
 		var lines = new List<object>();
 		if (cashSum > 0m) lines.Add(new { VoucherDate = targetDate, AccountCode = "1001", AccountName = "库存现金", Summary = $"{targetDate} 医院现金收款汇总", Debit = cashSum, Credit = 0m });
@@ -749,5 +862,539 @@ ORDER BY fee_date_int DESC, created_at_ms DESC";
 			TotalCredit = totalCredit,
 			Entries = lines
 		}, $"已生成 {targetDate} 借贷平衡总账凭证（共 {lines.Count} 条分录）"));
+	}
+
+	[HttpGet("opd/accounts/{patientId}/balance")]
+	[HttpGet("/api/v4/opd/accounts/{patientId}/balance")]
+	public async Task<ApiResponse<OpdPatientAccount>> GetOpdAccountBalance(string patientId)
+	{
+		await using var conn = _connFactory.CreateConnection();
+		var acc = await conn.QuerySingleOrDefaultAsync<OpdPatientAccount>(
+			"SELECT * FROM opd_patient_accounts WHERE patient_id = @PatientId", new { PatientId = patientId.Trim() });
+		if (acc == null)
+		{
+			var now = SystemTime.UtcNowMs;
+			acc = new OpdPatientAccount
+			{
+				Id = Guid.NewGuid().ToString("D"),
+				PatientId = patientId.Trim(),
+				AccountNo = "ACC" + SystemTime.ShanghaiNow.ToString("yyMMddHHmmssfff"),
+				CardNo = "CARD-" + patientId.Trim(),
+				Balance = 0m,
+				FrozenAmount = 0m,
+				Status = 1,
+				CreatedAtMs = now,
+				CreatedBy = _userSession?.UserId ?? "SYSTEM",
+				UpdatedAtMs = now,
+				UpdatedBy = _userSession?.UserId ?? "SYSTEM"
+			};
+			await conn.ExecuteAsync(
+				@"INSERT OR IGNORE INTO opd_patient_accounts (id, patient_id, account_no, card_no, balance, frozen_amount, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+				  VALUES (@Id, @PatientId, @AccountNo, @CardNo, @Balance, @FrozenAmount, @Status, 1, @CreatedAtMs, @CreatedBy, @UpdatedAtMs, @UpdatedBy, 1)", acc);
+		}
+		return ApiResponse<OpdPatientAccount>.Success(acc);
+	}
+
+	[HttpPost("opd/accounts/recharge")]
+	[HttpPost("/api/v4/opd/accounts/recharge")]
+	public async Task<ApiResponse<OpdPatientAccount>> RechargeOpdAccount([FromBody] OpdRechargeRequestDto req)
+	{
+		if (req == null || string.IsNullOrWhiteSpace(req.PatientId) || req.Amount <= 0m)
+		{
+			return ApiResponse<OpdPatientAccount>.Fail(400, "充值患者ID与充值金额必须大于零");
+		}
+		var operatorId = _userSession?.UserId ?? req.OperatorId ?? "CASHIER";
+		long now = SystemTime.UtcNowMs;
+
+		return await _connFactory.ExecuteInTransactionAsync(async ct =>
+		{
+			await using var conn = _connFactory.CreateConnection();
+			var acc = await conn.QuerySingleOrDefaultAsync<OpdPatientAccount>(
+				"SELECT * FROM opd_patient_accounts WHERE patient_id = @PatientId", new { PatientId = req.PatientId.Trim() });
+
+			if (acc == null)
+			{
+				acc = new OpdPatientAccount
+				{
+					Id = Guid.NewGuid().ToString("D"),
+					PatientId = req.PatientId.Trim(),
+					AccountNo = "ACC" + SystemTime.ShanghaiNow.ToString("yyMMddHHmmssfff"),
+					CardNo = req.CardNo ?? ("CARD-" + req.PatientId.Trim()),
+					Balance = req.Amount,
+					Status = 1,
+					CreatedAtMs = now,
+					CreatedBy = operatorId,
+					UpdatedAtMs = now,
+					UpdatedBy = operatorId
+				};
+				await conn.ExecuteAsync(
+					@"INSERT INTO opd_patient_accounts (id, patient_id, account_no, card_no, balance, frozen_amount, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+					  VALUES (@Id, @PatientId, @AccountNo, @CardNo, @Balance, 0, 1, 1, @CreatedAtMs, @CreatedBy, @UpdatedAtMs, @UpdatedBy, 1)", acc);
+			}
+			else
+			{
+				acc.UpdatedAtMs = now;
+				acc.UpdatedBy = operatorId;
+				await conn.ExecuteAsync(
+					"UPDATE opd_patient_accounts SET balance = balance + @Amount, updated_at_ms = @Now, updated_by = @User, version_no = version_no + 1 WHERE id = @Id",
+					new { Amount = req.Amount, Now = now, User = operatorId, Id = acc.Id });
+				acc.Balance = await conn.ExecuteScalarAsync<decimal>("SELECT balance FROM opd_patient_accounts WHERE id = @Id", new { Id = acc.Id });
+			}
+
+			var ledger = new OpdAccountLedger
+			{
+				Id = Guid.NewGuid().ToString("D"),
+				AccountId = acc.Id,
+				PatientId = acc.PatientId,
+				TransType = "RECHARGE",
+				Amount = req.Amount,
+				BalanceAfter = acc.Balance,
+				PaymentChannel = string.IsNullOrWhiteSpace(req.PaymentChannel) ? "CASH" : req.PaymentChannel.Trim(),
+				OperatorId = operatorId,
+				Remark = $"就诊卡充值 ¥{req.Amount:0.00}",
+				CreatedAtMs = now,
+				CreatedBy = operatorId,
+				UpdatedAtMs = now,
+				UpdatedBy = operatorId
+			};
+			await conn.ExecuteAsync(
+				@"INSERT INTO opd_account_ledgers (id, account_id, patient_id, trans_type, amount, balance_after, payment_channel, operator_id, prescription_id, payment_order_id, remark, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+				  VALUES (@Id, @AccountId, @PatientId, @TransType, @Amount, @BalanceAfter, @PaymentChannel, @OperatorId, @PrescriptionId, @PaymentOrderId, @Remark, 1, @CreatedAtMs, @CreatedBy, @UpdatedAtMs, @UpdatedBy, 1)", ledger);
+
+			if (_auditTrail != null)
+			{
+				await _auditTrail.RecordAuditAsync("OPD_PREPAY_RECHARGE", "OpdPatientAccount", acc.Id, $"患者 [{acc.PatientId}] 就诊卡预交金充值 ¥{req.Amount:0.00}，当前余额 ¥{acc.Balance:0.00}", operatorId);
+			}
+
+			return ApiResponse<OpdPatientAccount>.Success(acc, $"就诊卡充值成功，当前账户可用余额 ¥{acc.Balance:0.00}");
+		});
+	}
+
+	[HttpPost("opd/accounts/settle-in-clinic")]
+	[HttpPost("/api/v4/opd/accounts/settle-in-clinic")]
+	public async Task<ApiResponse<FinPaymentOrder>> SettleInClinic([FromBody] OpdInClinicSettleRequestDto req)
+	{
+		if (req == null || string.IsNullOrWhiteSpace(req.PatientId) || string.IsNullOrWhiteSpace(req.PrescriptionId))
+		{
+			return ApiResponse<FinPaymentOrder>.Fail(400, "患者ID与处方ID不能为空");
+		}
+		var doctorId = _userSession?.UserId ?? req.DoctorId ?? "DOCTOR";
+		long now = SystemTime.UtcNowMs;
+
+		return await _connFactory.ExecuteInTransactionAsync(async ct =>
+		{
+			await using var conn = _connFactory.CreateConnection();
+			var tx = _connFactory.CurrentTransaction;
+			var rx = await conn.QuerySingleOrDefaultAsync<dynamic>(
+				new CommandDefinition(
+					"SELECT id, prescription_no, visit_id, patient_id, opd_dept_id, target_pharmacy_id, payment_order_id, status FROM opd_prescriptions WHERE id = @Id",
+					new { Id = req.PrescriptionId.Trim() }, tx, cancellationToken: ct));
+			if (rx == null)
+				return ApiResponse<FinPaymentOrder>.Fail(404, "处方不存在");
+			if (Convert.ToInt32(rx.status) == 3 || !string.IsNullOrWhiteSpace((string?)rx.payment_order_id))
+				return ApiResponse<FinPaymentOrder>.Fail(409, "处方已完成缴费，请勿重复扣费");
+
+			var items = (await conn.QueryAsync<dynamic>(
+				new CommandDefinition(
+					"SELECT total_quantity, unit_price FROM opd_prescription_items WHERE prescription_id = @Id AND is_deleted = 0",
+					new { Id = req.PrescriptionId.Trim() }, tx, cancellationToken: ct))).ToList();
+			decimal totalAmount = 0m;
+			foreach (var item in items)
+			{
+				decimal q = item.total_quantity != null ? Convert.ToDecimal(item.total_quantity) : 1m;
+				decimal p = item.unit_price != null ? Convert.ToDecimal(item.unit_price) : 0m;
+				totalAmount += q * p;
+			}
+			if (totalAmount <= 0m) totalAmount = 10m;
+
+			var acc = await conn.QuerySingleOrDefaultAsync<OpdPatientAccount>(
+				new CommandDefinition("SELECT * FROM opd_patient_accounts WHERE patient_id = @PatientId", new { PatientId = req.PatientId.Trim() }, tx, cancellationToken: ct));
+			if (acc == null || acc.Balance < totalAmount)
+			{
+				var curBal = acc?.Balance ?? 0m;
+				return ApiResponse<FinPaymentOrder>.Fail(400, $"就诊卡余额不足！处方金额 ¥{totalAmount:0.00}，当前卡余额 ¥{curBal:0.00}，请先充值或前往窗口缴费");
+			}
+
+			int deducted = await conn.ExecuteAsync(new CommandDefinition(
+				"UPDATE opd_patient_accounts SET balance = balance - @Amount, updated_at_ms = @Now, updated_by = @User, version_no = version_no + 1 WHERE id = @Id AND balance >= @Amount",
+				new { Amount = totalAmount, Now = now, User = doctorId, Id = acc.Id }, tx, cancellationToken: ct));
+			if (deducted != 1)
+				return ApiResponse<FinPaymentOrder>.Fail(409, "就诊卡余额不足或已被并发扣减，请刷新后重试");
+			acc.Balance -= totalAmount;
+
+			var payOrder = new FinPaymentOrder
+			{
+				PaymentNo = "PAY" + SystemTime.ShanghaiNow.ToString("yyMMddHHmmssfff") + Guid.NewGuid().ToString("N")[..4],
+				Scene = "OPD",
+				PatientId = req.PatientId.Trim(),
+				VisitOrEncounterId = (string)rx.visit_id,
+				TotalAmount = totalAmount,
+				SelfPayAmount = 0m,
+				PrepaymentDeduct = totalAmount,
+				InsuranceAmount = 0m,
+				PaymentChannel = "PREPAYMENT_ACCOUNT",
+				Status = 1,
+				PaidAtMs = now,
+				InvoiceOfdId = FinanceSettlementContract.GenerateFiscalInvoiceNo("BILL"),
+				CreatedBy = doctorId,
+				UpdatedBy = doctorId
+			};
+			await _paymentRepo.InsertAsync(payOrder, ct);
+
+			var ledger = new OpdAccountLedger
+			{
+				Id = Guid.NewGuid().ToString("D"),
+				AccountId = acc.Id,
+				PatientId = acc.PatientId,
+				TransType = "DEDUCT",
+				Amount = totalAmount,
+				BalanceAfter = acc.Balance,
+				PaymentChannel = "PREPAYMENT_ACCOUNT",
+				OperatorId = doctorId,
+				PrescriptionId = req.PrescriptionId.Trim(),
+				PaymentOrderId = payOrder.Id,
+				Remark = $"诊间一键划扣处方费 ¥{totalAmount:0.00}",
+				CreatedAtMs = now,
+				CreatedBy = doctorId,
+				UpdatedAtMs = now,
+				UpdatedBy = doctorId
+			};
+			await conn.ExecuteAsync(new CommandDefinition(
+				@"INSERT INTO opd_account_ledgers (id, account_id, patient_id, trans_type, amount, balance_after, payment_channel, operator_id, prescription_id, payment_order_id, remark, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+				  VALUES (@Id, @AccountId, @PatientId, @TransType, @Amount, @BalanceAfter, @PaymentChannel, @OperatorId, @PrescriptionId, @PaymentOrderId, @Remark, 1, @CreatedAtMs, @CreatedBy, @UpdatedAtMs, @UpdatedBy, 1)",
+				ledger, tx, cancellationToken: ct));
+
+			await conn.ExecuteAsync(new CommandDefinition(
+				"UPDATE opd_prescriptions SET payment_order_id = @PayId, status = 3, updated_at_ms = @Now, updated_by = @Doctor, version_no = version_no + 1 WHERE id = @Id",
+				new { PayId = payOrder.Id, Now = now, Doctor = doctorId, Id = req.PrescriptionId.Trim() }, tx, cancellationToken: ct));
+
+			string rxNo = (string)(rx.prescription_no ?? req.PrescriptionId.Trim());
+			string chargeDept = (string?)rx.opd_dept_id ?? "DEPT-OPD-01";
+			string pharmacyId = (string?)rx.target_pharmacy_id ?? "DEPT-PHM-01";
+			await _chargeRepo.InsertAsync(new FinChargeLedger
+			{
+				PatientId = req.PatientId.Trim(),
+				VisitOrEncounterId = (string)rx.visit_id,
+				PaymentOrderId = payOrder.Id,
+				OrderDeptId = chargeDept,
+				ExecDeptId = pharmacyId,
+				ItemCode = "OPD_PRESCRIPTION",
+				ItemName = "处方 " + rxNo,
+				Quantity = 1,
+				UnitPrice = totalAmount,
+				TotalAmount = totalAmount,
+				Status = 1,
+				CreatedBy = doctorId,
+				UpdatedBy = doctorId
+			}, ct);
+
+			var dispenseExists = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+				"SELECT count(*) FROM phm_dispense_orders WHERE prescription_id = @RxId",
+				new { RxId = req.PrescriptionId.Trim() }, tx, cancellationToken: ct));
+			if (dispenseExists == 0)
+			{
+				await conn.ExecuteAsync(new CommandDefinition(
+					"""
+					INSERT INTO phm_dispense_orders
+					    (id, dispense_no, pharmacy_id, prescription_id, ward_summary_id,
+					     patient_id, status, dispensed_by_id, dispensed_at_ms,
+					     drug_return_confirmed, ext_data_json, schema_version,
+					     created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+					VALUES
+					    (@Id, @DispenseNo, @PharmacyId, @RxId, NULL,
+					     @PatientId, 0, NULL, NULL,
+					     0, @ExtJson, 1,
+					     @Now, @Actor, @Now, @Actor, 1)
+					""",
+					new
+					{
+						Id = Guid.NewGuid().ToString("D"),
+						DispenseNo = "WAIT-" + rxNo,
+						PharmacyId = pharmacyId,
+						RxId = req.PrescriptionId.Trim(),
+						PatientId = req.PatientId.Trim(),
+						ExtJson = JsonSerializer.Serialize(new { paymentNo = payOrder.PaymentNo, paidAtMs = now, notificationState = "READY_TO_DISPENSE", source = "IN_CLINIC_SETTLE" }),
+						Now = now,
+						Actor = doctorId
+					}, tx, cancellationToken: ct));
+			}
+
+			await TryAutoCreateInfusionOrderAsync(conn, tx, req.PrescriptionId.Trim(), (string)rx.visit_id, req.PatientId.Trim(), doctorId, now, ct);
+
+			if (_auditTrail != null)
+			{
+				await _auditTrail.RecordAuditAsync("OPD_IN_CLINIC_SETTLE", "FinPaymentOrder", payOrder.Id, $"门诊诊间就诊卡划扣处方结算 ¥{totalAmount:0.00}，卡扣减后余额 ¥{acc.Balance:0.00}", doctorId);
+			}
+
+			return ApiResponse<FinPaymentOrder>.Success(payOrder, $"诊间预交金划扣成功！实扣 ¥{totalAmount:0.00}，就诊卡剩余余额 ¥{acc.Balance:0.00}");
+		});
+	}
+
+	private static readonly string[] InfusionRouteKeywords =
+	[
+		"IV", "IV_DRIP", "IVGTT", "DRIP", "静脉滴注", "静滴", "输液"
+	];
+
+	private static async Task TryAutoCreateInfusionOrderAsync(
+		DbConnection conn,
+		DbTransaction? tx,
+		string rxId,
+		string visitId,
+		string patientId,
+		string actorId,
+		long nowMs,
+		CancellationToken ct)
+	{
+		var existing = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+			"SELECT count(*) FROM opd_infusion_orders WHERE prescription_id = @RxId",
+			new { RxId = rxId }, tx, cancellationToken: ct));
+		if (existing > 0) return;
+
+		var rxItems = (await conn.QueryAsync<dynamic>(new CommandDefinition(
+			"""
+			SELECT id, group_no, drug_name_snapshot, dose_once, dose_unit, route_code
+			FROM opd_prescription_items
+			WHERE prescription_id = @RxId AND is_deleted = 0
+			ORDER BY group_no ASC, created_at_ms ASC
+			""", new { RxId = rxId }, tx, cancellationToken: ct))).ToList();
+
+		var infusionItems = rxItems.Where(x =>
+		{
+			string r = ((string?)x.route_code ?? string.Empty).Trim();
+			return InfusionRouteKeywords.Any(k => r.Contains(k, StringComparison.OrdinalIgnoreCase));
+		}).ToList();
+		if (infusionItems.Count == 0) return;
+
+		string patientName = await conn.QuerySingleOrDefaultAsync<string>(new CommandDefinition(
+			"SELECT COALESCE(full_name, @PatId) FROM pat_patients WHERE id = @PatId",
+			new { PatId = patientId }, tx, cancellationToken: ct)) ?? patientId;
+
+		var groups = infusionItems.GroupBy(i => Convert.ToInt32(i.group_no)).ToList();
+		string infusionId = Guid.NewGuid().ToString("D");
+		string infusionNo = "INF" + SystemTime.ShanghaiNow.ToString("yyyyMMddHHmmss") + Random.Shared.Next(10, 99);
+
+		await conn.ExecuteAsync(new CommandDefinition(
+			"""
+			INSERT INTO opd_infusion_orders
+			    (id, infusion_no, prescription_id, visit_id, patient_id, patient_name,
+			     status, total_bottles, completed_bottles, schema_version,
+			     created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    (@Id, @No, @RxId, @VisitId, @PatientId, @PatientName,
+			     0, @TotalBottles, 0, 1, @Now, @Actor, @Now, @Actor, 1)
+			""",
+			new
+			{
+				Id = infusionId,
+				No = infusionNo,
+				RxId = rxId,
+				VisitId = visitId,
+				PatientId = patientId,
+				PatientName = patientName,
+				TotalBottles = groups.Count,
+				Now = nowMs,
+				Actor = actorId
+			}, tx, cancellationToken: ct));
+
+		int seq = 1;
+		foreach (var grp in groups)
+		{
+			string barcode = $"BTL-{SystemTime.ShanghaiNow:yyyyMMdd}-{seq:02}-{Guid.NewGuid().ToString("N")[..4].ToUpperInvariant()}";
+			string drugNames = string.Join(" + ", grp.Select(x => (string)x.drug_name_snapshot));
+			string dosageText = string.Join("; ", grp.Select(x => $"{x.dose_once}{x.dose_unit}"));
+			await conn.ExecuteAsync(new CommandDefinition(
+				"""
+				INSERT INTO opd_infusion_bottles
+				    (id, infusion_order_id, bottle_barcode, sequence_no, drug_names,
+				     dosage_text, status, schema_version, created_at_ms, updated_at_ms, version_no)
+				VALUES
+				    (@Id, @OrderId, @Barcode, @Seq, @Drugs, @Dosage, 0, 1, @Now, @Now, 1)
+				""",
+				new
+				{
+					Id = Guid.NewGuid().ToString("D"),
+					OrderId = infusionId,
+					Barcode = barcode,
+					Seq = seq,
+					Drugs = drugNames,
+					Dosage = dosageText,
+					Now = nowMs
+				}, tx, cancellationToken: ct));
+			seq++;
+		}
+	}
+
+	[HttpGet("inpatient-fee-items/{encounterId}/daily-cost-sheet")]
+	[HttpGet("/api/v4/ipd/encounters/{encounterId}/daily-cost-sheet")]
+	public async Task<ApiResponse<InpatientDailyCostSheetDto>> GetInpatientDailyCostSheet(string encounterId, [FromQuery] int? feeDateInt = null)
+	{
+		await using var conn = _connFactory.CreateConnection();
+		var enc = await conn.QuerySingleOrDefaultAsync<dynamic>(
+			"""
+			SELECT e.id, e.patient_id, p.full_name as patient_name, e.bed_code, d.dept_name, e.prepayment_balance
+			FROM ipd_encounters e
+			LEFT JOIN pat_patients p ON e.patient_id = p.id
+			LEFT JOIN sys_departments d ON e.admit_dept_id = d.id
+			WHERE e.id = @Id
+			""", new { Id = encounterId.Trim() });
+
+		if (enc == null) return ApiResponse<InpatientDailyCostSheetDto>.Fail(404, "住院就诊记录不存在");
+
+		int targetDate = feeDateInt ?? int.Parse(SystemTime.ShanghaiNow.ToString("yyyyMMdd"));
+
+		var allItems = (await _inpatientFeeRepo.QueryAsync(
+			"SELECT * FROM fin_inpatient_fee_items WHERE encounter_id = @EncId AND is_refunded = 0 ORDER BY fee_date_int DESC, created_at_ms DESC",
+			new { EncId = encounterId.Trim() })).ToList();
+
+		// 合并 fin_charge_ledgers（包含每日自动滚费、医技确费、UDI高值耗材、预住院及出院带药直写记账）
+		var ledgerRows = (await conn.QueryAsync<dynamic>(
+			"""
+			SELECT id, item_code, item_name, quantity, unit_price, total_amount,
+			       order_dept_id, exec_dept_id, created_at_ms
+			FROM fin_charge_ledgers
+			WHERE visit_or_encounter_id = @EncId AND status = 1
+			ORDER BY created_at_ms DESC
+			""", new { EncId = encounterId.Trim() })).ToList();
+
+		foreach (var row in ledgerRows)
+		{
+			long createdMs = Convert.ToInt64(row.created_at_ms ?? SystemTime.UtcNowMs);
+			int rowDateInt = int.Parse(DateTimeOffset.FromUnixTimeMilliseconds(createdMs).ToOffset(SystemTime.ShanghaiOffset).ToString("yyyyMMdd"));
+			string code = ((string?)row.item_code ?? "OTHER").Trim();
+			allItems.Add(new FinInpatientFeeItem
+			{
+				Id = (string)row.id,
+				EncounterId = encounterId.Trim(),
+				PatientId = (string)enc.patient_id,
+				FeeDateInt = rowDateInt,
+				ItemCategory = InferFeeCategory(code, (string?)row.item_name ?? string.Empty),
+				ItemCode = code,
+				ItemName = (string?)row.item_name ?? code,
+				UnitName = "项",
+				UnitPrice = Convert.ToDecimal(row.unit_price ?? 0m),
+				Quantity = Convert.ToDecimal(row.quantity ?? 1m),
+				TotalAmount = Convert.ToDecimal(row.total_amount ?? 0m),
+				ChargeDeptId = (string?)row.order_dept_id ?? string.Empty,
+				ExecDeptId = (string?)row.exec_dept_id ?? string.Empty
+			});
+		}
+
+		// 补充尚未写 ledger 的已确费医技申请
+		var unpostedMtc = (await conn.QueryAsync<dynamic>(
+			"""
+			SELECT id, service_item_code, fee_amount, order_dept_id, exec_med_tech_dept_id, created_at_ms
+			FROM mtc_service_requests
+			WHERE (source_visit_id = @EncId
+			       OR source_order_id = @EncId
+			       OR source_order_id IN (SELECT id FROM ord_medical_orders WHERE encounter_id = @EncId))
+			  AND is_fee_confirmed = 1 AND status <> 4
+			  AND NOT EXISTS (
+			      SELECT 1 FROM fin_charge_ledgers l
+			      WHERE l.source_service_request_id = mtc_service_requests.id AND l.status = 1)
+			""", new { EncId = encounterId.Trim() })).ToList();
+
+		foreach (var mtc in unpostedMtc)
+		{
+			long createdMs = Convert.ToInt64(mtc.created_at_ms ?? SystemTime.UtcNowMs);
+			int rowDateInt = int.Parse(DateTimeOffset.FromUnixTimeMilliseconds(createdMs).ToOffset(SystemTime.ShanghaiOffset).ToString("yyyyMMdd"));
+			string code = (string?)mtc.service_item_code ?? "EXAM";
+			decimal amt = Convert.ToDecimal(mtc.fee_amount ?? 0m);
+			allItems.Add(new FinInpatientFeeItem
+			{
+				Id = (string)mtc.id,
+				EncounterId = encounterId.Trim(),
+				PatientId = (string)enc.patient_id,
+				FeeDateInt = rowDateInt,
+				ItemCategory = InferFeeCategory(code, code),
+				ItemCode = code,
+				ItemName = code,
+				UnitName = "次",
+				UnitPrice = amt,
+				Quantity = 1m,
+				TotalAmount = amt,
+				ChargeDeptId = (string?)mtc.order_dept_id ?? string.Empty,
+				ExecDeptId = (string?)mtc.exec_med_tech_dept_id ?? string.Empty
+			});
+		}
+
+		decimal cumulativeTotal = allItems.Sum(x => x.TotalAmount);
+		var todayItems = allItems.Where(x => x.FeeDateInt == targetDate).ToList();
+		decimal todayTotal = todayItems.Sum(x => x.TotalAmount);
+		decimal prepayBal = Convert.ToDecimal(enc.prepayment_balance ?? 0m);
+		decimal availableBal = prepayBal - cumulativeTotal;
+
+		string arrearsStatus;
+		string arrearsText;
+		if (availableBal > 500m)
+		{
+			arrearsStatus = "NORMAL";
+			arrearsText = $"预交金充足 (余 ¥{availableBal:0.00})";
+		}
+		else if (availableBal >= 0m)
+		{
+			arrearsStatus = "WARNING";
+			arrearsText = $"预交金偏低预警 (余 ¥{availableBal:0.00}，建议催缴押金)";
+		}
+		else
+		{
+			arrearsStatus = "ARREARS_LOCKOUT";
+			arrearsText = $"已欠费 ¥{Math.Abs(availableBal):0.00}！非紧急医嘱开立受限，请提醒家属尽快补缴押金";
+		}
+
+		var catNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+		{
+			["MEDICINE"] = "西药费",
+			["TCM_PATENT"] = "中成药费",
+			["TCM_HERB"] = "中草药费",
+			["BED"] = "床位费",
+			["NURSING"] = "护理费",
+			["EXAM"] = "检查费",
+			["LAB"] = "检验费",
+			["TREATMENT"] = "治疗费",
+			["SURGERY"] = "手术费",
+			["MATERIAL"] = "卫生材料费"
+		};
+
+		var categories = todayItems.GroupBy(x => (string)(x.ItemCategory ?? "OTHER"))
+			.Select(g => new CategorizedFeeSummaryDto(
+				g.Key,
+				catNames.TryGetValue(g.Key, out var cn) ? cn : g.Key,
+				g.Sum(x => x.TotalAmount),
+				g.Count()))
+			.OrderByDescending(x => x.Amount)
+			.ToList();
+
+		var dto = new InpatientDailyCostSheetDto(
+			EncounterId: encounterId.Trim(),
+			PatientId: (string)enc.patient_id,
+			PatientName: (string)(enc.patient_name ?? "在院患者"),
+			BedCode: (string)(enc.bed_code ?? "未分床"),
+			DeptName: (string)(enc.dept_name ?? "住院病区"),
+			FeeDateInt: targetDate,
+			TodayTotalAmount: todayTotal,
+			CumulativeTotalAmount: cumulativeTotal,
+			PrepaymentBalance: prepayBal,
+			AvailableBalance: availableBal,
+			ArrearsStatus: arrearsStatus,
+			ArrearsStatusText: arrearsText,
+			Categories: categories,
+			TodayItems: todayItems);
+
+		return ApiResponse<InpatientDailyCostSheetDto>.Success(dto, $"已生成 {targetDate} 住院一日清单");
+	}
+
+	private static string InferFeeCategory(string code, string name)
+	{
+		string upper = (code + " " + name).ToUpperInvariant();
+		if (upper.Contains("BED") || upper.Contains("床位")) return "BED";
+		if (upper.Contains("NURS") || upper.Contains("护理")) return "NURSING";
+		if (upper.Contains("LAB") || upper.Contains("血常规") || upper.Contains("检验")) return "LAB";
+		if (upper.Contains("RAD") || upper.Contains("CT") || upper.Contains("MRI") || upper.Contains("EXAM") || upper.Contains("彩超")) return "EXAM";
+		if (upper.Contains("SURG") || upper.Contains("ANES") || upper.Contains("手术") || upper.Contains("麻醉")) return "SURGERY";
+		if (upper.Contains("UDI") || upper.Contains("MAT") || upper.Contains("耗材")) return "MATERIAL";
+		if (upper.Contains("HERB") || upper.Contains("草药")) return "TCM_HERB";
+		if (upper.Contains("TCM") || upper.Contains("中成药")) return "TCM_PATENT";
+		if (upper.Contains("DRUG") || upper.Contains("DISCHARGE_MED") || upper.Contains("药")) return "MEDICINE";
+		return "TREATMENT";
 	}
 }

@@ -29,5 +29,7 @@ public class OpdScheduleTemplate : BaseEntity
 
     public int TotalCapacity { get; set; } = 30;
 
+    public int SlotIntervalMinutes { get; set; } = 0;
+
     public int IsActive { get; set; } = 1;
 }

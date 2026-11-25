@@ -79,6 +79,70 @@ public partial class WorkbenchModel
 		}
 	}
 
+	public async Task<OpdActionOutcome> RecallOpdPatientAsync()
+	{
+		PatientQueueItemModel? patient = SelectedPatient;
+		if (patient == null)
+		{
+			return OpdActionOutcome.Failure("请先选择或叫号需要重呼的门诊患者");
+		}
+
+		string clinicRoomId = patient.ClinicRoomId ?? string.Empty;
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			string uri = $"/api/v4/opd/queue/recall?visitId={Uri.EscapeDataString(patient.VisitId)}";
+			if (!string.IsNullOrWhiteSpace(clinicRoomId))
+			{
+				uri += $"&clinicRoomId={Uri.EscapeDataString(clinicRoomId)}";
+			}
+			using HttpResponseMessage response = await http.PostAsync(uri, content: null);
+			ClientApiEnvelope<OpdVisitDto>? envelope =
+				await response.Content.ReadFromJsonAsync<ClientApiEnvelope<OpdVisitDto>>(JsonOptions);
+			if (envelope is not { Code: 200 })
+			{
+				return OpdActionOutcome.Failure(envelope?.Message ?? "重呼失败");
+			}
+			SystemNotice = $"已再次呼叫 [{patient.PatientName}] (#{patient.QueueNo})";
+			return OpdActionOutcome.Success($"已重呼患者 {patient.PatientName}");
+		}
+		catch (Exception ex)
+		{
+			return OpdActionOutcome.Failure("重呼失败：" + ex.Message);
+		}
+	}
+
+	public async Task<OpdActionOutcome> PassOpdPatientAsync()
+	{
+		PatientQueueItemModel? patient = SelectedPatient;
+		if (patient == null)
+		{
+			return OpdActionOutcome.Failure("请先选择需要过号的门诊患者");
+		}
+
+		try
+		{
+			using HttpClient http = CreateConfigHttpClient();
+			string uri = $"/api/v4/opd/queue/pass?visitId={Uri.EscapeDataString(patient.VisitId)}";
+			using HttpResponseMessage response = await http.PostAsync(uri, content: null);
+			ClientApiEnvelope<bool>? envelope =
+				await response.Content.ReadFromJsonAsync<ClientApiEnvelope<bool>>(JsonOptions);
+			if (envelope is not { Code: 200 })
+			{
+				return OpdActionOutcome.Failure(envelope?.Message ?? "过号失败");
+			}
+
+			await LoadOpdQueueAsync();
+			SelectedPatient = null;
+			SystemNotice = $"患者 [{patient.PatientName}] (#{patient.QueueNo}) 已标记过号顺延";
+			return OpdActionOutcome.Success($"患者 {patient.PatientName} 已标记过号");
+		}
+		catch (Exception ex)
+		{
+			return OpdActionOutcome.Failure("过号操作失败：" + ex.Message);
+		}
+	}
+
 	private async Task<OpdActionOutcome> StartConsultationForPatientAsync(PatientQueueItemModel patient)
 	{
 		if (patient.IsCompleted)

@@ -17,15 +17,16 @@ namespace HIS.Client.UrsaShell.Shell;
 public sealed class ClinicalAlertRecordItem : ClientModelBase
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string? CriticalValueId { get; set; }
     public string EventType { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
     public string PatientName { get; set; } = string.Empty;
     public string Severity { get; set; } = "Info";
-    public string TimeText { get; set; } = DateTime.Now.ToString("HH:mm:ss");
+    public string TimeText { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 }
 
-public sealed class ShellViewModel : ClientModelBase
+public sealed partial class ShellViewModel : ClientModelBase
 {
     private readonly Dictionary<string, Control> _stationViewCache = new();
     private readonly Dictionary<string, IStationLifecycle> _stationLifecycles = new();
@@ -107,29 +108,28 @@ public sealed class ShellViewModel : ClientModelBase
         {
             if (param is string ctxId)
             {
+                var oldContext = CriticalContext();
                 await Workbench.SwitchToContextAsync(ctxId);
+                if (oldContext != CriticalContext())
+                {
+                    ++_criticalQueueRevision;
+                    AlertHistory.Clear();
+                    UnreadAlertCount = 0;
+                    SetCriticalCount(0);
+                    OnPropertyChanged(nameof(CanOpenCriticalValueQueue));
+                    StopAlertHub();
+                    StartAlertHub();
+                    _ = RefreshCriticalValueQueueAsync();
+                }
                 RebuildNavigation();
                 RefreshBannerBindings();
                 CloseDrawer();
             }
         });
 
-        DoctorAckCriticalCommand = new RelayCommand(() =>
-        {
-            Workbench.CriticalValueAlert.DoctorAck = $"✓ 已签收 ({Workbench.CurrentOperatorName} {DateTime.Now:HH:mm:ss})";
-            ShowToast("危急值经治医生已签收，现可由病区护士复核。", "Success");
-            RefreshNavBadges();
-        });
-
-        NurseAckCriticalCommand = new RelayCommand(() =>
-        {
-            Workbench.CriticalValueAlert.NurseAck = $"✓ 已签收 ({Workbench.CurrentOperatorName} {DateTime.Now:HH:mm:ss})";
-            ShowToast("危急值护士已复核签收，双签闭环完成。", "Success");
-            RefreshNavBadges();
-        });
-
         RebuildNavigation();
         StartAlertHub();
+        _ = RefreshCriticalValueQueueAsync();
     }
 
     public WorkbenchModel Workbench { get; }
@@ -184,8 +184,6 @@ public sealed class ShellViewModel : ClientModelBase
     public ICommand ConfirmCancelCommand { get; }
     public ICommand LogoutCommand { get; }
     public ICommand SwitchToContextCommand { get; }
-    public ICommand DoctorAckCriticalCommand { get; }
-    public ICommand NurseAckCriticalCommand { get; }
 
     public void AttachWindowCallbacks(
         Action<int> openLegacyWindow,
@@ -403,6 +401,24 @@ public sealed class ShellViewModel : ClientModelBase
                 IsClinical = true,
                 Description = "叫号接诊、门诊病历书写、处方开立与检验检查"
             });
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "opd_screen",
+                LegacyNavIndex = -1,
+                Title = "门诊候诊叫号大屏",
+                Icon = "📺",
+                IsClinical = true,
+                Description = "诊区门口与候诊区智能叫号、当前接诊与过号顺延大屏"
+            });
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "opd_infusion",
+                LegacyNavIndex = -1,
+                Title = "门诊输液中心",
+                Icon = "💧",
+                IsClinical = true,
+                Description = "门诊输液三查七对、座位床位分配、配药复核、穿刺与巡视闭环"
+            });
         }
         if (ctx.CanSeeIpdStation)
         {
@@ -427,6 +443,15 @@ public sealed class ShellViewModel : ClientModelBase
                 IsClinical = true,
                 Description = "医嘱校对、分解、执行与借床/床位护理"
             });
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "mobile_nursing",
+                LegacyNavIndex = -1,
+                Title = "移动护理执行 (PDA)",
+                Icon = "📱",
+                IsClinical = true,
+                Description = "移动护理腕带与药品条码三查七对扫码核对与执行"
+            });
         }
         if (ctx.CanSeeMedTech)
         {
@@ -437,7 +462,106 @@ public sealed class ShellViewModel : ClientModelBase
                 Title = "医技与检查",
                 Icon = "🔬",
                 IsClinical = true,
-                Description = "检查申请确费锁单、结果报告与危急值双签"
+                Description = "检查申请、结果查询与危急值提醒"
+            });
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "medtech_report",
+                LegacyNavIndex = -1,
+                Title = "医技报告与审签",
+                Icon = "📋",
+                IsClinical = true,
+                Description = "待书写/待审签队列、机器直出直审与分科室自定义报告模板"
+            });
+        }
+        if (ctx.IsAdmin || ctx.CanSurgery || ctx.CanSeeMedTech || ctx.CanSeeWardStation)
+        {
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "aims",
+                LegacyNavIndex = -1,
+                Title = "手术麻醉中心 (AIMS)",
+                Icon = "🩺",
+                IsClinical = true,
+                Description = "手术排台急诊插台、术前访视极量计算、术中出入量/MH应急、毒麻空安瓿双人销毁、PACU门禁与PCA随访"
+            });
+        }
+        if (ctx.CanSeeOpdStation || ctx.IsAdmin || ctx.CanSeeWardStation)
+        {
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "er_opd_pro",
+                LegacyNavIndex = -1,
+                Title = "急诊分诊与门诊增强",
+                Icon = "🚑",
+                IsClinical = true,
+                Description = "急诊MEWS五级分诊抢救留观、临床优先级候诊、慢病续方与SM3证明书"
+            });
+        }
+        if (ctx.IsAdmin || ctx.CanSeeOpdStation || ctx.CanSeeMedTech)
+        {
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "checkup",
+                LegacyNavIndex = -1,
+                Title = "健康体检管理",
+                Icon = "🩺",
+                IsClinical = true,
+                Description = "个人/团体体检登记、套餐自动拆解、分科录入与主检总检"
+            });
+        }
+        if (ctx.CanSeeIpdStation || ctx.CanSeeWardStation || ctx.IsAdmin)
+        {
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "ipd_pro",
+                LegacyNavIndex = -1,
+                Title = "住院全流程与专科中心",
+                Icon = "🛏️",
+                IsClinical = true,
+                Description = "图形化床位看板、MAR三测单、全院会诊、每日自动滚费、退药冲正、产科与日间手术"
+            });
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "pre_admission",
+                LegacyNavIndex = -1,
+                Title = "预住院管理中心",
+                Icon = "🏥",
+                IsClinical = true,
+                Description = "医保预住院登记、P0危急值抢占中断、准入评估与复合费用拆分"
+            });
+        }
+        if (ctx.CanSeeWardStation || ctx.IsAdmin)
+        {
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "nursing_mgmt",
+                LegacyNavIndex = -1,
+                Title = "护理管理中心",
+                Icon = "👩‍⚕️",
+                IsClinical = true,
+                Description = "护士能级N0-N4档案、病区安全约束排班与Acuity护患比测算、三级护理质控与SBAR双签交接"
+            });
+        }
+        if (ctx.CanSeeIpdStation || ctx.CanSeeWardStation || ctx.IsAdmin || ctx.CanSeeAnalytics)
+        {
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "critical_care_control",
+                LegacyNavIndex = -1,
+                Title = "危急重症质控塔(P0)",
+                Icon = "🚨",
+                IsClinical = true,
+                Description = "急诊五大中心时间轴质控、ICU重症CIS(APACHE II/SOFA/三管)、DRG事中实时控费、抗菌药DDDs与PIVAS静配"
+            });
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "public_health_supply",
+                LegacyNavIndex = -1,
+                Title = "公卫随访与UDI营养(P1)",
+                Icon = "🛡️",
+                IsClinical = true,
+                Description = "公卫ICD-10多报卡强触发、院后专病随访与30天再入院追踪、高值耗材UDI消耗记账代销对账、NRS-2002营养配餐"
             });
         }
         clinical.Items.Add(new ShellNavItem
@@ -467,6 +591,27 @@ public sealed class ShellViewModel : ClientModelBase
             IsClinical = true,
             Description = "全院血液库存、备血建议、交叉配血与双签发血闭环"
         });
+        if (ctx.CanSeeIpdStation || ctx.CanSeeWardStation || ctx.CanSeeOpdStation || ctx.IsAdmin)
+        {
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "clinical_pathway",
+                LegacyNavIndex = -1,
+                Title = "临床路径管理",
+                Icon = "🧭",
+                IsClinical = true,
+                Description = "ICD路径自动匹配、患者入径评估、医嘱变异登记与病历融合摘要"
+            });
+            clinical.Items.Add(new ShellNavItem
+            {
+                Key = "hie_gateway",
+                LegacyNavIndex = -1,
+                Title = "区域互联互通 (HIE)",
+                Icon = "🌐",
+                IsClinical = true,
+                Description = "EMPI 患者主索引交叉索引、外院 EHR 调阅与双向转诊闭环"
+            });
+        }
         if (clinical.Items.Count > 0) NavGroups.Add(clinical);
 
         if (ctx.CanSeePharmacy)
@@ -496,6 +641,15 @@ public sealed class ShellViewModel : ClientModelBase
                     Description = "采购入库、效期批次、跨库调拨与药品主目录维护"
                 });
             }
+            med.Items.Add(new ShellNavItem
+            {
+                Key = "adr_monitor",
+                LegacyNavIndex = -1,
+                Title = "药品不良反应 (ADR)",
+                Icon = "⚠️",
+                IsClinical = false,
+                Description = "Naranjo 因果评估、ADR 上报归档与安全知识库规则联动"
+            });
             if (med.Items.Count > 0) NavGroups.Add(med);
         }
 
@@ -524,19 +678,43 @@ public sealed class ShellViewModel : ClientModelBase
                 Description = "科室耗材物资请领与高值植入耗材UDI扫码核销绑定"
             });
         }
+        if (ctx.IsAdmin || ctx.CanSeeWarehouse || ctx.CanSeeConsumablesWarehouse || ctx.CanSeeAnalytics)
+        {
+            logistics.Items.Add(new ShellNavItem
+            {
+                Key = "equipment_mgmt",
+                LegacyNavIndex = -1,
+                Title = "医疗设备与计量",
+                Icon = "🔧",
+                IsClinical = false,
+                Description = "大型医用设备台账、强检到期预警、维修保养与折旧核算"
+            });
+        }
         if (logistics.Items.Count > 0) NavGroups.Add(logistics);
 
-        if (ctx.CanSeeAnalytics)
+        if (ctx.CanSeeAnalytics || ctx.CanSeeFinance || ctx.IsAdmin)
         {
             var bi = new ShellNavGroup("bi", "运营与决策", isExpanded: true);
+            if (ctx.CanSeeAnalytics)
+            {
+                bi.Items.Add(new ShellNavItem
+                {
+                    Key = "analytics",
+                    LegacyNavIndex = -1,
+                    Title = "统计分析工作站",
+                    Icon = "📊",
+                    IsClinical = false,
+                    Description = "全院门诊住院运营、药占比、医疗质控与等保安全决策看板"
+                });
+            }
             bi.Items.Add(new ShellNavItem
             {
-                Key = "analytics",
+                Key = "cost_center",
                 LegacyNavIndex = -1,
-                Title = "统计分析工作站",
-                Icon = "📊",
+                Title = "全成本核算中心",
+                Icon = "🧮",
                 IsClinical = false,
-                Description = "全院门诊住院运营、药占比、医疗质控与等保安全决策看板"
+                Description = "阶梯分摊法全成本归集、收入结余率测算与绩效考核支撑"
             });
             NavGroups.Add(bi);
         }
@@ -610,36 +788,37 @@ public sealed class ShellViewModel : ClientModelBase
                 IsClinical = true,
                 Description = "全过程时效性监控、内涵质控缺陷下发与整改复核闭环"
             });
+            records.Items.Add(new ShellNavItem
+            {
+                Key = "mrms",
+                LegacyNavIndex = -1,
+                Title = "病案室与临床编码",
+                Icon = "📚",
+                IsClinical = true,
+                Description = "出院病案回收、ICD-10/ICD-9编码、DRG预分组、归档封存与借阅复印"
+            });
             NavGroups.Add(records);
         }
 
-        if (ctx.CanSeeAdminPanel)
+        if (ctx.CanSeeAdminPanel || ctx.CanSeeAnalytics)
         {
-            var sys = new ShellNavGroup("system", "系统管理", isExpanded: false);
+            var sys = new ShellNavGroup("system", "系统与管理", isExpanded: false);
             if (ctx.CanSeeDynFormConfig)
             {
                 sys.Items.Add(new ShellNavItem { Key = "dynamic_form", LegacyNavIndex = 6, Title = "动态表单配置", Icon = "🧩", Description = "专科扩展字段与表单模板设计" });
             }
-            sys.Items.Add(new ShellNavItem { Key = "hr_management", LegacyNavIndex = -1, Title = "人力资源管理", Icon = "🪪", Description = "入职登记、人事档案修改、调科晋升、证照与合同管理" });
-            sys.Items.Add(new ShellNavItem { Key = "user_admin", LegacyNavIndex = 7, Title = "用户账号维护", Icon = "👤", Description = "全院用户账号、科室岗位绑定" });
-            sys.Items.Add(new ShellNavItem { Key = "role_admin", LegacyNavIndex = 8, Title = "角色与权限", Icon = "🔐", Description = "角色权限矩阵与数据隔离策略" });
-            sys.Items.Add(new ShellNavItem { Key = "audit_log", LegacyNavIndex = 9, Title = "安全审计日志", Icon = "📜", Description = "关键操作不可篡改审计与链校验" });
-            sys.Items.Add(new ShellNavItem { Key = "workflow_designer", LegacyNavIndex = -1, Title = "流程设计器", Icon = "🔀", Description = "低代码可视化状态机审批流设计与发布" });
-            sys.Items.Add(new ShellNavItem { Key = "print_designer", LegacyNavIndex = -1, Title = "打印模板设计", Icon = "🖨️", Description = "自定义纸张长宽、拖拽条码单据排版与页面触发位" });
-            sys.Items.Add(new ShellNavItem { Key = "master_catalog", LegacyNavIndex = -1, Title = "药品耗材与套餐字典", Icon = "📦", Description = "药品字典、耗材字典与医疗组合套餐（如肾功能全套）维护" });
-            sys.Items.Add(new ShellNavItem { Key = "checkup", LegacyNavIndex = -1, Title = "健康体检管理", Icon = "🩺", Description = "个人/团体体检登记、套餐自动拆解、分科录入与主检总检" });
-            sys.Items.Add(new ShellNavItem { Key = "medtech_report", LegacyNavIndex = -1, Title = "医技报告与审签", Icon = "📋", Description = "待书写/待审签队列、机器直出直审与分科室自定义报告模板" });
-            sys.Items.Add(new ShellNavItem { Key = "pre_admission", LegacyNavIndex = -1, Title = "预住院管理中心", Icon = "🏥", Description = "医保预住院登记、P0危急值抢占中断、准入评估与复合费用拆分" });
-            sys.Items.Add(new ShellNavItem { Key = "er_opd_pro", LegacyNavIndex = -1, Title = "急诊分诊与门诊增强", Icon = "🚑", Description = "急诊MEWS五级分诊抢救留观、临床优先级候诊、慢病续方与SM3证明书" });
-            sys.Items.Add(new ShellNavItem { Key = "ipd_pro", LegacyNavIndex = -1, Title = "住院全流程与专科中心", Icon = "🛏️", Description = "图形化床位看板、MAR三测单、全院会诊、每日自动滚费、退药冲正、产科与日间手术" });
+            if (ctx.CanSeeAdminPanel)
+            {
+                sys.Items.Add(new ShellNavItem { Key = "hr_management", LegacyNavIndex = -1, Title = "人力资源管理", Icon = "🪪", Description = "入职登记、人事档案修改、调科晋升、证照与合同管理" });
+                sys.Items.Add(new ShellNavItem { Key = "user_admin", LegacyNavIndex = 7, Title = "用户账号维护", Icon = "👤", Description = "全院用户账号、科室岗位绑定" });
+                sys.Items.Add(new ShellNavItem { Key = "role_admin", LegacyNavIndex = 8, Title = "角色与权限", Icon = "🔐", Description = "角色权限矩阵与数据隔离策略" });
+                sys.Items.Add(new ShellNavItem { Key = "audit_log", LegacyNavIndex = 9, Title = "安全审计日志", Icon = "📜", Description = "关键操作不可篡改审计与链校验" });
+                sys.Items.Add(new ShellNavItem { Key = "workflow_designer", LegacyNavIndex = -1, Title = "流程设计器", Icon = "🔀", Description = "低代码可视化状态机审批流设计与发布" });
+                sys.Items.Add(new ShellNavItem { Key = "print_designer", LegacyNavIndex = -1, Title = "打印模板设计", Icon = "🖨️", Description = "自定义纸张长宽、拖拽条码单据排版与页面触发位" });
+                sys.Items.Add(new ShellNavItem { Key = "master_dict", LegacyNavIndex = -1, Title = "主数据中心", Icon = "📖", Description = "全院统一主数据治理：药耗与套餐目录、通用参考值域字典及34大国家标准主数据域" });
+            }
             sys.Items.Add(new ShellNavItem { Key = "medical_affairs", LegacyNavIndex = -1, Title = "医务管理中心", Icon = "⚖️", Description = "医师动态分级授权与停权、Ⅰ~Ⅳ级安全事件RCA/PDCA、医疗纠纷联动封存病案与新技术准入" });
-            sys.Items.Add(new ShellNavItem { Key = "nursing_mgmt", LegacyNavIndex = -1, Title = "护理管理中心", Icon = "👩‍⚕️", Description = "护士能级N0-N4档案、病区安全约束排班与Acuity护患比测算、三级护理质控与SBAR双签交接" });
-            sys.Items.Add(new ShellNavItem { Key = "critical_care_control", LegacyNavIndex = -1, Title = "危急重症质控塔(P0)", Icon = "🚨", Description = "急诊五大中心时间轴质控、ICU重症CIS(APACHE II/SOFA/三管)、DRG事中实时控费、抗菌药DDDs与PIVAS静配" });
-            sys.Items.Add(new ShellNavItem { Key = "public_health_supply", LegacyNavIndex = -1, Title = "公卫随访与UDI营养(P1)", Icon = "🛡️", Description = "公卫ICD-10多报卡强触发、院后专病随访与30天再入院追踪、高值耗材UDI消耗记账代销对账、NRS-2002营养配餐" });
-            sys.Items.Add(new ShellNavItem { Key = "aims", LegacyNavIndex = -1, Title = "手术麻醉中心 (AIMS)", Icon = "🩺", Description = "手术排台急诊插台、术前访视极量计算、术中出入量/MH应急、毒麻空安瓿双人销毁、PACU门禁与PCA随访" });
-            sys.Items.Add(new ShellNavItem { Key = "master_dict", LegacyNavIndex = -1, Title = "主数据字典中心", Icon = "📖", Description = "全院标准计量单位与临床主数据字典维护，供动态表单直接引用限制输入" });
-            sys.Items.Add(new ShellNavItem { Key = "mrms", LegacyNavIndex = -1, Title = "病案室与临床编码", Icon = "📚", Description = "出院病案回收、ICD-10/ICD-9编码、DRG预分组、归档封存与借阅复印" });
-            NavGroups.Add(sys);
+            if (sys.Items.Count > 0) NavGroups.Add(sys);
         }
 
         RefreshNavBadges();
@@ -694,6 +873,19 @@ public sealed class ShellViewModel : ClientModelBase
         }
     }
 
+    public void NavigateToStation(string key)
+    {
+        foreach (var sec in NavGroups)
+        {
+            var item = sec.Items.FirstOrDefault(i => string.Equals(i.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (item != null)
+            {
+                ActivateNavItem(item);
+                return;
+            }
+        }
+    }
+
     public void ActivateNavItem(ShellNavItem item)
     {
         DeactivateCurrentStation();
@@ -723,8 +915,11 @@ public sealed class ShellViewModel : ClientModelBase
         {
             "workbench" => new Stations.Workbench.WorkbenchHomeView { DataContext = new Stations.Workbench.WorkbenchHomeViewModel(this) },
             "opd" => new Stations.OpdDoctor.OpdDoctorView { DataContext = new Stations.OpdDoctor.OpdDoctorViewModel(Workbench, this) },
+            "opd_screen" => new Stations.OpdQueueScreen.OpdQueueScreenView { DataContext = new Stations.OpdQueueScreen.OpdQueueScreenViewModel(this) },
+            "opd_infusion" => new Stations.OpdInfusion.OpdInfusionView { DataContext = new Stations.OpdInfusion.OpdInfusionViewModel(Workbench, this) },
             "ipd_doctor" => new Stations.IpdDoctor.IpdDoctorView { DataContext = new Stations.IpdDoctor.IpdDoctorViewModel(Workbench, this) },
             "ipd_nurse" => new Stations.IpdNurse.IpdNurseView { DataContext = new Stations.IpdNurse.IpdNurseViewModel(Workbench, this) },
+            "mobile_nursing" => new Stations.MobileNursing.MobileNursingScannerView { DataContext = new Stations.MobileNursing.MobileNursingScannerViewModel(Workbench, this) },
             "medtech" => new Stations.MedTech.MedTechStationView { DataContext = new Stations.MedTech.MedTechStationViewModel(Workbench, this) },
             "pharmacy_window" => new Stations.PharmacyWindow.PharmacyWindowView { DataContext = new Stations.PharmacyWindow.PharmacyWindowViewModel(Workbench, this) },
             "pharmacy_warehouse" => new Stations.PharmacyWarehouse.PharmacyWarehouseView { DataContext = new Stations.PharmacyWarehouse.PharmacyWarehouseViewModel(Workbench, this) },
@@ -747,7 +942,7 @@ public sealed class ShellViewModel : ClientModelBase
             "emr_qc" => new Stations.EmrQc.EmrQcStationView { DataContext = new Stations.EmrQc.EmrQcStationViewModel(Workbench, this) },
             "workflow_designer" => new Stations.WorkflowDesigner.WorkflowDesignerStationView { DataContext = new Stations.WorkflowDesigner.WorkflowDesignerViewModel(Workbench, this) },
             "print_designer" => new Stations.PrintDesigner.PrintDesignerStationView { DataContext = new Stations.PrintDesigner.PrintDesignerViewModel(Workbench, this) },
-            "master_catalog" => new Stations.MasterCatalog.MasterCatalogStationView { DataContext = new Stations.MasterCatalog.MasterCatalogViewModel(Workbench, this) },
+            "master_catalog" => new Stations.MasterDict.MasterDictStationView { DataContext = new Stations.MasterDict.MasterDictViewModel(Workbench, this) },
             "checkup" => new Stations.Checkup.CheckupStationView { DataContext = new Stations.Checkup.CheckupStationViewModel(Workbench, this) },
             "medtech_report" => new Stations.MedTechReport.MedTechReportStationView { DataContext = new Stations.MedTechReport.MedTechReportViewModel(Workbench, this) },
             "pre_admission" => new Stations.PreAdmission.PreAdmissionStationView { DataContext = new Stations.PreAdmission.PreAdmissionViewModel(Workbench, this) },
@@ -761,6 +956,11 @@ public sealed class ShellViewModel : ClientModelBase
             "master_dict" => new Stations.MasterDict.MasterDictStationView { DataContext = new Stations.MasterDict.MasterDictViewModel(Workbench, this) },
             "mrms" => new Stations.Mrms.MrmsStationView { DataContext = new Stations.Mrms.MrmsViewModel(Workbench, this) },
             "workflow_inbox" => new Stations.WorkflowInbox.WorkflowInboxStationView { DataContext = new Stations.WorkflowInbox.WorkflowInboxViewModel(Workbench, this) },
+            "clinical_pathway" => new Stations.ClinicalPathway.ClinicalPathwayView { DataContext = new Stations.ClinicalPathway.ClinicalPathwayViewModel(Workbench, this) },
+            "adr_monitor" => new Stations.Adr.AdrStationView { DataContext = new Stations.Adr.AdrStationViewModel(Workbench, this) },
+            "equipment_mgmt" => new Stations.Equipment.EquipmentStationView { DataContext = new Stations.Equipment.EquipmentStationViewModel(Workbench, this) },
+            "cost_center" => new Stations.CostCenter.CostCenterStationView { DataContext = new Stations.CostCenter.CostCenterStationViewModel(Workbench, this) },
+            "hie_gateway" => new Stations.HieGateway.HieGatewayStationView { DataContext = new Stations.HieGateway.HieGatewayStationViewModel(Workbench, this) },
             _ => new LegacyStationBridgeView(
                 item.Title,
                 item.Description,
@@ -868,13 +1068,13 @@ public sealed class ShellViewModel : ClientModelBase
         IsDrawerOpen = true;
     }
 
-    public void OpenCriticalValueDrawer()
+    public void OpenCriticalValueDrawer() => OpenCriticalValueDrawer(null);
+
+    private void OpenCriticalValueDrawer(string? alertId)
     {
-        DrawerTitle = "危急值预警与双人签收";
-        DrawerSubtitle = $"{Workbench.CriticalValueAlert.PatientName} · {Workbench.CriticalValueAlert.TestItem}";
-        DrawerWidth = 500;
-        DrawerContent = CreateCriticalValueDrawerView();
-        IsDrawerOpen = true;
+        var panel = new StackPanel { Spacing = 9 };
+        OpenDrawer("危急值", null, panel, 500);
+        _ = RefreshCriticalValueQueueAsync(panel, alertId);
     }
 
     public void OpenContextSwitchDrawer()
@@ -982,67 +1182,26 @@ public sealed class ShellViewModel : ClientModelBase
                 CornerRadius = new Avalonia.CornerRadius(8),
                 BorderThickness = new Avalonia.Thickness(1)
             };
-            card[!Border.BackgroundProperty] = new Avalonia.Data.Binding { Source = Avalonia.Application.Current?.FindResource("SemiColorBackground1") };
-            card[!Border.BorderBrushProperty] = new Avalonia.Data.Binding { Source = Avalonia.Application.Current?.FindResource("SemiColorBorder") };
+            card[!Border.BackgroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorBackground1");
+            card[!Border.BorderBrushProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorBorder");
+
+            var titleTb = new TextBlock { Text = $"{ev.ResultIcon} {ev.EventTitle}", FontWeight = Avalonia.Media.FontWeight.Bold, FontSize = 13 };
+            titleTb[!TextBlock.ForegroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorText0");
+
+            var metaTb = new TextBlock { Text = $"{ev.EventTime} · {ev.Department} · {ev.DoctorOrOperator}", FontSize = 11 };
+            metaTb[!TextBlock.ForegroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorText2");
+
+            var summaryTb = new TextBlock { Text = ev.Summary, FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+            summaryTb[!TextBlock.ForegroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorText1");
 
             var inner = new StackPanel { Spacing = 4 };
-            inner.Children.Add(new TextBlock { Text = $"{ev.ResultIcon} {ev.EventTitle}", FontWeight = Avalonia.Media.FontWeight.Bold, FontSize = 13 });
-            inner.Children.Add(new TextBlock { Text = $"{ev.EventTime} · {ev.Department} · {ev.DoctorOrOperator}", FontSize = 11 });
-            inner.Children.Add(new TextBlock { Text = ev.Summary, FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+            inner.Children.Add(titleTb);
+            inner.Children.Add(metaTb);
+            inner.Children.Add(summaryTb);
             card.Child = inner;
             stack.Children.Add(card);
         }
         return stack;
-    }
-
-    private Control CreateCriticalValueDrawerView()
-    {
-        var alert = Workbench.CriticalValueAlert;
-        var root = new StackPanel { Spacing = 14, DataContext = alert };
-
-        var summary = new Border
-        {
-            Padding = new Avalonia.Thickness(14),
-            CornerRadius = new Avalonia.CornerRadius(8),
-            BorderThickness = new Avalonia.Thickness(1)
-        };
-        if (Avalonia.Application.Current?.TryGetResource("SemiColorDangerLight", null, out var bg) == true && bg is Avalonia.Media.IBrush bgBrush)
-        {
-            summary.Background = bgBrush;
-        }
-        if (Avalonia.Application.Current?.TryGetResource("SemiColorDanger", null, out var bd) == true && bd is Avalonia.Media.IBrush bdBrush)
-        {
-            summary.BorderBrush = bdBrush;
-        }
-
-        var sInner = new StackPanel { Spacing = 4 };
-        sInner.Children.Add(new TextBlock { Text = $"{alert.AlertLevel} · {alert.TestItem}", FontSize = 15, FontWeight = Avalonia.Media.FontWeight.Bold });
-        sInner.Children.Add(new TextBlock { Text = $"测定值: {alert.MeasuredValue} (参考范围: {alert.ReferenceRange})", FontSize = 13, FontWeight = Avalonia.Media.FontWeight.SemiBold });
-        sInner.Children.Add(new TextBlock { Text = $"报告科室: {alert.ReportingDept} · {alert.ReportingTime}", FontSize = 11 });
-        summary.Child = sInner;
-        root.Children.Add(summary);
-
-        root.Children.Add(new TextBlock { Text = alert.ClinicalAction, FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
-
-        var docStatus = new TextBlock { FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold };
-        docStatus[!TextBlock.TextProperty] = new Avalonia.Data.Binding(nameof(CriticalValueAlertModel.DoctorAck)) { StringFormat = "医生签收: {0}" };
-        root.Children.Add(docStatus);
-
-        var docBtn = new Button { Content = "经治医生首接签收", Height = 34, Command = DoctorAckCriticalCommand };
-        docBtn.Classes.Add("Primary");
-        docBtn[!Button.IsEnabledProperty] = new Avalonia.Data.Binding(nameof(CriticalValueAlertModel.CanDoctorAck));
-        root.Children.Add(docBtn);
-
-        var nurseStatus = new TextBlock { FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold };
-        nurseStatus[!TextBlock.TextProperty] = new Avalonia.Data.Binding(nameof(CriticalValueAlertModel.NurseAck)) { StringFormat = "护士复核: {0}" };
-        root.Children.Add(nurseStatus);
-
-        var nurseBtn = new Button { Content = "责任护士复核签收", Height = 34, Command = NurseAckCriticalCommand };
-        nurseBtn.Classes.Add("Warning");
-        nurseBtn[!Button.IsEnabledProperty] = new Avalonia.Data.Binding(nameof(CriticalValueAlertModel.CanNurseAck));
-        root.Children.Add(nurseBtn);
-
-        return root;
     }
 
     private Control CreateContextSwitchDrawerView()
@@ -1168,19 +1327,35 @@ public sealed class ShellViewModel : ClientModelBase
                     CornerRadius = new Avalonia.CornerRadius(8),
                     BorderThickness = new Avalonia.Thickness(1)
                 };
-                card[!Border.BackgroundProperty] = new Avalonia.Data.Binding { Source = Avalonia.Application.Current?.FindResource("SemiColorBackground1") };
-                card[!Border.BorderBrushProperty] = new Avalonia.Data.Binding { Source = Avalonia.Application.Current?.FindResource("SemiColorBorder") };
+                card[!Border.BackgroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorBackground1");
+                card[!Border.BorderBrushProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorBorder");
 
                 var inner = new StackPanel { Spacing = 4 };
                 var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-                headerGrid.Children.Add(new TextBlock { Text = a.Title, FontWeight = Avalonia.Media.FontWeight.Bold, FontSize = 13 });
-                var timeBlock = new TextBlock { Text = a.TimeText, FontSize = 11, Foreground = Avalonia.Media.Brushes.Gray };
+                var titleTb = new TextBlock { Text = a.Title, FontWeight = Avalonia.Media.FontWeight.Bold, FontSize = 13 };
+                titleTb[!TextBlock.ForegroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorText0");
+                headerGrid.Children.Add(titleTb);
+                var timeBlock = new TextBlock { Text = a.TimeText, FontSize = 11 };
+                timeBlock[!TextBlock.ForegroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorText2");
                 Grid.SetColumn(timeBlock, 1);
                 headerGrid.Children.Add(timeBlock);
                 inner.Children.Add(headerGrid);
 
-                inner.Children.Add(new TextBlock { Text = $"患者/对象: {a.PatientName}", FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold });
-                inner.Children.Add(new TextBlock { Text = a.Message, FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+                if (!string.IsNullOrWhiteSpace(a.PatientName))
+                {
+                    var patTb = new TextBlock { Text = $"患者/对象: {a.PatientName}", FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+                    patTb[!TextBlock.ForegroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorText1");
+                    inner.Children.Add(patTb);
+                }
+                var msgTb = new TextBlock { Text = a.Message, FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+                msgTb[!TextBlock.ForegroundProperty] = new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("SemiColorText1");
+                inner.Children.Add(msgTb);
+                if (a.CriticalValueId is { } alertId && CanOpenCriticalValueQueue)
+                {
+                    var open = new Button { Content = "查看报告" };
+                    open.Click += (_, _) => OpenCriticalValueDrawer(alertId);
+                    inner.Children.Add(open);
+                }
                 card.Child = inner;
                 listStack.Children.Add(card);
             }
@@ -1242,25 +1417,30 @@ public sealed class ShellViewModel : ClientModelBase
 
     private void HandleCriticalValue(ClinicalAlertPayload payload)
     {
+        var context = CriticalContext();
         Dispatcher.UIThread.Post(() =>
         {
+            if (context != CriticalContext()) return;
             UnreadAlertCount++;
             var item = new ClinicalAlertRecordItem
             {
                 EventType = "CRITICAL_VALUE",
-                Title = "⚠ 检验危急值急迫告警",
-                PatientName = payload.PatientName ?? "急救/病区患者",
-                Message = $"{payload.Item ?? "检验项"}: {payload.Value ?? "超出极值"} - {payload.Message ?? "需经治医师在 10 分钟内双人签收闭环"}",
+                CriticalValueId = payload.AlertId,
+                Title = payload.AlertId == null ? "临床提醒" : "危急值报告",
+                PatientName = payload.PatientName ?? string.Empty,
+                Message = payload.AlertId == null ? $"{payload.Item}：{payload.Value ?? payload.Message}" : "有新的危急值报告",
                 Severity = "Danger",
-                TimeText = DateTime.Now.ToString("HH:mm:ss")
+                TimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
             };
             AlertHistory.Insert(0, item);
-            Workbench.CriticalValueAlert.PatientName = item.PatientName;
-            Workbench.CriticalValueAlert.TestItem = $"{payload.Item}: {payload.Value}";
-            Workbench.CriticalValueAlert.DoctorAck = "待经治医师签收";
-            Workbench.CriticalValueAlert.NurseAck = "待病区护士复核";
-            ShowToast($"【危急值突发强告警】{item.PatientName} - {item.Message}", "Danger", "立即签收", () => OpenCriticalValueDrawer(), 15);
-            OpenCriticalValueDrawer();
+            if (payload.AlertId == null)
+            {
+                ShowToast($"【临床提醒】{item.PatientName} - {item.Message}", "Danger", "通知历史", OpenAlertHistoryDrawer, 15);
+                return;
+            }
+            ShowToast("有新的危急值报告，请核对原报告并按岗位签收。", "Danger", "查看报告", () => OpenCriticalValueDrawer(payload.AlertId), 15);
+            if (DrawerTitle == "危急值" && DrawerContent is StackPanel) return;
+            _ = RefreshCriticalValueQueueAsync();
         });
     }
 
@@ -1276,7 +1456,7 @@ public sealed class ShellViewModel : ClientModelBase
                 PatientName = payload.PatientName ?? "在院患者",
                 Message = payload.Message ?? $"{payload.Item}: 医嘱已更新状态",
                 Severity = "Info",
-                TimeText = DateTime.Now.ToString("HH:mm:ss")
+                TimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
             };
             AlertHistory.Insert(0, item);
             ShowToast($"【医嘱变更】{item.PatientName}：{item.Message}", "Info");
@@ -1295,7 +1475,7 @@ public sealed class ShellViewModel : ClientModelBase
                 PatientName = payload.PatientName ?? "在院患者",
                 Message = payload.Message ?? $"{payload.Item} 接近书写时限，请及时完成！",
                 Severity = "Warning",
-                TimeText = DateTime.Now.ToString("HH:mm:ss")
+                TimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
             };
             AlertHistory.Insert(0, item);
             ShowToast($"【时效预警】{item.PatientName}：{item.Message}", "Warning");
@@ -1314,7 +1494,7 @@ public sealed class ShellViewModel : ClientModelBase
                 PatientName = payload.PatientName ?? "重症监护患者",
                 Message = payload.Message ?? $"{payload.Item ?? "生理体征"} 异常: {payload.Value}",
                 Severity = "Danger",
-                TimeText = DateTime.Now.ToString("HH:mm:ss")
+                TimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
             };
             AlertHistory.Insert(0, item);
             ShowToast($"【监护报警】床位 {payload.BedCode} ({item.PatientName})：{item.Message}", "Danger", durationSeconds: 12);
@@ -1333,7 +1513,7 @@ public sealed class ShellViewModel : ClientModelBase
                 PatientName = payload.PatientName ?? "门诊/住院患者",
                 Message = payload.Message ?? $"{payload.Item}: 处方经药师点评存在用药风险，请确认",
                 Severity = "Warning",
-                TimeText = DateTime.Now.ToString("HH:mm:ss")
+                TimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
             };
             AlertHistory.Insert(0, item);
             ShowToast($"【处方点评】{item.PatientName}：{item.Message}", "Warning");
@@ -1352,7 +1532,7 @@ public sealed class ShellViewModel : ClientModelBase
                 PatientName = payload.PatientName ?? "病区患者",
                 Message = payload.Message ?? $"{payload.Item}: 护理评估/给药计划已到预定执行时间",
                 Severity = "Info",
-                TimeText = DateTime.Now.ToString("HH:mm:ss")
+                TimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
             };
             AlertHistory.Insert(0, item);
             ShowToast($"【护理提醒】{item.PatientName}：{item.Message}", "Info");
@@ -1361,6 +1541,7 @@ public sealed class ShellViewModel : ClientModelBase
 
     public void Dispose()
     {
+        ++_criticalQueueRevision;
         StopAlertHub();
         DeactivateCurrentStation();
         Workbench.PropertyChanged -= OnWorkbenchPropertyChanged;

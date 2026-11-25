@@ -27,7 +27,13 @@ public partial class MedTechController : ControllerBase
 	public sealed record SurgeryCheckDto(string ScheduleId, bool SignInOk, bool TimeOutOk, bool SignOutOk, bool InstrumentCountBalanced);
 
 	public sealed record DualCheckBloodDispenseDto(string RequestId, string? DispenserId, string DualCheckDispenserId, string BagBarcode);
-
+	private sealed class OpdVisitSettlementRow
+	{
+		public string Id { get; set; } = string.Empty;
+		public string PatientId { get; set; } = string.Empty;
+		public string OpdDeptId { get; set; } = string.Empty;
+		public int Status { get; set; }
+	}
 	private readonly IRepository<MtcServiceRequest> _requestRepo;
 
 	private readonly IRepository<MtcSurgerySchedule> _surgeryRepo;
@@ -67,6 +73,7 @@ public partial class MedTechController : ControllerBase
 	private readonly IEmrAccessPolicyContract? _accessPolicy;
 	private readonly IClinicalProcessSignatureContract? _signatureContract;
 	private readonly IClinicalAlertPublisher? _alertPublisher;
+	private readonly IOpdServicePaymentProofContract? _opdPaymentProof;
 
 	public MedTechController(
 		IRepository<MtcServiceRequest> requestRepo,
@@ -89,7 +96,8 @@ public partial class MedTechController : ControllerBase
 		IRepository<MtePostopFollowup>? followupRepo = null,
 		IEmrAccessPolicyContract? accessPolicy = null,
 		IClinicalProcessSignatureContract? signatureContract = null,
-		IClinicalAlertPublisher? alertPublisher = null)
+		IClinicalAlertPublisher? alertPublisher = null,
+		IOpdServicePaymentProofContract? opdPaymentProof = null)
 	{
 		_requestRepo = requestRepo;
 		_surgeryRepo = surgeryRepo;
@@ -112,6 +120,7 @@ public partial class MedTechController : ControllerBase
 		_accessPolicy = accessPolicy;
 		_signatureContract = signatureContract;
 		_alertPublisher = alertPublisher;
+		_opdPaymentProof = opdPaymentProof;
 	}
 
 	[HttpGet("requests")]
@@ -302,6 +311,41 @@ public partial class MedTechController : ControllerBase
 		return ApiResponse<MtcServiceRequest>.Success(item, "医技申请单开立并完成智能路由分发");
 	}
 
+	public sealed record RejectSampleRequestDto(string RejectionReason, string? Notes = null);
+
+	[HttpPost("requests/{reqId}/reject-sample")]
+	public async Task<ApiResponse<bool>> RejectSample(string reqId, [FromBody] RejectSampleRequestDto req)
+	{
+		var authError = RequireRoles("ROLE-MEDTECH", "ROLE-MEDTECH-STAFF", "MEDTECH");
+		if (authError != null)
+			return ApiResponse<bool>.Fail(403, authError);
+		if (string.IsNullOrWhiteSpace(reqId))
+			return ApiResponse<bool>.Fail(400, "申请单ID不能为空");
+		if (string.IsNullOrWhiteSpace(req.RejectionReason))
+			return ApiResponse<bool>.Fail(400, "必须指定标本拒收原因（如溶血、凝血、标本量不足、采血管错误）");
+
+		using var conn = _connFactory.CreateConnection();
+		var request = await conn.QuerySingleOrDefaultAsync<MtcServiceRequest>(
+			"SELECT * FROM mtc_service_requests WHERE id = @Id", new { Id = reqId });
+		if (request == null) return ApiResponse<bool>.Fail(404, "医技申请单不存在");
+		if (request.Status >= 2) return ApiResponse<bool>.Fail(409, "已报告或已完成的申请单不可拒收标本");
+
+		long now = SystemTime.UtcNowMs;
+		await conn.ExecuteAsync(@"
+			UPDATE mtc_service_requests
+			SET status = 4, rejection_reason = @Reason, rejected_by = @User, rejected_at_ms = @Now,
+			    updated_at_ms = @Now, updated_by = @User, version_no = version_no + 1
+			WHERE id = @Id",
+			new { Id = reqId, Reason = req.RejectionReason + (string.IsNullOrWhiteSpace(req.Notes) ? "" : $" ({req.Notes})"), User = CurrentUserId, Now = now });
+
+		if (_auditTrail != null)
+			await _auditTrail.RecordAuditAsync("MTC_SAMPLE_REJECT", nameof(MtcServiceRequest), reqId,
+				$"检验技师 {CurrentUserId} 拒收标本 [{request.RequestNo}]，原因：{req.RejectionReason}，已向开单病区发出重新采血通知",
+				CurrentUserId, CurrentUserId, request.ExecMedTechDeptId);
+
+		return ApiResponse<bool>.Success(true, $"标本已拒收（原因：{req.RejectionReason}），已通知送检科室重新采集标本");
+	}
+
 	[HttpPost("requests/{reqId}/confirm-fee-and-receive")]
 	public async Task<ApiResponse<MtcServiceRequest>> ReceiveSampleAndConfirmFee(string reqId)
 	{
@@ -334,51 +378,15 @@ public partial class MedTechController : ControllerBase
 			string? paymentOrderId = null;
 			if (string.Equals(req.SourceType, "OPD", StringComparison.OrdinalIgnoreCase))
 			{
-				var opdPayment = await conn.QuerySingleOrDefaultAsync<string?>(new CommandDefinition(
-					"""
-					SELECT p.id
-					FROM fin_payment_orders p
-					WHERE p.scene = 'OPD' AND p.status = 1
-					  AND (p.visit_or_encounter_id = @SourceId OR p.patient_id = @PatientId)
-					ORDER BY p.paid_at_ms DESC
-					LIMIT 1
-					""",
-					new { SourceId = req.SourceVisitId, PatientId = req.PatientId },
-					_connFactory.CurrentTransaction));
-
-				if (!string.IsNullOrWhiteSpace(opdPayment))
-				{
-					paymentOrderId = opdPayment;
-				}
-				else
-				{
-					var registration = await conn.QuerySingleOrDefaultAsync<RegistrationPaymentRow>(
-						new CommandDefinition(
-							"""
-							SELECT COALESCE(a.id, v.id) AS appointment_id,
-							       v.id AS visit_id,
-							       COALESCE(a.payment_id, p.id) AS payment_id,
-							       COALESCE(a.paid_amount, p.total_amount, 0) AS paid_amount,
-							       CASE WHEN a.refund_id IS NULL AND p.status = 1 THEN 1 ELSE 0 END AS payment_status
-							FROM opd_visits v
-							LEFT JOIN opd_appointments a
-							       ON (a.visit_id = v.id OR (a.visit_id IS NULL AND a.patient_id = v.patient_id))
-							      AND a.patient_id = @PatientId
-							LEFT JOIN fin_payment_orders p
-							       ON p.scene = 'OPD' AND p.status = 1
-							      AND (p.id = a.payment_id
-							           OR (p.visit_or_encounter_id = @SourceId AND p.patient_id = a.patient_id))
-							WHERE (v.id = @SourceId OR v.visit_no = @SourceId) AND a.patient_id = @PatientId
-							ORDER BY a.created_at_ms DESC
-							LIMIT 1
-							""",
-							new { SourceId = req.SourceVisitId, PatientId = req.PatientId },
-							_connFactory.CurrentTransaction));
-					if (registration == null || string.IsNullOrWhiteSpace(registration.PaymentId)
-						|| registration.PaymentStatus != 1 || registration.PaidAmount <= 0m)
-						return ApiResponse<MtcServiceRequest>.Fail(409, "门诊患者尚未缴纳该医技检查检验项目费用，禁止核收确费");
-					paymentOrderId = registration.PaymentId;
-				}
+				var visit = await conn.QuerySingleOrDefaultAsync<OpdVisitSettlementRow>(new CommandDefinition(
+					"SELECT id, patient_id, opd_dept_id, status FROM opd_visits WHERE id = @VisitId AND patient_id = @PatientId",
+					new { VisitId = req.SourceVisitId, req.PatientId }, _connFactory.CurrentTransaction));
+				if (visit == null) return ApiResponse<MtcServiceRequest>.Fail(409, "医技申请未绑定当前门诊就诊");
+				var proof = _opdPaymentProof == null ? null : await _opdPaymentProof.FindValidPaymentAsync(
+					new OpdServicePaymentProofRequest(req.Id, req.PatientId, visit.Id, req.ServiceItemCode, req.FeeAmount), ct);
+				if (proof == null || string.IsNullOrWhiteSpace(proof.PaymentOrderId))
+					return ApiResponse<MtcServiceRequest>.Fail(409, "未找到本次申请对应的有效付款明细，挂号费或同患者其他收费不能作为核收凭据");
+				paymentOrderId = proof.PaymentOrderId;
 			}
 			else if (string.Equals(req.SourceType, "IPD", StringComparison.OrdinalIgnoreCase))
 			{
@@ -415,10 +423,10 @@ public partial class MedTechController : ControllerBase
 				    (id, patient_id, visit_or_encounter_id, order_dept_id, patient_ward_id, exec_dept_id,
 				     item_code, item_name, quantity, unit_price, total_amount, status, payment_order_id,
 				     source_service_request_id, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
-				VALUES
-				    (@Id, @PatientId, @VisitId, @OrderDeptId, @OrderWardId, @ExecDeptId,
+				SELECT @Id, @PatientId, @VisitId, @OrderDeptId, @OrderWardId, @ExecDeptId,
 				     @ItemCode, @ItemName, 1, @UnitPrice, @TotalAmount, 1, @PaymentOrderId,
-				     @RequestId, 1, @Now, @OperatorId, @Now, @OperatorId, 1)
+				     @RequestId, 1, @Now, @OperatorId, @Now, @OperatorId, 1
+				WHERE @SourceType = 'IPD'
 				""",
 				new
 				{
@@ -433,6 +441,7 @@ public partial class MedTechController : ControllerBase
 					UnitPrice = req.FeeAmount,
 					TotalAmount = req.FeeAmount,
 					PaymentOrderId = paymentOrderId,
+					SourceType = req.SourceType,
 					RequestId = req.Id,
 					Now = now,
 					OperatorId = CurrentUserId
@@ -606,6 +615,7 @@ public partial class MedTechController : ControllerBase
 				UpdatedBy = CurrentUserId
 			};
 			await _criticalValueRepo.InsertAsync(cv);
+			await NotifyCriticalValueAsync(cv.Id, req);
 
 			if (_auditTrail != null)
 			{
@@ -614,122 +624,6 @@ public partial class MedTechController : ControllerBase
 		}
 		await RecordAuditAsync("MTC_REPORT_PUBLISH", req, $"医技报告发布：{req.ReportSummary}" + (dto.IsCriticalValue ? "（危急值）" : ""));
 		return ApiResponse<MtcServiceRequest>.Success(req, dto.IsCriticalValue ? "医技报告已发布并触发【危急值】全院声光强推送，需临床医生与病区护士双签收闭环！" : "医技报告已审核发布并生成国标 OFD 归档");
-	}
-
-	[HttpPost("requests/{reqId}/critical-ack")]
-	public async Task<ApiResponse<MtcServiceRequest>> AcknowledgeCriticalValue(string reqId, [FromBody] CriticalValueAckRequestDto dto)
-	{
-		if (dto == null)
-			return ApiResponse<MtcServiceRequest>.Fail(400, "危急值签收内容不能为空");
-		MtcServiceRequest req = await _requestRepo.GetByIdAsync(reqId);
-		if (req == null)
-		{
-			return ApiResponse<MtcServiceRequest>.Fail(404, "医技申请单不存在");
-		}
-		if (req.IsCriticalValue != 1)
-		{
-			return ApiResponse<MtcServiceRequest>.Fail(400, "该医技报告非危急值报告，无需执行危急值签收");
-		}
-		if (string.IsNullOrWhiteSpace(_session?.UserId))
-			return ApiResponse<MtcServiceRequest>.Fail(401, "危急值签收必须使用本人登录身份");
-		bool isDoctor = HasAnyRole("ROLE-OPD-DOC", "ROLE-IPD-RESIDENT", "ROLE-IPD-ATTENDING", "OPD_DOC", "DOCTOR", "PHYSICIAN", "ATTENDING", "RESIDENT");
-		bool isNurse = HasAnyRole("ROLE-WARD-NURSE", "ROLE-OPD-NURSE", "WARD_NURSE", "OPD_NURSE", "NURSE", "NURSING");
-		if (!isDoctor && !isNurse)
-			return ApiResponse<MtcServiceRequest>.Fail(403, "危急值签收仅限临床医师或责任护士");
-
-		var operatorId = _session.UserId;
-		if (!string.IsNullOrWhiteSpace(dto.DoctorId)
-			&& !string.Equals(dto.DoctorId.Trim(), operatorId, StringComparison.OrdinalIgnoreCase))
-			return ApiResponse<MtcServiceRequest>.Fail(403, "医师签收工号必须与当前登录身份一致");
-		if (!string.IsNullOrWhiteSpace(dto.NurseId)
-			&& !string.Equals(dto.NurseId.Trim(), operatorId, StringComparison.OrdinalIgnoreCase))
-			return ApiResponse<MtcServiceRequest>.Fail(403, "护士签收工号必须与当前登录身份一致");
-		if (string.IsNullOrWhiteSpace(dto.DoctorId) && string.IsNullOrWhiteSpace(dto.NurseId))
-			return ApiResponse<MtcServiceRequest>.Fail(400, "危急值签收必须由当前登录的医师或护士执行");
-
-		if (req.Status != 3)
-			return ApiResponse<MtcServiceRequest>.Fail(409, "危急值报告尚未完成审核发布，禁止签收");
-		if (isDoctor)
-		{
-			if (!string.IsNullOrWhiteSpace(req.CriticalAckDocId)
-				&& !string.Equals(req.CriticalAckDocId, operatorId, StringComparison.OrdinalIgnoreCase))
-				return ApiResponse<MtcServiceRequest>.Fail(409, "医师签收已由其他经治医师完成，禁止覆盖签名");
-			req.CriticalAckDocId = operatorId;
-		}
-		else
-		{
-			if (!string.IsNullOrWhiteSpace(req.CriticalAckNurseId)
-				&& !string.Equals(req.CriticalAckNurseId, operatorId, StringComparison.OrdinalIgnoreCase))
-				return ApiResponse<MtcServiceRequest>.Fail(409, "护士签收已由其他责任护士完成，禁止覆盖签名");
-			req.CriticalAckNurseId = operatorId;
-		}
-		if (!string.IsNullOrWhiteSpace(req.CriticalAckDocId)
-			&& string.Equals(req.CriticalAckDocId, req.CriticalAckNurseId, StringComparison.OrdinalIgnoreCase))
-			return ApiResponse<MtcServiceRequest>.Fail(400, "危急值双签收必须由不同的医师和护士分别完成");
-		using (var conn = _connFactory.CreateConnection())
-		{
-			var updated = await conn.ExecuteAsync(
-				"""
-				UPDATE mtc_service_requests
-				SET critical_ack_doc_id = @DocId, critical_ack_nurse_id = @NurseId,
-				    updated_at_ms = @Now, updated_by = @OperatorId, version_no = version_no + 1
-				WHERE id = @Id AND is_critical_value = 1 AND status = 3
-				  AND (critical_ack_doc_id IS NULL OR critical_ack_doc_id = @DocId)
-				  AND (critical_ack_nurse_id IS NULL OR critical_ack_nurse_id = @NurseId)
-				""",
-				new
-				{
-					req.Id,
-					DocId = req.CriticalAckDocId,
-					NurseId = req.CriticalAckNurseId,
-					Now = SystemTime.UtcNowMs,
-					OperatorId = operatorId
-				});
-			if (updated != 1)
-				return ApiResponse<MtcServiceRequest>.Fail(409, "危急值签收状态已变更，请刷新后重试");
-		}
-
-		var cvs = await _criticalValueRepo.QueryAsync("SELECT * FROM medtech_critical_values WHERE report_id = @ReportId", new { ReportId = req.Id });
-		if (cvs.Count > 0)
-		{
-			var cv = cvs[0];
-			if (isDoctor)
-			{
-				cv.DocAckedBy = operatorId;
-				cv.DocAckedAtMs = SystemTime.UtcNowMs;
-			}
-			else
-			{
-				cv.NurseAckedBy = operatorId;
-				cv.NurseAckedAtMs = SystemTime.UtcNowMs;
-			}
-			if (!string.IsNullOrWhiteSpace(cv.DocAckedBy) && !string.IsNullOrWhiteSpace(cv.NurseAckedBy))
-			{
-				cv.Status = "ACKNOWLEDGED";
-			}
-			cv.UpdatedAtMs = SystemTime.UtcNowMs;
-			cv.UpdatedBy = operatorId;
-			await _criticalValueRepo.UpdateAsync(cv);
-		}
-
-		bool isDualCompleted = !string.IsNullOrWhiteSpace(req.CriticalAckDocId) && !string.IsNullOrWhiteSpace(req.CriticalAckNurseId);
-		if (_auditTrail != null)
-		{
-			await _auditTrail.RecordAuditAsync("MTC_CRITICAL_VALUE_ACK", "MtcServiceRequest", req.Id, $"危急值签收更新：医师={req.CriticalAckDocId ?? "待签"}, 护士={req.CriticalAckNurseId ?? "待签"}, 处置={dto.ClinicalActionNote ?? "已处置"}", operatorId, _session.DisplayName);
-		}
-		return ApiResponse<MtcServiceRequest>.Success(req, isDualCompleted ? "危急值【医师+护士】双签收闭环已完成！" : "危急值单方签收已记录，请继续完成医护双签收闭环");
-	}
-
-	[HttpGet("critical-values")]
-	public async Task<ApiResponse<IReadOnlyList<MedtechCriticalValue>>> GetCriticalValues([FromQuery] string? encounterId = null, [FromQuery] string? status = null)
-	{
-		string sql = @"
-SELECT * FROM medtech_critical_values
-WHERE (@EncId IS NULL OR visit_or_encounter_id = @EncId)
-  AND (@Status IS NULL OR status = @Status)
-ORDER BY published_at_ms DESC LIMIT 100";
-		var list = await _criticalValueRepo.QueryAsync(sql, new { EncId = encounterId, Status = status });
-		return ApiResponse<IReadOnlyList<MedtechCriticalValue>>.Success(list);
 	}
 
 	[HttpPost("requests/{reqId}/cancel")]
@@ -769,112 +663,12 @@ ORDER BY published_at_ms DESC LIMIT 100";
 	}
 
 	[HttpPost("surgeries/safety-check")]
-	public async Task<ApiResponse<MtcSurgerySchedule>> RecordSurgerySafetyCheck([FromBody] SurgeryCheckDto req)
-	{
-		var authError = RequireRoles("ROLE-WARD-NURSE", "ROLE-OPD-NURSE", "ROLE-OR-NURSE", "WARD_NURSE", "OPD_NURSE", "ROLE-IPD-ATTENDING");
-		if (authError != null)
-			return ApiResponse<MtcSurgerySchedule>.Fail(403, authError);
-		if (req == null)
-			return ApiResponse<MtcSurgerySchedule>.Fail(400, "手术安全核查内容不能为空");
-		MtcSurgerySchedule surg = await _surgeryRepo.GetByIdAsync(req.ScheduleId);
-		if (surg == null)
-		{
-			return ApiResponse<MtcSurgerySchedule>.Fail(404, "手术排班不存在");
-		}
-		if (surg.Status >= 2)
-			return ApiResponse<MtcSurgerySchedule>.Fail(409, "手术已结束，禁止修改安全核查记录");
-		bool isTeamMember = IsAdmin()
-			|| string.Equals(surg.CirculatingNurseId, CurrentUserId, StringComparison.OrdinalIgnoreCase)
-			|| string.Equals(surg.MainSurgeonId, CurrentUserId, StringComparison.OrdinalIgnoreCase);
-		if (!isTeamMember)
-			return ApiResponse<MtcSurgerySchedule>.Fail(403, "仅该台手术的主刀医师或巡回护士可以记录安全核查");
-		surg.SignInOk = (short)(req.SignInOk ? 1 : 0);
-		surg.TimeOutOk = (short)(req.TimeOutOk ? 1 : 0);
-		surg.SignOutOk = (short)(req.SignOutOk ? 1 : 0);
-		surg.InstrumentCountBalanced = (short)(req.InstrumentCountBalanced ? 1 : 0);
-		if (surg.Status == 0 && surg.SignInOk == 1 && surg.TimeOutOk == 1)
-		{
-			surg.Status = 1;
-		}
-		using (var conn = _connFactory.CreateConnection())
-		{
-			var updated = await conn.ExecuteAsync(
-				"""
-				UPDATE mtc_surgery_schedules
-				SET sign_in_ok = @SignInOk, time_out_ok = @TimeOutOk, sign_out_ok = @SignOutOk,
-				    instrument_count_balanced = @InstrumentCountBalanced, status = @Status,
-				    updated_at_ms = @Now, updated_by = @OperatorId, version_no = version_no + 1
-				WHERE id = @Id AND status < 2
-				""",
-				new
-				{
-					surg.Id,
-					surg.SignInOk,
-					surg.TimeOutOk,
-					surg.SignOutOk,
-					surg.InstrumentCountBalanced,
-					surg.Status,
-					Now = SystemTime.UtcNowMs,
-					OperatorId = CurrentUserId
-				});
-			if (updated != 1)
-				return ApiResponse<MtcSurgerySchedule>.Fail(409, "手术状态已变更，安全核查记录未保存，请刷新后重试");
-		}
-		await RecordAuditAsync("MTC_SURGERY_SAFETY_CHECK", surg, "记录 WHO 手术三方安全核查");
-		return ApiResponse<MtcSurgerySchedule>.Success(surg, "手术三方安全核查记录已保存");
-	}
+	public ApiResponse<MtcSurgerySchedule> RecordSurgerySafetyCheck([FromBody] SurgeryCheckDto req) =>
+		ApiResponse<MtcSurgerySchedule>.Fail(409, "不再接受汇总签写，请在对应手术排班逐阶段核查并由本人签署");
 
 	[HttpPost("surgeries/{scheduleId}/finish")]
-	public async Task<ApiResponse<MtcSurgerySchedule>> FinishSurgery(string scheduleId)
-	{
-		var authError = RequireRoles("ROLE-WARD-NURSE", "ROLE-OPD-NURSE", "ROLE-OR-NURSE", "WARD_NURSE", "OPD_NURSE", "ROLE-IPD-ATTENDING");
-		if (authError != null)
-			return ApiResponse<MtcSurgerySchedule>.Fail(403, authError);
-		MtcSurgerySchedule surg = await _surgeryRepo.GetByIdAsync(scheduleId);
-		if (surg == null)
-		{
-			return ApiResponse<MtcSurgerySchedule>.Fail(404, "手术排班不存在");
-		}
-		if (surg.SignInOk != 1 || surg.TimeOutOk != 1 || surg.SignOutOk != 1 || surg.InstrumentCountBalanced != 1)
-		{
-			return ApiResponse<MtcSurgerySchedule>.Fail(400, "WHO 三方安全核查（Sign-in/Time-out/Sign-out）未全部通过或器械清点不平衡，严禁结束手术转出！");
-		}
-
-		using (var conn = _connFactory.CreateConnection())
-		{
-			var anes = await conn.QuerySingleOrDefaultAsync<MteAnesthesiaRecord>(
-				"SELECT * FROM mte_anesthesia_records WHERE schedule_id = @ScheduleId",
-				new { ScheduleId = surg.Id });
-			if (anes != null && anes.Status != 1)
-			{
-				return ApiResponse<MtcSurgerySchedule>.Fail(409, "手术麻醉记录尚未完成并归档（必须填写麻醉记录、用药及苏醒状态并标记完成），严禁结束手术转出！");
-			}
-		}
-		if (surg.Status == 2)
-			return ApiResponse<MtcSurgerySchedule>.Success(surg, "手术已结束（幂等返回）");
-		if (surg.Status != 1)
-			return ApiResponse<MtcSurgerySchedule>.Fail(409, "手术尚未进入 Time-out 核查状态，禁止结束手术");
-		bool isTeamMember = IsAdmin()
-			|| string.Equals(surg.CirculatingNurseId, CurrentUserId, StringComparison.OrdinalIgnoreCase)
-			|| string.Equals(surg.MainSurgeonId, CurrentUserId, StringComparison.OrdinalIgnoreCase);
-		if (!isTeamMember)
-			return ApiResponse<MtcSurgerySchedule>.Fail(403, "仅该台手术的主刀医师或巡回护士可以结束手术");
-		using (var conn = _connFactory.CreateConnection())
-		{
-			var updated = await conn.ExecuteAsync(
-				"""
-				UPDATE mtc_surgery_schedules
-				SET status = 2, updated_at_ms = @Now, updated_by = @OperatorId, version_no = version_no + 1
-				WHERE id = @Id AND status = 1
-				""",
-				new { surg.Id, Now = SystemTime.UtcNowMs, OperatorId = CurrentUserId });
-			if (updated != 1)
-				return ApiResponse<MtcSurgerySchedule>.Fail(409, "手术状态已变更，禁止重复结束手术");
-		}
-		surg.Status = 2;
-		await RecordAuditAsync("MTC_SURGERY_FINISH", surg, "手术结束并完成 WHO 三方安全核查");
-		return ApiResponse<MtcSurgerySchedule>.Success(surg, "手术已顺利完成并准予转入 PACU 复苏");
-	}
+	public ApiResponse<MtcSurgerySchedule> FinishSurgery(string scheduleId) =>
+		ApiResponse<MtcSurgerySchedule>.Fail(409, "旧版手术结束入口已停用，请从对应手术排班核对阶段记录后结束");
 
 	[HttpPost("blood/dual-dispense")]
 	public async Task<ApiResponse<MtcBloodRequest>> DualCheckBloodDispense([FromBody] DualCheckBloodDispenseDto req)
@@ -1060,10 +854,24 @@ SET status = 3, report_summary = @ReportSummary, executed_at_ms = @ExecutedAtMs,
 WHERE id = @Id AND status = 2",
 				new { req.ReportSummary, req.ExecutedAtMs, req.IsCriticalValue, req.ReportOfdArchiveId, Now = SystemTime.UtcNowMs, UpdatedBy = CurrentUserId, req.Id });
 
-			// Structured insert into mtc_lab_result_items
+			// Structured insert into mtc_lab_result_items (with cfg_exam_std_items critical threshold linkage)
 			foreach (var item in res.Items)
 			{
 				decimal? numVal = decimal.TryParse(item.Value, out var v) ? v : null;
+				string itemFlag = item.Flag ?? "NORMAL";
+				if (numVal.HasValue && !string.IsNullOrWhiteSpace(item.ItemCode))
+				{
+					var stdItem = await conn.QueryFirstOrDefaultAsync<dynamic>(
+						"SELECT critical_low AS CriticalLow, critical_high AS CriticalHigh FROM cfg_exam_std_items WHERE std_code = @Code AND is_active = 1 LIMIT 1",
+						new { Code = item.ItemCode.Trim() });
+					if (stdItem != null)
+					{
+						if (decimal.TryParse((string?)stdItem.CriticalLow, out var cl) && numVal.Value <= cl)
+							itemFlag = "CRITICAL";
+						else if (decimal.TryParse((string?)stdItem.CriticalHigh, out var ch) && numVal.Value >= ch)
+							itemFlag = "CRITICAL";
+					}
+				}
 				var itemId = Guid.NewGuid().ToString();
 				await conn.ExecuteAsync(@"
 INSERT INTO mtc_lab_result_items (id, request_id, patient_id, item_code, item_name, value_text, value_num, unit, ref_text, abnormal_flag, reported_at_ms, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
@@ -1079,7 +887,7 @@ VALUES (@Id, @ReqId, @PatientId, @ItemCode, @ItemName, @ValText, @ValNum, @Unit,
 						ValNum = numVal,
 						Unit = item.Unit,
 						RefText = item.ReferenceRange,
-						Flag = item.Flag ?? "NORMAL",
+						Flag = itemFlag,
 						ReportedAt = res.ReportTimeMs > 0 ? res.ReportTimeMs : SystemTime.UtcNowMs,
 						Now = SystemTime.UtcNowMs,
 						User = CurrentUserId
@@ -1103,19 +911,7 @@ VALUES (@Id, @ReqId, @PatientId, @ItemCode, @ItemName, @ValText, @ValNum, @Unit,
 				};
 				await _criticalValueRepo.InsertAsync(crit);
 
-				if (_alertPublisher != null)
-				{
-					try
-					{
-						await _alertPublisher.PublishCriticalValueAsync(
-							req.SourceVisitId ?? req.Id,
-							req.PatientId,
-							req.ServiceItemCode,
-							crit.CriticalValueText,
-							req.OrderDeptId ?? "INPATIENT");
-					}
-					catch { }
-				}
+				await NotifyCriticalValueAsync(crit.Id, req);
 			}
 
 			await RecordAuditAsync("LIS_RESULT_SYNC", req, $"同步 LIS 结果，申请单 [{req.RequestNo}]，项目数 {res.Items.Count}，危急值={res.IsCritical}", ct);
@@ -1145,7 +941,11 @@ VALUES (@Id, @ReqId, @PatientId, @ItemCode, @ItemName, @ValText, @ValNum, @Unit,
 			var report = await _pacsAdapter.QueryReportAsync(req.RequestNo, ct);
 			if (report == null) continue;
 
-			var summary = $"【PACS影像检查报告 - {report.Modality} {report.StudyBodyPart}】\n影像表现：{report.Findings}\n诊断意见：{report.Impression}\nDICOM影像调阅：{report.DicomViewerUrl}\n报告医师：{report.RadiologistName}，审核医师：{report.VerifierName}";
+			var imgMap = await conn.QueryFirstOrDefaultAsync<dynamic>(
+				"SELECT exam_room_code AS ExamRoomCode, dicom_ae_title AS DicomAeTitle, scan_protocol AS ScanProtocol FROM mdm_imaging_mappings WHERE (mapping_code = @Code OR body_part_name = @Part OR modality = @Mod) AND is_active = 1 LIMIT 1",
+				new { Code = req.ServiceItemCode, Part = report.StudyBodyPart, Mod = report.Modality });
+			string aeInfo = imgMap != null ? $"\n检查机房/AE：{imgMap.ExamRoomCode} ({imgMap.DicomAeTitle})" : string.Empty;
+			var summary = $"【PACS影像检查报告 - {report.Modality} {report.StudyBodyPart}】{aeInfo}\n影像表现：{report.Findings}\n诊断意见：{report.Impression}\nDICOM影像调阅：{report.DicomViewerUrl}\n报告医师：{report.RadiologistName}，审核医师：{report.VerifierName}";
 
 			await conn.ExecuteAsync(@"
 UPDATE mtc_service_requests
@@ -1309,6 +1109,14 @@ drawSlice();
 
 		if (req == null || string.IsNullOrWhiteSpace(req.EncounterId) || string.IsNullOrWhiteSpace(req.SurgeryName))
 			return ApiResponse<MteSurgerySchedule>.Fail(400, "手术排班基本信息（住院号、手术名称）不能为空");
+		using var patientConn = _connFactory.CreateConnection();
+		var patientName = await patientConn.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
+			SELECT p.full_name FROM ipd_encounters e JOIN pat_patients p ON p.id = e.patient_id
+			WHERE e.id = @EncounterId AND e.patient_id = @PatientId AND e.status = 1
+			AND (@Scoped = 0 OR e.admit_dept_id = @Dept)
+			""", new { req.EncounterId, req.PatientId, Scoped = !IsAdmin() && RoleCode.Normalize(_session?.RoleCode) != "OR-NURSE", Dept = _session?.ActiveDeptId }, cancellationToken: ct));
+		if (patientName == null)
+			return ApiResponse<MteSurgerySchedule>.Fail(409, "请核对本岗位下的在院记录及患者身份");
 
 		string schedNo = "SURG" + DateTime.Now.ToString("yyMMddHHmmssfff") + Random.Shared.Next(10, 99);
 		long now = SystemTime.UtcNowMs;
@@ -1318,7 +1126,7 @@ drawSlice();
 			ScheduleNo = schedNo,
 			EncounterId = req.EncounterId,
 			PatientId = req.PatientId,
-			PatientName = req.PatientName,
+			PatientName = patientName,
 			SurgeryCode = req.SurgeryCode,
 			SurgeryName = req.SurgeryName,
 			SurgeryLevel = req.SurgeryLevel,
@@ -1388,16 +1196,18 @@ SELECT * FROM mte_surgery_schedules
 WHERE (@EncounterId IS NULL OR encounter_id = @EncounterId)
   AND (@PatientId IS NULL OR patient_id = @PatientId)
   AND (@Status IS NULL OR status = @Status)
-ORDER BY scheduled_start_ms DESC", new { EncounterId = encounterId, PatientId = patientId, Status = status });
+  AND (@Admin = 1 OR @Actor IN (surgeon_id, anesthesiologist_id, circulating_nurse_id, scrub_nurse_id))
+ORDER BY scheduled_start_ms DESC", new { EncounterId = encounterId, PatientId = patientId, Status = status,
+			Admin = RoleCode.IsAdmin(_session?.RoleCode), Actor = CurrentUserId });
 
-		return ApiResponse<IReadOnlyList<MteSurgerySchedule>>.Success(list);
+		return ApiResponse<IReadOnlyList<MteSurgerySchedule>>.Success(list.Where(CanReadSurgery).ToArray());
 	}
 
 	[HttpGet("surgeries/schedules/{id}")]
 	public async Task<ApiResponse<MteSurgerySchedule>> GetScheduleById(string id)
 	{
 		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id);
-		if (schedule == null)
+		if (schedule == null || !CanReadSurgery(schedule))
 			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
 		return ApiResponse<MteSurgerySchedule>.Success(schedule);
 	}
@@ -1406,11 +1216,13 @@ ORDER BY scheduled_start_ms DESC", new { EncounterId = encounterId, PatientId = 
 	public async Task<ApiResponse<MteSurgerySchedule>> UpdateSchedule(string id, [FromBody] UpdateScheduleRequest req, CancellationToken ct = default)
 	{
 		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
-		if (schedule == null)
+		if (schedule == null || !CanReadSurgery(schedule))
 			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
-
-		if (schedule.Status >= 2)
-			return ApiResponse<MteSurgerySchedule>.Fail(409, "已完成或已取消的手术排班禁止修改");
+		if (!RoleCode.IsAdmin(_session?.RoleCode) && CurrentSurgeryDuty(SurgeryTeam(schedule)) != Surgeon)
+			return ApiResponse<MteSurgerySchedule>.Fail(403, "当前岗位无权修改排台");
+		if (schedule.Status != 0 || schedule.ApprovalStatus is not ("DRAFT" or "REJECTED") ||
+			(await ReadSurgerySafetyAsync(schedule, ct)).State.History.Count != 0)
+			return ApiResponse<MteSurgerySchedule>.Fail(409, "已送审、已签署或已执行的排班不能直接修改");
 
 		if (!string.IsNullOrWhiteSpace(req.OrRoomId)) schedule.OrRoomId = req.OrRoomId;
 		if (req.TableSeq.HasValue) schedule.TableSeq = req.TableSeq.Value;
@@ -1422,144 +1234,57 @@ ORDER BY scheduled_start_ms DESC", new { EncounterId = encounterId, PatientId = 
 		if (req.EstimatedDurationMin.HasValue) schedule.EstimatedDurationMin = req.EstimatedDurationMin.Value;
 
 		schedule.UpdatedBy = CurrentUserId;
-		await _surgeryScheduleRepo.UpdateAsync(schedule, ct);
+		try
+		{
+			if (await _surgeryScheduleRepo.UpdateAsync(schedule, ct) != 1)
+				return ApiResponse<MteSurgerySchedule>.Fail(409, "排台已变化，请刷新后重试");
+		}
+		catch (DbConcurrencyException)
+		{
+			return ApiResponse<MteSurgerySchedule>.Fail(409, "排台已变化，请刷新后重试");
+		}
 		await RecordAuditAsync("MTE_SURGERY_UPDATE", nameof(MteSurgerySchedule), schedule.Id, $"更新手术排班 [{schedule.ScheduleNo}]", ct);
 
 		return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术排班更新成功");
 	}
 
 	[HttpPost("surgeries/{id}/start")]
-	public async Task<ApiResponse<MteSurgerySchedule>> StartSurgery(string id, CancellationToken ct = default)
-	{
-		var authError = RequireRoles("ROLE-WARD-NURSE", "ROLE-OR-NURSE", "ROLE-IPD-ATTENDING", "ADMIN", "ROLE-ADMIN");
-		if (authError != null)
-			return ApiResponse<MteSurgerySchedule>.Fail(403, authError);
-
-		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
-		if (schedule == null)
-			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
-
-		if (schedule.Status == 1)
-			return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术已处于进行中状态（幂等返回）");
-		if (schedule.Status != 0)
-			return ApiResponse<MteSurgerySchedule>.Fail(409, "当前手术状态不允许开始手术");
-
-		long now = SystemTime.UtcNowMs;
-		schedule.Status = 1;
-		schedule.ActualStartMs = now;
-		schedule.UpdatedBy = CurrentUserId;
-		await _surgeryScheduleRepo.UpdateAsync(schedule, ct);
-
-		using (var conn = _connFactory.CreateConnection())
-		{
-			await conn.ExecuteAsync(
-				"UPDATE mtc_surgery_schedules SET status = 1, updated_at_ms = @Now, updated_by = @Op WHERE id = @Id",
-				new { Now = now, Op = CurrentUserId, Id = id });
-		}
-
-		await RecordAuditAsync("MTE_SURGERY_START", nameof(MteSurgerySchedule), schedule.Id, $"手术 [{schedule.ScheduleNo}] 正式开台", ct);
-		return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术已开始，请按流程执行 WHO 三方核查与麻醉记录");
-	}
+	public Task<ApiResponse<MteSurgerySchedule>> StartSurgery(string id, CancellationToken ct = default) =>
+		AdvanceSurgeryThroughSafetyAsync(id, finish: false, ct);
 
 	[HttpPost("surgeries/{id}/who-checklist")]
-	public async Task<ApiResponse<MteSurgerySchedule>> RecordWhoChecklist(string id, [FromBody] WhoThreeCheckRequest req, CancellationToken ct = default)
-	{
-		var authError = RequireRoles("ROLE-OR-NURSE", "ROLE-IPD-ATTENDING", "ADMIN", "ROLE-ADMIN");
-		if (authError != null)
-			return ApiResponse<MteSurgerySchedule>.Fail(403, authError);
-
-		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
-		if (schedule == null)
-			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
-
-		schedule.WhoSignInOk = (short)(req.SignInOk ? 1 : 0);
-		schedule.WhoTimeoutOk = (short)(req.TimeOutOk ? 1 : 0);
-		schedule.WhoSignOutOk = (short)(req.SignOutOk ? 1 : 0);
-		schedule.InstrumentCountBalanced = (short)(req.InstrumentCountBalanced ? 1 : 0);
-		schedule.UpdatedBy = CurrentUserId;
-
-		await _surgeryScheduleRepo.UpdateAsync(schedule, ct);
-
-		using (var conn = _connFactory.CreateConnection())
-		{
-			await conn.ExecuteAsync(@"
-UPDATE mtc_surgery_schedules
-SET sign_in_ok = @SignIn, time_out_ok = @TimeOut, sign_out_ok = @SignOut,
-    instrument_count_balanced = @Bal, updated_at_ms = @Now, updated_by = @Op
-WHERE id = @Id",
-				new { SignIn = schedule.WhoSignInOk, TimeOut = schedule.WhoTimeoutOk, SignOut = schedule.WhoSignOutOk, Bal = schedule.InstrumentCountBalanced, Now = SystemTime.UtcNowMs, Op = CurrentUserId, Id = id });
-		}
-
-		await RecordAuditAsync("MTE_SURGERY_WHO_CHECK", nameof(MteSurgerySchedule), schedule.Id,
-			$"记录 WHO 三方核查：SignIn={req.SignInOk}, TimeOut={req.TimeOutOk}, SignOut={req.SignOutOk}, InstrumentBalanced={req.InstrumentCountBalanced}", ct);
-
-		return ApiResponse<MteSurgerySchedule>.Success(schedule, "WHO 三方核查状态已更新");
-	}
+	public ApiResponse<MteSurgerySchedule> RecordWhoChecklist(string id, [FromBody] WhoThreeCheckRequest req) =>
+		ApiResponse<MteSurgerySchedule>.Fail(409, "不再接受汇总签写，请按手术阶段逐项核查并由本人签署");
 
 	[HttpPost("surgeries/{id}/finish-surgery")]
-	public async Task<ApiResponse<MteSurgerySchedule>> FinishSurgeryFull(string id, CancellationToken ct = default)
-	{
-		var authError = RequireRoles("ROLE-OR-NURSE", "ROLE-IPD-ATTENDING", "ADMIN", "ROLE-ADMIN");
-		if (authError != null)
-			return ApiResponse<MteSurgerySchedule>.Fail(403, authError);
-
-		var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
-		if (schedule == null)
-			return ApiResponse<MteSurgerySchedule>.Fail(404, "手术排班不存在");
-
-		if (schedule.Status == 2)
-			return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术已顺利完成（幂等返回）");
-		if (schedule.Status != 1)
-			return ApiResponse<MteSurgerySchedule>.Fail(409, "手术尚未开始，无法完成手术");
-
-		if (schedule.WhoSignInOk != 1 || schedule.WhoTimeoutOk != 1 || schedule.WhoSignOutOk != 1 || schedule.InstrumentCountBalanced != 1)
-		{
-			return ApiResponse<MteSurgerySchedule>.Fail(400, "WHO 三方安全核查（Sign-in / Time-out / Sign-out）未全部通过或器械清点不平衡，严禁结束手术转出！");
-		}
-
-		// Verify anesthesia record is completed
-		using (var conn = _connFactory.CreateConnection())
-		{
-			var anes = await conn.QuerySingleOrDefaultAsync<MteAnesthesiaRecord>(
-				"SELECT * FROM mte_anesthesia_records WHERE schedule_id = @ScheduleId",
-				new { ScheduleId = id });
-
-			if (anes == null || anes.Status != 1)
-			{
-				return ApiResponse<MteSurgerySchedule>.Fail(409, "手术麻醉记录尚未完成并归档（必须填写麻醉记录、用药及苏醒状态并标记完成），严禁结束手术转出！");
-			}
-		}
-
-		long now = SystemTime.UtcNowMs;
-		schedule.Status = 2;
-		schedule.ActualEndMs = now;
-		schedule.UpdatedBy = CurrentUserId;
-		await _surgeryScheduleRepo.UpdateAsync(schedule, ct);
-
-		using (var conn = _connFactory.CreateConnection())
-		{
-			await conn.ExecuteAsync(
-				"UPDATE mtc_surgery_schedules SET status = 2, updated_at_ms = @Now, updated_by = @Op WHERE id = @Id",
-				new { Now = now, Op = CurrentUserId, Id = id });
-		}
-
-		await RecordAuditAsync("MTE_SURGERY_FINISH", nameof(MteSurgerySchedule), schedule.Id, $"手术 [{schedule.ScheduleNo}] 闭环完成并准予转入 PACU", ct);
-		return ApiResponse<MteSurgerySchedule>.Success(schedule, "手术已顺利完成并准予转入 PACU 复苏");
-	}
+	public Task<ApiResponse<MteSurgerySchedule>> FinishSurgeryFull(string id, CancellationToken ct = default) =>
+		AdvanceSurgeryThroughSafetyAsync(id, finish: true, ct);
 
 	[HttpPost("anesthesia/records")]
 	public async Task<ApiResponse<MteAnesthesiaRecord>> CreateAnesthesiaRecord([FromBody] CreateAnesthesiaRecordRequest req, CancellationToken ct = default)
 	{
-		var authError = RequireRoles("ROLE-IPD-ATTENDING", "ROLE-OR-NURSE", "ADMIN", "ROLE-ADMIN", "DOCTOR_IPD");
-		if (authError != null)
-			return ApiResponse<MteAnesthesiaRecord>.Fail(403, authError);
-
 		if (req == null || string.IsNullOrWhiteSpace(req.ScheduleId))
 			return ApiResponse<MteAnesthesiaRecord>.Fail(400, "手术排班号不能为空");
+		if (string.IsNullOrWhiteSpace(req.AsaGrade) || string.IsNullOrWhiteSpace(req.AnesthesiaType))
+			return ApiResponse<MteAnesthesiaRecord>.Fail(400, "须填写实际 ASA 分级和麻醉方式");
+		return await _connFactory.ExecuteInTransactionAsync(token => CreateAssignedAnesthesiaRecordAsync(req, token), ct);
+	}
 
+	private async Task<ApiResponse<MteAnesthesiaRecord>> CreateAssignedAnesthesiaRecordAsync(CreateAnesthesiaRecordRequest req, CancellationToken ct)
+	{
 		var schedule = await _surgeryScheduleRepo.GetByIdAsync(req.ScheduleId, ct);
-		if (schedule == null)
+		if (schedule == null || !CanReadSurgery(schedule))
 			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "关联的手术排班不存在");
+		if (CurrentSurgeryDuty(SurgeryTeam(schedule)) != Anesthetist)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(403, "仅本台排班的麻醉医师可录入");
+		var safety = (await ReadSurgerySafetyAsync(schedule, ct)).State;
+		if (schedule.Status is not (0 or 1) || safety.BlockReason != null || !safety.Steps[0].Completed)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(409, safety.BlockReason ?? "尚未完成麻醉前核查，或手术不处于可记录状态");
+		using var conn = _connFactory.CreateConnection();
+		if (await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+			"SELECT COUNT(*) FROM mte_anesthesia_records WHERE schedule_id = @Id", new { schedule.Id }, _connFactory.CurrentTransaction,
+			cancellationToken: ct)) > 0)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(409, "该台手术已有麻醉记录，请刷新后查看原记录");
 
 		string recordNo = "ANES" + DateTime.Now.ToString("yyMMddHHmmssfff") + Random.Shared.Next(10, 99);
 		long now = SystemTime.UtcNowMs;
@@ -1570,12 +1295,12 @@ WHERE id = @Id",
 			ScheduleId = req.ScheduleId,
 			EncounterId = schedule.EncounterId,
 			PatientId = schedule.PatientId,
-			AsaGrade = req.AsaGrade ?? "I",
-			AnesthesiaType = req.AnesthesiaType ?? "GENERAL",
+			AsaGrade = req.AsaGrade.Trim(),
+			AnesthesiaType = req.AnesthesiaType.Trim(),
 			PreopDiagnosis = req.PreopDiagnosis,
 			AirwayAssessment = req.AirwayAssessment,
-			AnesthesiologistId = !string.IsNullOrWhiteSpace(req.AnesthesiologistId) ? req.AnesthesiologistId : schedule.AnesthesiologistId,
-			AnesthesiologistName = !string.IsNullOrWhiteSpace(req.AnesthesiologistName) ? req.AnesthesiologistName : schedule.AnesthesiologistName,
+			AnesthesiologistId = CurrentUserId,
+			AnesthesiologistName = _session?.DisplayName ?? CurrentUserId,
 			AnesthesiaStartMs = now,
 			Status = 0,
 			CreatedBy = CurrentUserId,
@@ -1592,9 +1317,15 @@ WHERE id = @Id",
 	[HttpGet("anesthesia/records/by-schedule/{scheduleId}")]
 	public async Task<ApiResponse<MteAnesthesiaRecord>> GetAnesthesiaRecordBySchedule(string scheduleId)
 	{
+		var schedule = await _surgeryScheduleRepo.GetByIdAsync(scheduleId);
+		if (schedule == null || !CanReadSurgery(schedule))
+			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "手术排班不存在");
 		using var conn = _connFactory.CreateConnection();
-		var record = await conn.QuerySingleOrDefaultAsync<MteAnesthesiaRecord>(
-			"SELECT * FROM mte_anesthesia_records WHERE schedule_id = @ScheduleId", new { ScheduleId = scheduleId });
+		var records = (await conn.QueryAsync<MteAnesthesiaRecord>(
+			"SELECT * FROM mte_anesthesia_records WHERE schedule_id = @ScheduleId LIMIT 2", new { ScheduleId = scheduleId })).ToArray();
+		if (records.Length > 1)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(409, "发现多条历史麻醉记录，须先核对源记录");
+		var record = records.SingleOrDefault();
 
 		if (record == null)
 			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "该手术尚未建立麻醉记录");
@@ -1616,6 +1347,13 @@ WHERE id = @Id",
 		var record = await _anesthesiaRecordRepo.GetByIdAsync(id, ct);
 		if (record == null)
 			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "麻醉记录不存在");
+		var schedule = await _surgeryScheduleRepo.GetByIdAsync(record.ScheduleId, ct);
+		if (schedule == null || !CanReadSurgery(schedule) || record.PatientId != schedule.PatientId || record.EncounterId != schedule.EncounterId)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(404, "未找到匹配的麻醉记录");
+		if (CurrentSurgeryDuty(SurgeryTeam(schedule)) != Anesthetist || record.AnesthesiologistId != CurrentUserId)
+			return ApiResponse<MteAnesthesiaRecord>.Fail(403, "仅本台麻醉医师本人可更新或归档");
+		if (schedule.Status is not (0 or 1) || record.Status != 0 || (req.MarkCompleted && schedule.Status != 1))
+			return ApiResponse<MteAnesthesiaRecord>.Fail(409, "已归档不得覆盖，且只能在开台后完成麻醉归档");
 
 		if (!string.IsNullOrWhiteSpace(req.AsaGrade)) record.AsaGrade = req.AsaGrade;
 		if (!string.IsNullOrWhiteSpace(req.AnesthesiaType)) record.AnesthesiaType = req.AnesthesiaType;

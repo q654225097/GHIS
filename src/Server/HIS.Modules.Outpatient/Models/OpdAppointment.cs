@@ -30,6 +30,8 @@ public class OpdAppointment : BaseEntity
 
 	public int Status { get; set; } = 0;
 
+	public int CheckinStatus { get; set; } = 1;
+
 	public long LockExpiresAtMs { get; set; }
 
 	public string? VisitId { get; set; }

@@ -1780,11 +1780,23 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
         }
 
         var previewResponse = await cashier.GetAsync(
-            "/api/v4/ipd/encounters/" + Uri.EscapeDataString(encounterId) + "/settlement-preview");
+            "/api/v4/ipd/discharge-requests/" + Uri.EscapeDataString(requestId) + "/settlement-preview");
         var preview = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<IpdSettlementPreviewView>>();
         Assert.Equal(200, preview?.Code);
         Assert.Empty(preview!.Data!.ClinicalBlockers);
         Assert.Equal(200.00m, preview.Data.ChargeTotal);
+        Assert.Equal(requestId, preview.Data.RequestId);
+        Assert.Equal(encounterId, preview.Data.EncounterId);
+        Assert.Equal(patientId, preview.Data.PatientId);
+        Assert.False(string.IsNullOrWhiteSpace(preview.Data.PreviewVersion));
+
+        var stale = await cashier.PostAsJsonAsync($"/api/v4/ipd/discharge-requests/{requestId}/settle",
+            new SettleIpdDischargeRequest
+            {
+                TotalAmount = 200m, InsuranceAmount = 100m, PrepaymentDeduct = 50m,
+                SelfPayAmount = 50m, RefundAmount = 450m, PreviewVersion = "stale-preview"
+            });
+        Assert.Equal(400, (await stale.Content.ReadFromJsonAsync<ApiResponse<IpdDischargeRequestView>>())?.Code);
 
         string requestKey = "IPD-TEST-" + suffix;
         var settleResponse = await cashier.PostAsJsonAsync(
@@ -1798,6 +1810,7 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
                 RefundAmount = 450.00m,
                 PaymentChannel = "CASH",
                 RequestKey = requestKey,
+                PreviewVersion = preview.Data.PreviewVersion,
                 ChargeItems = new List<IpdSettlementChargeView>
                 {
                     new()
@@ -1815,6 +1828,11 @@ public class EndToEndWorkflowTests : IClassFixture<WebApplicationFactory<Program
         Assert.Equal("SETTLED", settled?.Data?.Status);
         Assert.Equal(450.00m, settled?.Data?.RefundAmount);
         Assert.False(string.IsNullOrWhiteSpace(settled?.Data?.SettlementPaymentId));
+        var settledPreview = await cashier.GetFromJsonAsync<ApiResponse<IpdSettlementPreviewView>>(
+            $"/api/v4/ipd/discharge-requests/{requestId}/settlement-preview");
+        Assert.Equal("SETTLED", settledPreview?.Data?.Status);
+        Assert.Equal(requestId, settledPreview?.Data?.RequestId);
+        Assert.Equal(200.00m, settledPreview?.Data?.ChargeTotal);
 
         using (var scope = _factory.Services.CreateScope())
         {

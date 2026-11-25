@@ -111,7 +111,22 @@ SELECT (
 		{
 			failures.Add($"存在 {pendingDrugReturns} 笔病区退药申请尚未经药房审批冲正");
 		}
-		int pendingDischargeMeds = await QueryCountAsync("SELECT count(*) FROM ipd_discharge_medications WHERE encounter_id = @EncounterId AND status = 'PRESCRIBED'", new { EncounterId = encounterId }, ct);
+		int pendingDischargeMeds = await QueryCountAsync(@"
+SELECT (
+    SELECT count(*) FROM ipd_discharge_medications
+    WHERE encounter_id = @EncounterId AND status = 'PRESCRIBED'
+) + (
+    SELECT count(*) FROM ord_medical_orders o
+    WHERE o.encounter_id = @EncounterId
+      AND o.order_sub_type = 'DISCHARGE_MED'
+      AND o.status IN (0, 1)
+      AND NOT EXISTS (
+          SELECT 1 FROM phm_dispense_order_lines l WHERE l.medical_order_id = o.id
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM ipd_discharge_medications m WHERE m.id = o.id
+      )
+)", new { EncounterId = encounterId }, ct);
 		if (pendingDischargeMeds > 0)
 		{
 			failures.Add($"存在 {pendingDischargeMeds} 张出院带药处方尚未完成药房发药核对");

@@ -84,8 +84,8 @@ public sealed class InpatientBillingAndPathwayTests
                 ('SI-2', 'ST-1', 'EXAM', 'EXAM_ECG', '心电图', 1, 2, 1, @Now, @Now, 1)", new { Now = now });
 
             await conn.ExecuteAsync(@"
-                INSERT INTO cpw_patient_enrollments (id, encounter_id, patient_id, pathway_id, current_stage_id, enrolled_at_ms, status, schema_version, created_at_ms, updated_at_ms, version_no)
-                VALUES ('EN-1', 'ENC-CPW', 'PAT-1', 'PW-1', 'ST-1', @Now, 'ACTIVE', 1, @Now, @Now, 1)", new { Now = now });
+                INSERT INTO cpw_patient_enrollments (id, encounter_id, patient_id, pathway_id, current_stage_id, enrolled_at_ms, enrolled_by, status, schema_version, created_at_ms, updated_at_ms, version_no)
+                VALUES ('EN-1', 'ENC-CPW', 'PAT-1', 'PW-1', 'ST-1', @Now, 'DOC1', 'ACTIVE', 1, @Now, @Now, 1)", new { Now = now });
 
             // 患者已开血常规（命中路径），未开心电图（缺失），另开了一个路径外医嘱（变异）
             await conn.ExecuteAsync(@"

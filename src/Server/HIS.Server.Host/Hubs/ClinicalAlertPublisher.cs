@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using HIS.Contracts;
 using Microsoft.AspNetCore.SignalR;
@@ -33,6 +34,19 @@ public class ClinicalAlertPublisher : IClinicalAlertPublisher
         {
             await _hub.Clients.All.CriticalValuePublished(payload);
         }
+    }
+
+    public Task PublishReportCriticalValueAsync(string alertId, string? deptId, string? wardId)
+    {
+        var groups = new List<string>(2);
+        if (!string.IsNullOrWhiteSpace(deptId)) groups.Add($"dept_{deptId}");
+        if (!string.IsNullOrWhiteSpace(wardId)) groups.Add($"ward_{wardId}");
+        return groups.Count == 0 ? Task.CompletedTask : _hub.Clients.Groups(groups).CriticalValuePublished(new
+        {
+            AlertId = alertId,
+            Message = "有新的危急值报告",
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        });
     }
 
     public async Task PublishOrderChangedAsync(string encounterId, string wardId, string orderId, string changeType)
@@ -145,5 +159,26 @@ public class ClinicalAlertPublisher : IClinicalAlertPublisher
         {
             await _hub.Clients.All.WorkflowTodoReceived(payload);
         }
+    }
+
+    public async Task PublishOpdQueueCallAsync(string deptId, string clinicRoomName, string doctorName, int queueNo, string patientName, string ticketAction)
+    {
+        var payload = new
+        {
+            DeptId = deptId,
+            ClinicRoomName = clinicRoomName,
+            DoctorName = doctorName,
+            QueueNo = queueNo,
+            PatientName = patientName,
+            TicketAction = ticketAction,
+            TtsAnnouncement = $"请 {queueNo} 号 {patientName} 到 {clinicRoomName} 就诊",
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        };
+
+        if (!string.IsNullOrWhiteSpace(deptId))
+        {
+            await _hub.Clients.Group($"dept_{deptId}").OpdQueueCalled(payload);
+        }
+        await _hub.Clients.All.OpdQueueCalled(payload);
     }
 }

@@ -47,6 +47,7 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
     private RegistrationLevelChoice? _selectedRegistrationLevel;
     private string _registrationFee = "15.00";
     private string _capacity = "30";
+    private IntervalChoice? _selectedSlotInterval;
     private bool _isTemplateActive = true;
     private string _generateStartDate = string.Empty;
     private string _generateEndDate = string.Empty;
@@ -73,8 +74,13 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
         {
             RegistrationLevelOptions.Add(new RegistrationLevelChoice(code, label));
         }
+        SlotIntervalOptions.Add(new IntervalChoice(0, "整时段 (不细分)"));
+        SlotIntervalOptions.Add(new IntervalChoice(15, "15 分钟分时"));
+        SlotIntervalOptions.Add(new IntervalChoice(30, "30 分钟分时"));
+        SlotIntervalOptions.Add(new IntervalChoice(60, "60 分钟分时"));
         _selectedPeriod = PeriodOptions[0];
         _selectedRegistrationLevel = RegistrationLevelOptions[0];
+        _selectedSlotInterval = SlotIntervalOptions[0];
     }
 
     public ObservableCollection<DepartmentChoice> DepartmentOptions { get; } = new();
@@ -84,6 +90,7 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
     public ObservableCollection<DepartmentChoice> RoomOptions { get; } = new();
     public ObservableCollection<PeriodChoice> PeriodOptions { get; } = new();
     public ObservableCollection<RegistrationLevelChoice> RegistrationLevelOptions { get; } = new();
+    public ObservableCollection<IntervalChoice> SlotIntervalOptions { get; } = new();
     public ObservableCollection<ScheduleTemplateItem> Templates { get; } = new();
     public ObservableCollection<ScheduleSlotItem> Slots { get; } = new();
 
@@ -105,7 +112,26 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
     public string QueryDate
     {
         get => _queryDate;
-        set => SetField(ref _queryDate, value);
+        set
+        {
+            if (SetField(ref _queryDate, value))
+            {
+                OnPropertyChanged(nameof(QueryDateDateTime));
+            }
+        }
+    }
+
+    public DateTime? QueryDateDateTime
+    {
+        get => DateTime.TryParse(QueryDate, out var date) ? date.Date : DateTime.Today;
+        set
+        {
+            var next = (value ?? DateTime.Today).ToString("yyyy-MM-dd");
+            if (QueryDate != next)
+            {
+                QueryDate = next;
+            }
+        }
     }
 
     public string TemplateName
@@ -172,9 +198,61 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
 
     public string RegistrationFee { get => _registrationFee; set => SetField(ref _registrationFee, value); }
     public string Capacity { get => _capacity; set => SetField(ref _capacity, value); }
+    public IntervalChoice? SelectedSlotInterval
+    {
+        get => _selectedSlotInterval;
+        set => SetField(ref _selectedSlotInterval, value);
+    }
     public bool IsTemplateActive { get => _isTemplateActive; set => SetField(ref _isTemplateActive, value); }
-    public string GenerateStartDate { get => _generateStartDate; set => SetField(ref _generateStartDate, value); }
-    public string GenerateEndDate { get => _generateEndDate; set => SetField(ref _generateEndDate, value); }
+    public string GenerateStartDate
+    {
+        get => _generateStartDate;
+        set
+        {
+            if (SetField(ref _generateStartDate, value))
+            {
+                OnPropertyChanged(nameof(GenerateStartDateDateTime));
+            }
+        }
+    }
+
+    public DateTime? GenerateStartDateDateTime
+    {
+        get => DateTime.TryParse(GenerateStartDate, out var date) ? date.Date : DateTime.Today;
+        set
+        {
+            var next = (value ?? DateTime.Today).ToString("yyyy-MM-dd");
+            if (GenerateStartDate != next)
+            {
+                GenerateStartDate = next;
+            }
+        }
+    }
+
+    public string GenerateEndDate
+    {
+        get => _generateEndDate;
+        set
+        {
+            if (SetField(ref _generateEndDate, value))
+            {
+                OnPropertyChanged(nameof(GenerateEndDateDateTime));
+            }
+        }
+    }
+
+    public DateTime? GenerateEndDateDateTime
+    {
+        get => DateTime.TryParse(GenerateEndDate, out var date) ? date.Date : DateTime.Today.AddDays(13);
+        set
+        {
+            var next = (value ?? DateTime.Today.AddDays(13)).ToString("yyyy-MM-dd");
+            if (GenerateEndDate != next)
+            {
+                GenerateEndDate = next;
+            }
+        }
+    }
 
     public ScheduleTemplateItem? SelectedTemplate
     {
@@ -362,6 +440,7 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
         SelectedRegistrationLevel = RegistrationLevelOptions[0];
         RegistrationFee = "15.00";
         Capacity = "30";
+        SelectedSlotInterval = SlotIntervalOptions[0];
         IsTemplateActive = true;
         SelectedTemplate = null;
         ErrorMessage = string.Empty;
@@ -431,6 +510,7 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
                 regLevelCode = SelectedRegistrationLevel?.Code ?? "NORMAL",
                 registrationFee = fee,
                 totalCapacity = capacity,
+                slotIntervalMinutes = SelectedSlotInterval?.Minutes ?? 0,
                 isActive = IsTemplateActive ? 1 : 0,
                 campusId = "CAMPUS-01"
             };
@@ -678,6 +758,7 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
         SelectedRegistrationLevel = RegistrationLevelOptions.FirstOrDefault(x => x.Code == template.RegLevelCode);
         RegistrationFee = template.RegistrationFee.ToString("0.00");
         Capacity = template.TotalCapacity.ToString();
+        SelectedSlotInterval = SlotIntervalOptions.FirstOrDefault(x => x.Minutes == template.SlotIntervalMinutes) ?? SlotIntervalOptions[0];
         IsTemplateActive = template.IsActive == 1;
     }
 
@@ -868,6 +949,33 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
     public sealed record DoctorChoice(string Id, string Name, string DeptId = "", string DeptName = "", string RoleCode = "");
     public sealed record PeriodChoice(string Code, string Name);
     public sealed record RegistrationLevelChoice(string Code, string Name);
+    public sealed record IntervalChoice(int Minutes, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    public static string FormatPeriodCode(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return "门诊";
+        var upper = code.Trim().ToUpperInvariant();
+        string baseCode = upper;
+        string suffix = string.Empty;
+        int idx = upper.LastIndexOf('_');
+        if (idx > 0 && idx + 5 == upper.Length && int.TryParse(upper.AsSpan(idx + 1, 2), out int hh) && int.TryParse(upper.AsSpan(idx + 3, 2), out int mm))
+        {
+            baseCode = upper[..idx];
+            suffix = $" {hh:00}:{mm:00}";
+        }
+        string label = baseCode switch
+        {
+            "MORNING" => "上午",
+            "AFTERNOON" => "下午",
+            "EVENING" => "夜间",
+            "ALL_DAY" => "全天",
+            _ => upper
+        };
+        return label + suffix;
+    }
 
     public sealed class ScheduleTemplateDto
     {
@@ -884,6 +992,7 @@ public sealed class ScheduleWorkstationViewModel : ClientModelBase
         public string RegLevelCode { get; set; } = string.Empty;
         public decimal RegistrationFee { get; set; }
         public int TotalCapacity { get; set; }
+        public int SlotIntervalMinutes { get; set; }
         public int IsActive { get; set; }
     }
 
@@ -975,11 +1084,11 @@ public sealed class ScheduleTemplateItem : ClientModelBase
             }
         }
     }
-    public IBrush CardBackground => ScheduleWorkstationViewModel.Brush(IsSelected ? "#E6F4FF" : "#FFFFFF");
-    public IBrush CardBorderBrush => ScheduleWorkstationViewModel.Brush(IsSelected ? "#1677FF" : "#D9D9D9");
+    public IBrush CardBackground => IsSelected ? HIS.Client.UrsaShell.Shell.ThemeBrushes.PrimaryLight : HIS.Client.UrsaShell.Shell.ThemeBrushes.Surface;
+    public IBrush CardBorderBrush => IsSelected ? HIS.Client.UrsaShell.Shell.ThemeBrushes.Primary : HIS.Client.UrsaShell.Shell.ThemeBrushes.Border;
     public Avalonia.Thickness CardBorderThickness => IsSelected ? new Avalonia.Thickness(2) : new Avalonia.Thickness(1);
-    public IBrush StatusBackground => ScheduleWorkstationViewModel.Brush(IsActive ? "#E8F5E9" : "#F0F0F0");
-    public IBrush StatusForeground => ScheduleWorkstationViewModel.Brush(IsActive ? "#237804" : "#8C8C8C");
+    public IBrush StatusBackground => IsActive ? HIS.Client.UrsaShell.Shell.ThemeBrushes.SuccessLight : HIS.Client.UrsaShell.Shell.ThemeBrushes.Background0;
+    public IBrush StatusForeground => IsActive ? HIS.Client.UrsaShell.Shell.ThemeBrushes.Success : HIS.Client.UrsaShell.Shell.ThemeBrushes.Text2;
 
     public void Select() => _owner.SelectedTemplate = this;
 }
@@ -1031,19 +1140,12 @@ public sealed class ScheduleSlotItem : ClientModelBase
     public bool HasCapacityChanged => _capacityText != Model.TotalCapacity.ToString();
     public bool IsStopped => Model.SlotStatus == 3;
     public bool IsFull => !IsStopped && Model.ReservedCount >= Model.TotalCapacity;
-    public string PeriodText => Model.SlotPeriodCode switch
-    {
-        "MORNING" => "上午",
-        "AFTERNOON" => "下午",
-        "EVENING" => "夜间",
-        "ALL_DAY" => "全天",
-        _ => Model.SlotPeriodCode
-    };
+    public string PeriodText => ScheduleWorkstationViewModel.FormatPeriodCode(Model.SlotPeriodCode);
     public IBrush StatusForeground => Model.SlotStatus switch
     {
-        3 => ScheduleWorkstationViewModel.Brush("#D4380D"),
-        2 => ScheduleWorkstationViewModel.Brush("#AD6800"),
-        _ => ScheduleWorkstationViewModel.Brush("#237804")
+        3 => HIS.Client.UrsaShell.Shell.ThemeBrushes.Danger,
+        2 => HIS.Client.UrsaShell.Shell.ThemeBrushes.Warning,
+        _ => HIS.Client.UrsaShell.Shell.ThemeBrushes.Success
     };
     public string StatusText => IsStopped ? "已停诊" : IsFull ? "已约满" : "开放";
     public string ToggleActionText => IsStopped ? "恢复" : "停诊";

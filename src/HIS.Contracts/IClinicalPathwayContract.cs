@@ -27,7 +27,10 @@ public sealed record CpwEnrollmentDto(
 public sealed record CpwOrderComparisonResultDto(
     IReadOnlyList<string> MissingMandatoryItems,
     IReadOnlyList<string> VarianceCandidateOrders
-);
+)
+{
+    public IReadOnlyList<string> PotentialVariances => VarianceCandidateOrders;
+}
 
 public sealed record CpwEmrFusionSnippetDto(
     string StageName,

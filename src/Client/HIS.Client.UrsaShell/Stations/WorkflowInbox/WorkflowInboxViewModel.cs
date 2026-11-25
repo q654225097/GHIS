@@ -35,7 +35,7 @@ public class WorkflowTaskDisplayItem : ClientModelBase
     public long CreatedAtMs { get; set; }
 
     public string TimeString => CreatedAtMs > 0
-        ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+        ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
         : "--";
 
     public string ModeBadge => ApprovalMode switch
@@ -81,7 +81,7 @@ public class WorkflowNotificationDisplayItem : ClientModelBase
     public long CreatedAtMs { get; set; }
 
     public string TimeString => CreatedAtMs > 0
-        ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+        ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
         : "--";
 }
 

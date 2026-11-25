@@ -6,7 +6,7 @@ using HIS.Client.UrsaShell.ViewModels;
 
 namespace HIS.Client.UrsaShell.Stations.PharmacyWarehouse;
 
-public sealed class PharmacyWarehouseViewModel : ClientModelBase, IShortcutTarget
+public sealed partial class PharmacyWarehouseViewModel : ClientModelBase, IShortcutTarget
 {
     private readonly ShellViewModel? _shell;
     private int _localTabIndex;
@@ -71,6 +71,7 @@ public sealed class PharmacyWarehouseViewModel : ClientModelBase, IShortcutTarge
         await Pharmacy.EnsureLoadedAsync();
         Pharmacy.SelectedTabIndex = MapLocalTabToSharedIndex(_localTabIndex);
         RaiseAllComputed();
+        _ = LoadForecastAndGspAsync();
     }
 
     public void OnDetached()

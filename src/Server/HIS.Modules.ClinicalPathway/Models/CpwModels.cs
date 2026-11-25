@@ -32,6 +32,7 @@ public class CpwStageItem : BaseEntity
     public string ItemName { get; set; } = string.Empty;
     public short IsMandatory { get; set; } = 1;
     public short IsDefaultSelected { get; set; } = 1;
+    public int SortOrder { get; set; } = 1;
 }
 
 public class CpwPatientEnrollment : BaseEntity

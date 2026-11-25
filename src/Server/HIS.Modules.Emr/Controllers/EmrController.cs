@@ -1289,6 +1289,22 @@ public partial class EmrController : ControllerBase
         if (!_userSession.IsAdmin && _userSession.EmrSignLevel < requestedLevel)
             return StatusCode(403, ApiResponse<EmrOfdArchive>.Fail(403, $"当前账号电子病历审签权限为 {_userSession.EmrSignLevel} 级，不能执行 {requestedLevel} 级审签"));
 
+        using (var caConn = _connFactory.CreateConnection())
+        {
+            var caCert = await caConn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT revoke_status, expires_at_ms FROM mdm_ca_certificates WHERE staff_id = @StaffId ORDER BY issued_at_ms DESC LIMIT 1",
+                new { StaffId = req.SignerId });
+            if (caCert != null)
+            {
+                string revokeStatus = ((string?)caCert.revoke_status ?? "VALID").ToUpperInvariant();
+                long expiresAt = caCert.expires_at_ms != null ? Convert.ToInt64(caCert.expires_at_ms) : long.MaxValue;
+                if (revokeStatus == "REVOKED" || expiresAt < SystemTime.UtcNowMs)
+                {
+                    return StatusCode(403, ApiResponse<EmrOfdArchive>.Fail(403, "当前审签医师的 CA 数字证书已吊销或已过期，禁止签署电子病历"));
+                }
+            }
+        }
+
         // 住院三级审签职责分离校验（门诊病历仅需一级审签）
         if (!_userSession.IsAdmin && !string.Equals(doc.EmrScene, "OPD", StringComparison.OrdinalIgnoreCase))
         {

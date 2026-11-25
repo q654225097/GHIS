@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
+using HIS.BuildingBlocks.Security;
 using Microsoft.AspNetCore.SignalR;
 
 namespace HIS.Server.Host.Hubs;
@@ -13,48 +15,25 @@ public interface IClinicalAlertClient
     Task PrescriptionCommentReceived(object payload);
     Task CarePlanReminder(object payload);
     Task WorkflowTodoReceived(object payload);
+    Task OpdQueueCalled(object payload);
 }
 
 public class ClinicalAlertHub : Hub<IClinicalAlertClient>
 {
     public override async Task OnConnectedAsync()
     {
-        var httpContext = Context.GetHttpContext();
-        var user = httpContext?.User;
-
-        string? userId = user?.FindFirst("sub")?.Value;
-        string? deptId = user?.FindFirst("dept_id")?.Value;
-        string? wardId = user?.FindFirst("ward_id")?.Value;
-
-        if (!string.IsNullOrWhiteSpace(userId))
+        if (Context.GetHttpContext()?.User is not { Identity.IsAuthenticated: true } user)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+            Context.Abort();
+            return;
         }
-        if (!string.IsNullOrWhiteSpace(deptId))
-        {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"dept_{deptId}");
-        }
-        if (!string.IsNullOrWhiteSpace(wardId))
-        {
+        var session = UserSession.FromClaims(user);
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{session.UserId}");
+        if (!string.IsNullOrWhiteSpace(session.ActiveDeptId))
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"dept_{session.ActiveDeptId}");
+        foreach (string wardId in session.LinkedWardIds.Append(session.ActiveWardId).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
             await Groups.AddToGroupAsync(Context.ConnectionId, $"ward_{wardId}");
-        }
 
         await base.OnConnectedAsync();
-    }
-
-    public async Task JoinDepartmentGroup(string deptId)
-    {
-        if (!string.IsNullOrWhiteSpace(deptId))
-        {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"dept_{deptId}");
-        }
-    }
-
-    public async Task JoinWardGroup(string wardId)
-    {
-        if (!string.IsNullOrWhiteSpace(wardId))
-        {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"ward_{wardId}");
-        }
     }
 }

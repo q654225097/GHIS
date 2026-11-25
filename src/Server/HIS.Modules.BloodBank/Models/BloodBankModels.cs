@@ -75,8 +75,13 @@ public class BldTransfusionExecution : BaseEntity
     public string? Mid15VitalsJson { get; set; }
     public string? PostVitalsJson { get; set; }
     public long StartedAtMs { get; set; }
+    public long? FifteenMinCheckedAtMs { get; set; }
+    public string? FifteenMinNurseId { get; set; }
     public long? EndedAtMs { get; set; }
     public long? EmptyBagReturnedAtMs { get; set; }
+    public string? BagRecoveredById { get; set; }
+    public string? BagStorageLocation { get; set; }
+    public int RetentionHours { get; set; } = 24;
     public string Status { get; set; } = "TRANSFUSING"; // TRANSFUSING / FINISHED / TERMINATED
     public string? TerminationReason { get; set; }
 }

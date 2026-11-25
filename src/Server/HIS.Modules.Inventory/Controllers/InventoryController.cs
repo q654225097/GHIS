@@ -16,7 +16,7 @@ namespace HIS.Modules.Inventory.Controllers;
 
 [ApiController]
 [Route("api/v4/inventory")]
-public class InventoryController : ControllerBase
+public partial class InventoryController : ControllerBase
 {
 	public sealed record UpsertDrugRequestDto(string? Id, string DrugCode, string DrugName, string Spec, string UnitName, decimal Price, decimal CostPrice, int AntibioticLevel = 0, short IsNarcotic = 0, short IsSkinTestRequired = 0, short IsActive = 1, string? OperatorId = null, string? AdjustReason = null);
 
@@ -456,6 +456,15 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 		{
 			return ApiResponse<InvDrugBatch>.Fail(400, "药品已停用，不能继续采购入库");
 		}
+		if (!string.IsNullOrWhiteSpace(req.WarehouseOrPharmacyId))
+		{
+			using var whConn = _connFactory.CreateConnection();
+			int? whActive = await whConn.QueryFirstOrDefaultAsync<int?>(
+				"SELECT is_active FROM mdm_warehouses WHERE warehouse_code = @Wh OR id = @Wh LIMIT 1",
+				new { Wh = req.WarehouseOrPharmacyId.Trim() });
+			if (whActive == 0)
+				return ApiResponse<InvDrugBatch>.Fail(409, $"库房主数据 [{req.WarehouseOrPharmacyId}] 已停用，禁止采购入库");
+		}
 		string requestKey = "INV_STOCK_IN_" + (string.IsNullOrWhiteSpace(req.RequestKey) ? Guid.NewGuid().ToString("N") : req.RequestKey.Trim());
 		if (!string.IsNullOrWhiteSpace(req.RequestKey) && _idempotency != null)
 		{
@@ -768,6 +777,13 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 		{
 			return ApiResponse<IReadOnlyList<InvTransferOrder>>.Fail(400, "源库房（调出方/药库）与目标库房（调入方/药房）不能为空");
 		}
+		using (var whConn = _connFactory.CreateConnection())
+		{
+			int? srcAct = await whConn.QueryFirstOrDefaultAsync<int?>("SELECT is_active FROM mdm_warehouses WHERE warehouse_code = @Wh OR id = @Wh LIMIT 1", new { Wh = req.SourceWarehouseId.Trim() });
+			int? dstAct = await whConn.QueryFirstOrDefaultAsync<int?>("SELECT is_active FROM mdm_warehouses WHERE warehouse_code = @Wh OR id = @Wh LIMIT 1", new { Wh = req.TargetWarehouseId.Trim() });
+			if (srcAct == 0 || dstAct == 0)
+				return ApiResponse<IReadOnlyList<InvTransferOrder>>.Fail(409, "源库房或目标库房在主数据中心已停用，禁止调拨");
+		}
 		if (normalizedType == "WAREHOUSE_ISSUE")
 		{
 			if (!await CanIssueFromWarehouseAsync(req.SourceWarehouseId.Trim()))
@@ -799,32 +815,35 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 			return ApiResponse<IReadOnlyList<InvTransferOrder>>.Fail(404, "药品 [" + req.DrugId + "] 不存在");
 		}
 		int today = SystemTime.TodayInt;
-		IReadOnlyList<InvDrugBatch> sourceBatches = await _batchRepo.QueryAsync("SELECT * FROM inv_drug_batches\nWHERE warehouse_or_pharmacy_id = @SourceId\n  AND drug_id = @DrugId\n  AND is_frozen = 0\n  AND expiry_date_int >= @Today\n  AND quantity > 0\nORDER BY expiry_date_int ASC, created_at_ms ASC", new
-		{
-			SourceId = req.SourceWarehouseId.Trim(),
-			DrugId = drug.Id,
-			Today = today
-		});
-		if (!string.IsNullOrWhiteSpace(req.BatchId))
-		{
-			sourceBatches = sourceBatches.Where((InvDrugBatch b) => b.Id == req.BatchId.Trim() || b.BatchNo.Equals(req.BatchId.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
-		}
-		int totalAvailable = sourceBatches.Sum((InvDrugBatch b) => b.Quantity);
-		if (totalAvailable < req.Quantity)
-		{
-			return ApiResponse<IReadOnlyList<InvTransferOrder>>.Fail(400, $"源库房 [{req.SourceWarehouseId}] 药品 [{drug.DrugName}] 合格效期库存不足（需 {req.Quantity}{drug.UnitName}，可用 {totalAvailable}{drug.UnitName}）");
-		}
 		string operatorId = CurrentUserId();
 		long nowMs = SystemTime.UtcNowMs;
 		string prefix = ((normalizedType == "WAREHOUSE_ISSUE") ? "ISS" : "TRF");
 		string outChangeType = ((normalizedType == "WAREHOUSE_ISSUE") ? "OUT_WAREHOUSE_ISSUE" : "OUT_TRANSFER");
 		string inChangeType = ((normalizedType == "WAREHOUSE_ISSUE") ? "IN_PHARMACY_RECEIVE" : "IN_TRANSFER");
-		List<InvTransferOrder> createdOrders = await _connFactory.ExecuteInTransactionAsync(async (CancellationToken ct) =>
+		List<InvTransferOrder> createdOrders;
+		try
 		{
-			List<InvTransferOrder> orders = new List<InvTransferOrder>();
-			int remaining = req.Quantity;
-			int seq = 1;
-			foreach (InvDrugBatch srcBatch in sourceBatches)
+			createdOrders = await _connFactory.ExecuteInTransactionAsync(async (CancellationToken ct) =>
+			{
+				IReadOnlyList<InvDrugBatch> sourceBatches = await _batchRepo.QueryAsync("SELECT * FROM inv_drug_batches\nWHERE warehouse_or_pharmacy_id = @SourceId\n  AND drug_id = @DrugId\n  AND is_frozen = 0\n  AND expiry_date_int >= @Today\n  AND quantity > 0\nORDER BY expiry_date_int ASC, created_at_ms ASC", new
+				{
+					SourceId = req.SourceWarehouseId.Trim(),
+					DrugId = drug.Id,
+					Today = today
+				}, ct);
+				if (!string.IsNullOrWhiteSpace(req.BatchId))
+				{
+					sourceBatches = sourceBatches.Where((InvDrugBatch b) => b.Id == req.BatchId.Trim() || b.BatchNo.Equals(req.BatchId.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+				}
+				int totalAvailable = sourceBatches.Sum((InvDrugBatch b) => b.Quantity);
+				if (totalAvailable < req.Quantity)
+				{
+					throw new InvalidOperationException($"源库房 [{req.SourceWarehouseId}] 药品 [{drug.DrugName}] 合格效期库存不足（需 {req.Quantity}{drug.UnitName}，可用 {totalAvailable}{drug.UnitName}）");
+				}
+				List<InvTransferOrder> orders = new List<InvTransferOrder>();
+				int remaining = req.Quantity;
+				int seq = 1;
+				foreach (InvDrugBatch srcBatch in sourceBatches)
 			{
 				if (remaining <= 0)
 				{
@@ -926,6 +945,11 @@ public sealed record DrugFinanceReconciliationReportDto(int TotalStockInEvents, 
 			}
 			return orders;
 		});
+		}
+		catch (InvalidOperationException ex)
+		{
+			return ApiResponse<IReadOnlyList<InvTransferOrder>>.Fail(400, ex.Message);
+		}
 		if (!string.IsNullOrWhiteSpace(req.RequestKey) && _idempotency != null)
 		{
 			await _idempotency.SaveResponseAsync(requestKey, JsonSerializer.Serialize(createdOrders));
@@ -1184,6 +1208,14 @@ ORDER BY created_at_ms DESC LIMIT 100";
 			return ApiResponse<InvStockTakeLine>.Fail(404, "未找到盘点单");
 		if (take.Status != "DRAFT")
 			return ApiResponse<InvStockTakeLine>.Fail(400, "仅草稿状态盘点单可编辑明细");
+		if (req.ActualQty < 0)
+			return ApiResponse<InvStockTakeLine>.Fail(400, "实盘数量不能为负数");
+
+		var existingLine = await _stockTakeLineRepo.QuerySingleOrDefaultAsync(
+			"SELECT * FROM inv_stock_take_lines WHERE stock_take_id = @TakeId AND drug_id = @DrugId AND batch_id = @BatchId LIMIT 1",
+			new { TakeId = take.Id, DrugId = req.DrugId, BatchId = req.BatchId });
+		if (existingLine != null)
+			return ApiResponse<InvStockTakeLine>.Fail(409, $"该盘点单中已存在药品 [{req.DrugName}] 批号 [{req.BatchNo}] 的盘点明细，请勿重复录入");
 
 		int diff = req.ActualQty - req.SystemQty;
 		decimal diffCost = diff * req.UnitCostPrice;
@@ -1241,19 +1273,60 @@ ORDER BY created_at_ms DESC LIMIT 100";
 		string userId = _userSession?.UserId ?? "USER-ADMIN";
 		long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-		take.Status = "APPROVED";
-		take.ApprovedByUserId = userId;
-		take.ApprovedAtMs = nowMs;
-		take.Remark = req?.Remark ?? take.Remark;
-		take.UpdatedAtMs = nowMs;
-		take.UpdatedBy = userId;
-		await _stockTakeRepo.UpdateAsync(take);
+		await _connFactory.ExecuteInTransactionAsync(async ct =>
+		{
+			var freshTake = await _stockTakeRepo.GetByIdAsync(take.Id, ct);
+			if (freshTake == null || freshTake.Status != "DRAFT")
+				throw new InvalidOperationException("该盘点单已审核或状态已变更");
+
+			var lines = await _stockTakeLineRepo.QueryAsync(
+				"SELECT * FROM inv_stock_take_lines WHERE stock_take_id = @TakeId",
+				new { TakeId = freshTake.Id }, ct);
+
+			foreach (var line in lines)
+			{
+				if (line.DiffQty == 0 || string.IsNullOrWhiteSpace(line.BatchId))
+					continue;
+				var batch = await _batchRepo.GetByIdAsync(line.BatchId, ct);
+				if (batch == null)
+					continue;
+
+				batch.Quantity = Math.Max(0, line.ActualQty);
+				batch.UpdatedBy = userId;
+				await _batchRepo.UpdateAsync(batch, ct);
+
+				await _ledgerRepo.InsertAsync(new InvStockLedger
+				{
+					WarehouseOrPharmacyId = freshTake.WarehouseOrPharmacyId,
+					DrugId = line.DrugId,
+					BatchId = batch.Id,
+					ChangeType = "INV_ADJUST",
+					ChangeQuantity = line.DiffQty,
+					BalanceAfter = batch.Quantity,
+					ReferenceDocNo = freshTake.StockTakeNo,
+					UnitCostPrice = line.UnitCostPrice,
+					UnitRetailPrice = line.UnitCostPrice,
+					CreatedBy = userId,
+					UpdatedBy = userId
+				}, ct);
+			}
+
+			freshTake.Status = "APPROVED";
+			freshTake.ApprovedByUserId = userId;
+			freshTake.ApprovedAtMs = nowMs;
+			freshTake.Remark = req?.Remark ?? freshTake.Remark;
+			freshTake.UpdatedAtMs = nowMs;
+			freshTake.UpdatedBy = userId;
+			await _stockTakeRepo.UpdateAsync(freshTake, ct);
+			take = freshTake;
+			return 0;
+		});
 
 		if (_auditTrail != null)
 		{
 			await _auditTrail.RecordAuditAsync("STOCK_TAKE_APPROVE", "inv_stock_takes", take.Id, $"审核通过盘点单 [{take.StockTakeNo}]，差异数量: {take.TotalDiffQty}，差异金额: {take.TotalDiffAmount}", userId, _userSession?.DisplayName, take.WarehouseOrPharmacyId);
 		}
 
-		return ApiResponse<InvStockTake>.Success(take, "盘点单已审核生效");
+		return ApiResponse<InvStockTake>.Success(take, "盘点单已审核生效并同步批次库存");
 	}
 }

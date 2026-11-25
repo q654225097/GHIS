@@ -336,7 +336,7 @@ public partial class WorkbenchModel
 			Dose = dose,
 			Route = route,
 			Frequency = frequency,
-			StartTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+			StartTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
 			DoctorName = CurrentOperatorName,
 			Status = "待护士校对",
 			NurseSign = "--",
@@ -348,30 +348,7 @@ public partial class WorkbenchModel
 		NotifyInpatientChanged(selectedInpatient);
 		SystemNotice = $"✓ [步骤A：医生开立医嘱完成] {inpatientOrderModel.OrderType} [{inpatientOrderModel.Content}] 状态为【待护士校对】。下一步必须执行【步骤B：护士校对审签】➔【步骤C：分解生成执行单】➔【步骤D：扫码执行】➔【步骤E：双人核对】！";
 
-		try
-		{
-			using HttpClient http = CreateConfigHttpClient();
-			var orderTermType = longTerm ? 1 : 2;
-			var createDto = new
-			{
-				EncounterId = selectedInpatient.AdmissionNo,
-				PatientId = selectedInpatient.PatientId,
-				OrderIpdDeptId = "DEPT-IPD-01",
-				PatientWardId = "DEPT-WARD-02",
-				ExecTargetDeptId = "DEPT-WARD-02",
-				OrderTermType = orderTermType,
-				GroupNo = selectedInpatient.Orders.Count + 1,
-				OrderCategory = "DRUG",
-				ItemCode = "ORD-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
-				ItemName = inpatientOrderModel.Content,
-				Dosage = 1.0m,
-				FrequencyCode = inpatientOrderModel.Frequency,
-				RouteCode = inpatientOrderModel.Route,
-				OrderDoctorId = CurrentOperatorId
-			};
-			_ = http.PostAsJsonAsync("/api/v4/orders", createDto);
-		}
-		catch { }
+		_ = PostOrderToServerVerifiedAsync(selectedInpatient, inpatientOrderModel, 1.0m);
 	}
 
 	public void ReviewSelectedInpatientOrders()
@@ -398,24 +375,14 @@ public partial class WorkbenchModel
 		{
 			item.Status = ((item.OrderType == "长期医嘱") ? "已校对待分解" : "已校对待执行");
 			item.NurseSign = text + " (已校对)";
-			item.ReviewInfo = $"[步骤B] 责任护士 {text} 于 {DateTime.Now:HH:mm} 完成校对审签，等待【步骤C：分解生成执行单】";
+			item.ReviewInfo = $"[步骤B] 责任护士 {text} 于 {DateTime.Now:yyyy-MM-dd HH:mm:ss} 完成校对审签，等待【步骤C：分解生成执行单】";
+			if (!string.IsNullOrWhiteSpace(item.Id))
+			{
+				_ = VerifyOrderOnServerAsync(selectedInpatient, item);
+			}
 		}
 		NotifyInpatientChanged(selectedInpatient);
 		SystemNotice = $"✓ [步骤B：护士校对审签完成] 已核对 {list.Count} 条医嘱并转为【已校对待分解】，已解锁【步骤C：⚡ 自动分解今日医嘱】，请点击分解生成执行单！";
-
-		try
-		{
-			using HttpClient http = CreateConfigHttpClient();
-			foreach (var item in list)
-			{
-				_ = http.PostAsJsonAsync($"/api/v4/orders/{item.OrderNo}/verify", new
-				{
-					VerifyNurseId = CurrentOperatorId,
-					WardId = "DEPT-WARD-02"
-				});
-			}
-		}
-		catch { }
 	}
 
 	public void ReviewSingleInpatientOrder(InpatientOrderModel order)
@@ -429,7 +396,11 @@ public partial class WorkbenchModel
 		string text = ((SessionContext.Current.IsWardNurse && !string.IsNullOrWhiteSpace(SessionContext.Current.DisplayName)) ? SessionContext.Current.DisplayName : "陈劳");
 		order.Status = ((order.OrderType == "长期医嘱") ? "已校对待分解" : "已校对待执行");
 		order.NurseSign = text + " (已校对)";
-		order.ReviewInfo = $"[步骤B] 责任护士 {text} 于 {DateTime.Now:HH:mm} 完成校对审签，等待【步骤C：分解生成执行单】";
+		order.ReviewInfo = $"[步骤B] 责任护士 {text} 于 {DateTime.Now:yyyy-MM-dd HH:mm:ss} 完成校对审签，等待【步骤C：分解生成执行单】";
+		if (!string.IsNullOrWhiteSpace(order.Id))
+		{
+			_ = VerifyOrderOnServerAsync(selectedInpatient, order);
+		}
 		NotifyInpatientChanged(selectedInpatient);
 		SystemNotice = $"✓ [步骤B：护士校对完成] 医嘱 [{order.Content}] 已转为【{order.Status}】，请点击上方「⚡ 步骤C：自动分解今日医嘱」生成护理执行单！";
 	}
@@ -452,9 +423,9 @@ public partial class WorkbenchModel
 			return;
 		}
 		order.Status = "已停止";
-		order.StopTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+		order.StopTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 		order.StopDoctor = CurrentOperatorName;
-		order.ReviewInfo = $"{CurrentOperatorName} 于 {DateTime.Now:HH:mm} 停止医嘱";
+		order.ReviewInfo = $"{CurrentOperatorName} 于 {DateTime.Now:yyyy-MM-dd HH:mm:ss} 停止医嘱";
 		DateTime now = DateTime.Now;
 		int num = 0;
 		foreach (NursingTaskModel item in selectedInpatient.NursingTasks.Where((NursingTaskModel t) => t.SourceOrder == order.OrderNo && t.IsPending).ToList())
@@ -469,12 +440,10 @@ public partial class WorkbenchModel
 		NotifyInpatientChanged(selectedInpatient);
 		SystemNotice = ((num > 0) ? $"✓ 医嘱 [{order.Content}] 已下达停止，并自动撤销其关联的 {num} 项未执行分解任务。" : ("✓ 医嘱 [" + order.Content + "] 已停止，出院医嘱闭环校验已刷新。"));
 
-		try
+		if (!string.IsNullOrWhiteSpace(order.Id))
 		{
-			using HttpClient http = CreateConfigHttpClient();
-			_ = http.PostAsync($"/api/v4/orders/{order.OrderNo}/stop", null);
+			_ = StopOrderOnServerAsync(selectedInpatient, order);
 		}
-		catch { }
 	}
 
 	public void CancelInpatientOrder(InpatientOrderModel order)
@@ -488,18 +457,16 @@ public partial class WorkbenchModel
 				return;
 			}
 			order.Status = "已作废";
-			order.CancelTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+			order.CancelTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 			order.CancelDoctor = CurrentOperatorName;
-			order.ReviewInfo = $"{CurrentOperatorName} 于 {DateTime.Now:HH:mm} 作废未校对医嘱";
+			order.ReviewInfo = $"{CurrentOperatorName} 于 {DateTime.Now:yyyy-MM-dd HH:mm:ss} 作废未校对医嘱";
 			NotifyInpatientChanged(selectedInpatient);
 			SystemNotice = "✓ 未校对医嘱 [" + order.Content + "] 已作废。";
 
-			try
+			if (!string.IsNullOrWhiteSpace(order.Id))
 			{
-				using HttpClient http = CreateConfigHttpClient();
-				_ = http.PostAsync($"/api/v4/orders/{order.OrderNo}/discontinue", null);
+				_ = VoidOrderOnServerAsync(selectedInpatient, order);
 			}
-			catch { }
 		}
 	}
 
@@ -518,7 +485,7 @@ public partial class WorkbenchModel
 		}
 		ProgressNoteModel item = new ProgressNoteModel
 		{
-			RecordTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+			RecordTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
 			Author = CurrentOperatorName + " (" + CurrentOperatorRole + ")",
 			RecordType = "日常病程记录",
 			Content = NewProgressNote.Trim(),
@@ -564,6 +531,10 @@ public partial class WorkbenchModel
 		task.NurseName = CurrentOperatorName;
 		task.ExecutedAt = DateTime.Now.ToString("HH:mm");
 		task.Status = "已执行";
+		if (task.IsServerBacked && !string.IsNullOrWhiteSpace(task.PlanId))
+		{
+			_ = ExecutePlanOnServerAsync(selectedInpatient, task, selectedInpatient.AdmissionNo, task.SourceOrder);
+		}
 		NotifyInpatientChanged(selectedInpatient);
 		SystemNotice = "✓ [步骤D：扫码执行完成] 护理任务 [" + task.Content + "] 状态已变更为【已执行】，已解锁【步骤E：双人核对】按钮！";
 	}
@@ -649,13 +620,13 @@ public partial class WorkbenchModel
 			if (item.IsPendingReview)
 			{
 				item.Status = "已作废";
-				item.CancelTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+				item.CancelTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 				item.CancelDoctor = CurrentOperatorName;
 			}
 			else
 			{
 				item.Status = "已停止";
-				item.StopTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+				item.StopTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 				item.StopDoctor = CurrentOperatorName;
 			}
 		}
@@ -772,7 +743,7 @@ public partial class WorkbenchModel
 		bool flag = result >= 37.3m || result2 > 100m || result3 > 22m || result4 >= 140m || result4 < 90m || result5 >= 90m || result6 < 95m;
 		VitalSignModel item = new VitalSignModel
 		{
-			RecordedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+			RecordedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
 			Temperature = FormatVital(result),
 			Pulse = FormatVital(result2),
 			Respiration = FormatVital(result3),
@@ -803,7 +774,7 @@ public partial class WorkbenchModel
 		{
 			Shift = SelectedHandoverShift + " (交接)",
 			NurseName = CurrentOperatorName + " (" + CurrentOperatorRole + ")",
-			RecordTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+			RecordTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
 			Content = HandoverDraft.Trim(),
 			IsConfirmed = false
 		};
@@ -902,7 +873,7 @@ public partial class WorkbenchModel
 			NursingLevel = "二级护理",
 			Diagnosis = "待完善入院诊断",
 			AttendingDoctor = CurrentOperatorName + " (" + CurrentOperatorRole + ")",
-			AdmissionDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+			AdmissionDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
 			DailySummary = "新入院患者，已完成入科登记与身份核对，待完成首次病程与查房评估。",
 			MedTechReportsAllSigned = false,
 			DischargeMedsDispensed = false,
@@ -919,7 +890,7 @@ public partial class WorkbenchModel
 			Dose = "1套",
 			Route = "床旁",
 			Frequency = "持续",
-			StartTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+			StartTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
 			DoctorName = CurrentOperatorName,
 			Status = "待护士校对",
 			NurseSign = "--",
@@ -928,7 +899,7 @@ public partial class WorkbenchModel
 		inpatientRecordModel.ApplyOrderFilter();
 		inpatientRecordModel.ProgressNotes.Add(new ProgressNoteModel
 		{
-			RecordTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+			RecordTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
 			Author = CurrentOperatorName + " (" + CurrentOperatorRole + ")",
 			RecordType = "入院记录",
 			Content = "患者新入院，已核对身份、腕带与床位信息，待完善既往史、过敏史与系统查体。",
@@ -936,7 +907,7 @@ public partial class WorkbenchModel
 		});
 		inpatientRecordModel.VitalSigns.Add(new VitalSignModel
 		{
-			RecordedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+			RecordedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
 			Temperature = "36.5",
 			Pulse = "76",
 			Respiration = "18",

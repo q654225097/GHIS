@@ -143,6 +143,18 @@ public sealed class OpdEmrFieldModel : ClientModelBase
         {
             if (_syncingValues) return;
             Value = value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+            OnPropertyChanged(nameof(DateValueDateTime));
+        }
+    }
+
+    public DateTime? DateValueDateTime
+    {
+        get => DateValue?.DateTime;
+        set
+        {
+            if (_syncingValues) return;
+            DateValue = value.HasValue ? new DateTimeOffset(value.Value) : null;
+            OnPropertyChanged(nameof(DateValueDateTime));
         }
     }
 
@@ -369,6 +381,7 @@ public sealed class OpdEmrFieldModel : ClientModelBase
             OnPropertyChanged(nameof(IntegerValue));
             OnPropertyChanged(nameof(DecimalValue));
             OnPropertyChanged(nameof(DateValue));
+            OnPropertyChanged(nameof(DateValueDateTime));
             OnPropertyChanged(nameof(BooleanValue));
             OnPropertyChanged(nameof(EnumValue));
         }

@@ -334,7 +334,8 @@ public sealed class SessionContext : INotifyPropertyChanged
 
 	public bool CanSeeWardStation => IsAdmin || IsWardNurse || IsIpdResident || IsIpdAttending;
 
-	public bool CanSeeMedTech => IsAdmin || IsOpdDoctor || IsIpdResident || IsIpdAttending || IsMedTech;
+	public bool CanSeeMedTech => IsAdmin || IsOpdDoctor || IsIpdResident || IsIpdAttending || IsMedTech || IsWardNurse ||
+		IsRole("OR-NURSE") || IsRole("ANESTHESIOLOGIST") || IsRole("ANESTHESIA") || IsRole("SURGEON") || IsRole("IPD-CHIEF");
 
 	public bool CanSeePharmacy => IsAdmin || IsPharmacist || IsWarehouseKeeper;
 

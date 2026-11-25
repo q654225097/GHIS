@@ -159,6 +159,17 @@ INSERT INTO nut_nrs2002_screenings (
 
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
+
+        string dietKey = dto.DietType.Trim().ToUpperInvariant();
+        var nutMdm = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT item_code AS ItemCode, kcal_per_unit AS KcalPerUnit, is_active AS IsActive FROM mdm_nutrition_items WHERE UPPER(item_code) = @Key OR UPPER(item_name) = @Key OR UPPER(nutrition_type) = @Key LIMIT 1",
+            new { Key = dietKey });
+        if (nutMdm != null && Convert.ToInt32(nutMdm.IsActive) == 0)
+            return BadRequest(new { message = $"营养制剂主数据 [{dto.DietType}] 已停用，禁止开立膳食医嘱！" });
+
+        decimal resolvedKcal = dto.KcalTarget > 0 ? dto.KcalTarget
+            : (nutMdm != null && Convert.ToDecimal(nutMdm.KcalPerUnit) > 0 ? Convert.ToDecimal(nutMdm.KcalPerUnit) : 1800m);
+
         await conn.ExecuteAsync(@"
 INSERT INTO nut_diet_orders (
     id, diet_no, encounter_id, patient_id, patient_name, ward_name, bed_code,
@@ -177,8 +188,8 @@ INSERT INTO nut_diet_orders (
             PatName = dto.PatientName.Trim(),
             Ward = dto.WardName ?? "住院病区",
             Bed = dto.BedCode ?? "-",
-            DietType = dto.DietType.Trim().ToUpperInvariant(),
-            Kcal = dto.KcalTarget <= 0 ? 1800 : dto.KcalTarget,
+            DietType = dietKey,
+            Kcal = resolvedKcal,
             Protein = dto.ProteinGrams <= 0 ? 65 : dto.ProteinGrams,
             Schedule = string.IsNullOrWhiteSpace(dto.MealSchedule) ? "早/中/晚" : dto.MealSchedule.Trim(),
             Allergy = dto.AllergyAvoidance,

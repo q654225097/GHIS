@@ -50,7 +50,7 @@ public class BradenAssessmentModel : ClientModelBase
     public string? PreventiveMeasuresJson { get; set; }
     public string AssessorId { get; set; } = string.Empty;
     public long AssessedAtMs { get; set; }
-    public string AssessedTimeText => DateTimeOffset.FromUnixTimeMilliseconds(AssessedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+    public string AssessedTimeText => DateTimeOffset.FromUnixTimeMilliseconds(AssessedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
 }
 
 public class MorseAssessmentModel : ClientModelBase
@@ -63,7 +63,7 @@ public class MorseAssessmentModel : ClientModelBase
     public string? PreventiveMeasuresJson { get; set; }
     public string AssessorId { get; set; } = string.Empty;
     public long AssessedAtMs { get; set; }
-    public string AssessedTimeText => DateTimeOffset.FromUnixTimeMilliseconds(AssessedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+    public string AssessedTimeText => DateTimeOffset.FromUnixTimeMilliseconds(AssessedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
 }
 
 public class InfectionReportModel : ClientModelBase
@@ -93,7 +93,7 @@ public class IsolationOrderModel : ClientModelBase
     public bool CanEnd => Status == 0;
 }
 
-public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget, IPrintContextProvider
+public sealed partial class IpdNurseViewModel : ClientModelBase, IShortcutTarget, IPrintContextProvider
 {
     private readonly ShellViewModel? _shell;
     private bool _subscribed;
@@ -181,8 +181,12 @@ public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget, IPrint
 
         LoadNursingUserTemplatesCommand = new AsyncRelayCommand(LoadNursingUserTemplatesAsync);
         SaveAsNursingUserTemplateCommand = new AsyncRelayCommand(SaveAsNursingUserTemplateAsync);
-        PdaScanVerifyAndExecuteCommand = new RelayCommand(ExecutePdaScanVerifyAndExecute);
+        PdaScanVerifyAndExecuteCommand = new AsyncRelayCommand(ExecutePdaScanVerifyAndExecuteServerAsync);
         DualNurseSignCommand = new RelayCommand(ExecuteDualNurseSign);
+        if (SessionContext.Current.IsLoggedIn)
+        {
+            _ = Workbench.RefreshInpatientsFromServerAsync();
+        }
     }
 
     private string _pdaWristbandBarcode = string.Empty;
@@ -649,6 +653,7 @@ public sealed class IpdNurseViewModel : ClientModelBase, IShortcutTarget, IPrint
             RaiseComputed();
             if (e.PropertyName == nameof(WorkbenchModel.SelectedInpatient))
             {
+                _ = Workbench.LoadSelectedEncounterDetailsAsync(Workbench.SelectedInpatient);
                 _ = LoadCarePlansAsync();
                 _ = LoadAssessmentsAsync();
             }

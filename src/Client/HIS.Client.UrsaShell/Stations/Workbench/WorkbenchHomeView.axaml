@@ -41,11 +41,11 @@
                     Padding="14,10">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="危急值等待双人签收"
+                        <TextBlock Text="危急值待闭环"
                                    FontSize="13"
                                    FontWeight="Bold"
                                    Foreground="{DynamicResource SemiColorDanger}"/>
-                        <TextBlock Text="{Binding Workbench.CriticalValueAlert.TestItem, StringFormat='{}检验项目：{0}'}"
+                        <TextBlock Text="{Binding Workbench.PendingCriticalValueCount, StringFormat='{}当前岗位可查看 {0} 条未闭环记录'}"
                                    FontSize="12"
                                    Foreground="{DynamicResource SemiColorDanger}"/>
                     </StackPanel>

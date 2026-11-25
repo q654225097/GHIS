@@ -81,102 +81,102 @@
 
         <!-- Right Doctor Workspace -->
         <Grid Grid.Column="1" RowDefinitions="Auto,*">
-            <!-- Top Inpatient Patient Banner (Strictly Matching Screenshot 2) -->
+            <!-- Top Inpatient Patient Banner (Unified Semi Theme Tokens) -->
             <Border Grid.Row="0"
-                    Background="#D0EFFC"
-                    BorderBrush="#93D5ED"
+                    Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}"
                     BorderThickness="0,0,0,1"
-                    Padding="14,8">
-                <StackPanel Spacing="4">
-                    <!-- Line 1: 收起 / 床号 / 余额(欠费红字) / 性别 / 年龄 / 费别 / 住院号 / 住院天数 / 右侧图例 -->
+                    Padding="14,10">
+                <StackPanel Spacing="6">
+                    <!-- Line 1: 收起 / 床号 / 余额 / 性别 / 年龄 / 费别 / 住院号 / 住院天数 / 快捷操作 & 图例 -->
                     <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto">
                         <Button Grid.Column="0"
                                 Content="{Binding Workbench.SelectedInpatient.BannerExpandText, FallbackValue='收起'}"
                                 Classes="Tertiary"
-                                Foreground="#C53030"
+                                Foreground="{DynamicResource SemiColorPrimary}"
                                 FontWeight="Bold"
-                                FontSize="13"
-                                Padding="2,0"
-                                Margin="0,0,12,0"
+                                FontSize="12"
+                                Padding="6,2"
+                                Margin="0,0,10,0"
                                 VerticalAlignment="Center"
                                 Command="{Binding ToggleBannerExpandCommand}"/>
 
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding Workbench.SelectedInpatient.BedCode, FallbackValue='018床(2F)'}"
-                                   FontWeight="Bold"
-                                   FontSize="14"
-                                   Foreground="#C53030"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
+                        <Border Grid.Column="1" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="4" Padding="8,2" Margin="0,0,10,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.BedCode, FallbackValue='待分床'}"
+                                       FontWeight="Bold"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource SemiColorPrimary}"/>
+                        </Border>
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                            <TextBlock Text="可用余额: " FontSize="14" FontWeight="Bold" Foreground="#C53030"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AvailableBalanceText, FallbackValue='-23550cs'}"
-                                       FontSize="14" FontWeight="Bold" Foreground="#C53030"/>
+                            <TextBlock Text="可用余额: " FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AvailableBalanceText, FallbackValue='¥0.00'}"
+                                       FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" VerticalAlignment="Center"/>
                         </StackPanel>
 
                         <TextBlock Grid.Column="3"
-                                   Text="{Binding Workbench.SelectedInpatient.Gender, FallbackValue='女'}"
-                                   FontSize="13"
-                                   FontWeight="Bold"
-                                   Foreground="#C53030"
+                                   Text="{Binding Workbench.SelectedInpatient.Gender, FallbackValue='-'}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SemiColorText0}"
                                    VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
+                                   Margin="0,0,10,0"/>
 
                         <TextBlock Grid.Column="4"
-                                   Text="{Binding Workbench.SelectedInpatient.Age, StringFormat='{}{0}岁', FallbackValue='1岁'}"
-                                   FontSize="13"
-                                   FontWeight="Bold"
-                                   Foreground="#C53030"
+                                   Text="{Binding Workbench.SelectedInpatient.Age, StringFormat='{}{0}岁', FallbackValue=''}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SemiColorText0}"
                                    VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
+                                   Margin="0,0,10,0"/>
 
                         <TextBlock Grid.Column="5"
                                    Text="{Binding Workbench.SelectedInpatient.PaymentType, FallbackValue='自费'}"
-                                   FontSize="13"
-                                   FontWeight="Bold"
-                                   Foreground="#C53030"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SemiColorText1}"
                                    VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
+                                   Margin="0,0,10,0"/>
 
-                        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                            <TextBlock Text="住院号: " FontSize="13" FontWeight="Bold" Foreground="#C53030"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionNo, FallbackValue='0000000001'}"
-                                       FontSize="13" FontWeight="Bold" Foreground="#C53030"/>
-                            <TextBlock Text="  " FontSize="13"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.StayDays, StringFormat='住院 {0} 天', FallbackValue='住院 157 天'}"
-                                       FontSize="13" FontWeight="Bold" Foreground="#C53030"/>
+                        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0" Spacing="8">
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionNo, StringFormat='住院号: {0}', FallbackValue=''}"
+                                       FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.StayDays, StringFormat='在院 {0} 天', FallbackValue=''}"
+                                       FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
                         </StackPanel>
 
-                        <!-- Top Right Legend strictly matching Screenshot 2 (Two-line compact deep slate) -->
-                        <StackPanel Grid.Column="8" VerticalAlignment="Top" HorizontalAlignment="Right" Spacing="1">
-                            <TextBlock Text="绿色: 新开, 蓝色: 审核, 黄色:" FontSize="11" Foreground="#005580" FontWeight="SemiBold"/>
-                            <TextBlock Text="执行, 红色: 停止" FontSize="11" Foreground="#005580" FontWeight="SemiBold"/>
+                        <!-- Right Operational Tools & Status Legend -->
+                        <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Button Content="一日清单" Classes="Secondary" Height="26" Padding="10,0" FontSize="11"
+                                    Command="{Binding OpenDailyCostSheetCommand}"/>
+                            <Button Content="转科/SBAR交接" Classes="Warning" Height="26" Padding="10,0" FontSize="11"
+                                    Command="{Binding OpenTransferSbarCommand}"/>
+                            <Button Content="刷新" Classes="Tertiary" Height="26" Padding="8,0" FontSize="11"
+                                    Command="{Binding RefreshEncounterSyncCommand}"/>
+                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="8,3" Margin="4,0,0,0">
+                                <TextBlock Text="绿:新开 · 蓝:审签 · 黄:执行 · 红:停嘱" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                            </Border>
                         </StackPanel>
                     </Grid>
 
-                    <!-- Expandable Details: Exactly 3 lines with bracketed labels matching Screenshot 2 -->
+                    <!-- Expandable Details -->
                     <StackPanel Spacing="3" IsVisible="{Binding Workbench.SelectedInpatient.IsBannerExpanded, FallbackValue=True}">
-                        <!-- Line 2: [费用总额: ...] [押金总额: ...] [医保统筹: ...] [住院号: ...] [床号: ...] [诊断: ...] -->
                         <WrapPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.TotalCostDisplay, FallbackValue='[费用总额: 23550]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.DepositTotalDisplay, FallbackValue='[押金总额: 0]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.InsuranceCoordinationDisplay, FallbackValue='[医保统筹: 0]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionNoDisplay, FallbackValue='[住院号: 0000000001]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.BedCodeDisplay, FallbackValue='[床号: 018]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.DiagnosisDisplay, FallbackValue='[诊断: 胸腺脓肿]'}" FontSize="12" Foreground="#C53030"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.TotalCostDisplay, FallbackValue='[费用总额: 0]'}" FontSize="12" Foreground="{DynamicResource SemiColorText1}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.DepositTotalDisplay, FallbackValue='[押金总额: 0]'}" FontSize="12" Foreground="{DynamicResource SemiColorSuccess}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.InsuranceCoordinationDisplay, FallbackValue='[医保统筹: 0]'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionNoDisplay, FallbackValue='[住院号: --]'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.BedCodeDisplay, FallbackValue='[床号: --]'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.DiagnosisDisplay, FallbackValue='[诊断: 待查]'}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText0}"/>
                         </WrapPanel>
-                        <!-- Line 3: [入院日期: ...] [家庭住址: ...] [电话: ] -->
                         <WrapPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionDateDisplay, FallbackValue='[入院日期: 2026-06-15]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.HomeAddressDisplay, FallbackValue='[家庭住址: ---]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.ContactPhoneDisplay, FallbackValue='[电话:]'}" FontSize="12" Foreground="#C53030"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.AdmissionDateDisplay, FallbackValue='[入院日期: --]'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.HomeAddressDisplay, FallbackValue='[家庭住址: --]'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.ContactPhoneDisplay, FallbackValue='[电话: --]'}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
                         </WrapPanel>
-                        <!-- Line 4: [身份证] [身高] [体重] -->
                         <WrapPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.IdCardDisplay, FallbackValue='[身份证]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.HeightDisplay, FallbackValue='[身高]'}" FontSize="12" Foreground="#C53030" Margin="0,0,10,0"/>
-                            <TextBlock Text="{Binding Workbench.SelectedInpatient.WeightDisplay, FallbackValue='[体重]'}" FontSize="12" Foreground="#C53030"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.IdCardDisplay, FallbackValue='[身份证]'}" FontSize="11" Foreground="{DynamicResource SemiColorText3}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.HeightDisplay, FallbackValue='[身高]'}" FontSize="11" Foreground="{DynamicResource SemiColorText3}" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Workbench.SelectedInpatient.WeightDisplay, FallbackValue='[体重]'}" FontSize="11" Foreground="{DynamicResource SemiColorText3}"/>
                         </WrapPanel>
                     </StackPanel>
                 </StackPanel>
@@ -187,62 +187,35 @@
                 <!-- Tab 0: 医嘱管理 (住院医嘱开立与全要素表格) -->
                 <TabItem Header="医嘱管理">
                     <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
-                        <!-- Top Quick Order Entry Bar (Strictly Matching Screenshot 1) -->
+                        <!-- Top Quick Order Entry Bar (Semi Token Styled) -->
                         <Border Grid.Row="0"
-                                Background="#DCF8E6"
-                                BorderBrush="#A7D8B5"
+                                Background="{DynamicResource SemiColorBackground1}"
+                                BorderBrush="{DynamicResource SemiColorPrimary}"
                                 BorderThickness="1"
-                                CornerRadius="4"
-                                Padding="8,6">
-                            <Border.Styles>
-                                <Style Selector="TextBlock">
-                                    <Setter Property="Foreground" Value="#111827"/>
-                                    <Setter Property="FontSize" Value="12"/>
-                                </Style>
-                                <Style Selector="TextBox">
-                                    <Setter Property="Background" Value="#FFFFFF"/>
-                                    <Setter Property="Foreground" Value="#111827"/>
-                                    <Setter Property="BorderBrush" Value="#9CA3AF"/>
-                                </Style>
-                                <Style Selector="ComboBox">
-                                    <Setter Property="Background" Value="#FFFFFF"/>
-                                    <Setter Property="Foreground" Value="#111827"/>
-                                    <Setter Property="BorderBrush" Value="#9CA3AF"/>
-                                </Style>
-                                <Style Selector="u|NumericIntUpDown">
-                                    <Setter Property="Background" Value="#FFFFFF"/>
-                                    <Setter Property="Foreground" Value="#111827"/>
-                                    <Setter Property="BorderBrush" Value="#9CA3AF"/>
-                                </Style>
-                                <Style Selector="u|NumericDoubleUpDown">
-                                    <Setter Property="Background" Value="#FFFFFF"/>
-                                    <Setter Property="Foreground" Value="#111827"/>
-                                    <Setter Property="BorderBrush" Value="#9CA3AF"/>
-                                </Style>
-                            </Border.Styles>
-                            <StackPanel Spacing="5">
-                                <!-- Row 1: [全部 v] [简拼] 名称: [亮黄输入框] 数量 [ ^v] [ 单位 v] [亮黄规格/金额] [+ 录入 (Enter)] -->
+                                CornerRadius="6"
+                                Padding="10,8">
+                            <StackPanel Spacing="6">
+                                <!-- Row 1 -->
                                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6">
                                     <ComboBox Grid.Column="0"
                                               ItemsSource="{Binding ItemCategoryOptions}"
                                               SelectedItem="{Binding SelectedItemCategory, Mode=TwoWay}"
-                                              Width="80" Height="28" FontSize="12"/>
+                                              Width="84" Height="28" FontSize="12"/>
 
                                     <TextBox Grid.Column="1"
                                              Text="{Binding QuickSearchCode, Mode=TwoWay}"
                                              PlaceholderText="简拼"
                                              Width="70" Height="28" FontSize="12"/>
 
-                                    <TextBlock Grid.Column="2" Text="名称:" FontSize="12" VerticalAlignment="Center" Margin="2,0"/>
+                                    <TextBlock Grid.Column="2" Text="名称:" FontSize="12" Foreground="{DynamicResource SemiColorText1}" VerticalAlignment="Center" Margin="2,0"/>
 
-                                    <!-- Drug / Item Search with Bright Yellow Highlight Box (Strictly Matching Screenshot 1) -->
                                     <Grid Grid.Column="3">
                                         <TextBox x:Name="OrderContentInput"
                                                  Text="{Binding OrderContentInput, Mode=TwoWay}"
                                                  PlaceholderText="输入药品或项目名称快速检索 (按 / 或 F2 聚焦)..."
-                                                 Background="#FFFF55"
-                                                 Foreground="#000000"
-                                                 FontWeight="Bold"
+                                                 Background="{DynamicResource SemiColorBackground0}"
+                                                 BorderBrush="{DynamicResource SemiColorPrimary}"
+                                                 FontWeight="SemiBold"
                                                  Height="28"
                                                  FontSize="12"/>
                                         <Popup PlacementTarget="{Binding #OrderContentInput}"
@@ -303,10 +276,10 @@
                                     <TextBox Grid.Column="7"
                                              Text="{Binding QuickOrderSpecOrAmountText, Mode=OneWay}"
                                              IsReadOnly="True"
-                                             Background="#FFFF55"
-                                             Foreground="#000000"
+                                             Background="{DynamicResource SemiColorBackground2}"
+                                             Foreground="{DynamicResource SemiColorPrimary}"
                                              FontWeight="Bold"
-                                             Width="95" Height="28" FontSize="12"
+                                             Width="105" Height="28" FontSize="12"
                                              TextAlignment="Center"/>
 
                                     <Button Grid.Column="8"
@@ -372,11 +345,19 @@
                                                  Width="90" Height="26" FontSize="12"/>
                                     </StackPanel>
 
+                                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <TextBlock Text="性质:" FontSize="12" VerticalAlignment="Center"/>
+                                        <ComboBox ItemsSource="{Binding OrderSubTypeOptions}"
+                                                  SelectedItem="{Binding SelectedOrderSubType, Mode=TwoWay}"
+                                                  DisplayMemberBinding="{Binding Label}"
+                                                  Width="105" Height="26" FontSize="12"/>
+                                    </StackPanel>
+
                                     <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock Text="耗材扣库科室:" FontSize="12" VerticalAlignment="Center"/>
                                         <ComboBox ItemsSource="{Binding DeductDeptOptions}"
                                                   SelectedItem="{Binding SelectedDeductDept, Mode=TwoWay}"
-                                                  Foreground="#1D4ED8"
+                                                  Foreground="{DynamicResource SemiColorPrimary}"
                                                   FontWeight="Bold"
                                                   Width="115" Height="26" FontSize="12"/>
                                     </StackPanel>
@@ -447,8 +428,8 @@
                         <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,*">
                             <!-- Left Vertical "组套" Button strictly matching Screenshot 2 & 3 -->
                             <Border Grid.Column="0"
-                                    Background="#EFF6FF"
-                                    BorderBrush="#BAE6FD"
+                                    Background="{DynamicResource SemiColorBackground2}"
+                                    BorderBrush="{DynamicResource SemiColorBorder}"
                                     BorderThickness="1,1,0,1"
                                     CornerRadius="4,0,0,4"
                                     Width="22"
@@ -461,8 +442,8 @@
                                         Command="{Binding ToggleOrderSetsDrawerCommand}"
                                         ToolTip.Tip="点击展开/收起常用医嘱组套与个人模板">
                                     <StackPanel Spacing="3" HorizontalAlignment="Center">
-                                        <TextBlock Text="组" FontSize="11" FontWeight="Bold" Foreground="#0284C7" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="套" FontSize="11" FontWeight="Bold" Foreground="#0284C7" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="组" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="套" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </Border>

@@ -35,12 +35,13 @@ public sealed class DictItemRow
     public int SortOrder { get; set; }
     public short IsDefault { get; set; }
     public short IsActive { get; set; }
+    public string? StdMappingCode { get; set; }
 
     public string StatusDisplay => IsActive == 1 ? "✅ 启用" : "⏸ 已停用";
     public string DefaultDisplay => IsDefault == 1 ? "默认" : "-";
 }
 
-public sealed class MasterDictViewModel : ClientModelBase
+public sealed partial class MasterDictViewModel : ClientModelBase
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
     private readonly ShellViewModel _shell;
@@ -59,6 +60,7 @@ public sealed class MasterDictViewModel : ClientModelBase
     private string _itemCode = string.Empty;
     private string _itemName = string.Empty;
     private string _itemPinyin = string.Empty;
+    private string _itemStdMappingCode = string.Empty;
     private int _itemSortOrder = 10;
     private bool _itemIsDefault;
 
@@ -88,6 +90,7 @@ public sealed class MasterDictViewModel : ClientModelBase
                 ItemCode = value.ItemCode;
                 ItemName = value.ItemName;
                 ItemPinyin = value.PinyinCode ?? string.Empty;
+                ItemStdMappingCode = value.StdMappingCode ?? string.Empty;
                 ItemSortOrder = value.SortOrder;
                 ItemIsDefault = value.IsDefault == 1;
             }
@@ -102,6 +105,7 @@ public sealed class MasterDictViewModel : ClientModelBase
     public string ItemCode { get => _itemCode; set => SetField(ref _itemCode, value); }
     public string ItemName { get => _itemName; set => SetField(ref _itemName, value); }
     public string ItemPinyin { get => _itemPinyin; set => SetField(ref _itemPinyin, value); }
+    public string ItemStdMappingCode { get => _itemStdMappingCode; set => SetField(ref _itemStdMappingCode, value); }
     public int ItemSortOrder { get => _itemSortOrder; set => SetField(ref _itemSortOrder, value); }
     public bool ItemIsDefault { get => _itemIsDefault; set => SetField(ref _itemIsDefault, value); }
 
@@ -109,14 +113,17 @@ public sealed class MasterDictViewModel : ClientModelBase
     public ICommand SaveCategoryCommand { get; }
     public ICommand SaveItemCommand { get; }
     public ICommand ToggleItemCommand { get; }
+    public Stations.MasterCatalog.MasterCatalogViewModel Catalog { get; }
 
     public MasterDictViewModel(WorkbenchModel workbench, ShellViewModel shell)
     {
         _shell = shell;
+        Catalog = new Stations.MasterCatalog.MasterCatalogViewModel(workbench, shell);
         RefreshCommand = new RelayCommand(async () => await LoadCategoriesAsync());
         SaveCategoryCommand = new RelayCommand(async () => await SaveCategoryAsync());
         SaveItemCommand = new RelayCommand(async () => await SaveItemAsync());
         ToggleItemCommand = new RelayCommand(async () => await ToggleItemAsync());
+        InitializeMdmCommands();
         _ = LoadCategoriesAsync();
     }
 
@@ -189,11 +196,12 @@ public sealed class MasterDictViewModel : ClientModelBase
             ItemName,
             PinyinCode = ItemPinyin,
             SortOrder = ItemSortOrder,
-            IsDefault = ItemIsDefault
+            IsDefault = ItemIsDefault,
+            StdMappingCode = ItemStdMappingCode
         });
         var env = await resp.Content.ReadFromJsonAsync<ClientApiEnvelope<JsonElement>>(JsonOpts);
         _shell.ShowToast(env?.Message ?? "已保存字典项", (env?.Code is 200 or 0) ? "Success" : "Error");
-        ItemCode = string.Empty; ItemName = string.Empty; ItemPinyin = string.Empty;
+        ItemCode = string.Empty; ItemName = string.Empty; ItemPinyin = string.Empty; ItemStdMappingCode = string.Empty;
         await LoadItemsAsync(SelectedCategory.DictType);
         await LoadCategoriesAsync();
     }

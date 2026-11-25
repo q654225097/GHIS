@@ -66,7 +66,8 @@ public sealed class MrmsController : ControllerBase
         using var conn = _connFactory.CreateConnection();
         var list = (await conn.QueryAsync<dynamic>(@"
             SELECT e.id AS Id, e.admission_no AS AdmNo, COALESCE(p.full_name, e.patient_id) AS PatientName,
-                   COALESCE(p.gender_code, '男') AS Gender, COALESCE(d.dept_name, e.admit_dept_id) AS DeptName
+                   COALESCE(p.gender_code, '男') AS Gender, COALESCE(d.dept_name, e.admit_dept_id) AS DeptName,
+                   p.birth_date_int AS BirthDateInt
             FROM ipd_encounters e
             LEFT JOIN pat_patients p ON p.id = e.patient_id
             LEFT JOIN sys_departments d ON d.id = e.admit_dept_id
@@ -78,12 +79,15 @@ public sealed class MrmsController : ControllerBase
         int todayInt = int.Parse(SystemTime.ShanghaiNow.ToString("yyyyMMdd"));
         foreach (var e in list)
         {
+            int birthDateInt = e.BirthDateInt != null ? (int)e.BirthDateInt : 19800101;
+            int calculatedAge = Math.Max(1, (todayInt - birthDateInt) / 10000);
+
             await conn.ExecuteAsync(@"
                 INSERT INTO mrms_case_records
                 (id, case_no, encounter_id, patient_name, gender, age, discharge_dept_name, discharge_date_int, status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
                 VALUES
-                (@Id, @No, @Eid, @Name, @Gender, 45, @Dept, @Dt, 'PENDING_RETRIEVE', 1, @Now, @Actor, @Now, @Actor, 1)",
-                new { Id = Guid.NewGuid().ToString("D"), No = "BA-" + (string)e.AdmNo, Eid = (string)e.Id, Name = (string)e.PatientName, Gender = (string)e.Gender, Dept = (string?)e.DeptName, Dt = todayInt, Now = now, Actor = ActorId });
+                (@Id, @No, @Eid, @Name, @Gender, @Age, @Dept, @Dt, 'PENDING_RETRIEVE', 1, @Now, @Actor, @Now, @Actor, 1)",
+                new { Id = Guid.NewGuid().ToString("D"), No = "BA-" + (string)e.AdmNo, Eid = (string)e.Id, Name = (string)e.PatientName, Gender = (string)e.Gender, Age = calculatedAge, Dept = (string?)e.DeptName, Dt = todayInt, Now = now, Actor = ActorId });
             synced++;
         }
         return ApiResponse<object>.Success(new { SyncedCount = synced }, synced > 0 ? $"已同步 {synced} 份出院待回收病案" : "当前无新增待回收出院病案");
@@ -112,7 +116,7 @@ public sealed class MrmsController : ControllerBase
     }
 
     [HttpPut("cases/{id}/coding")]
-    public async Task<ApiResponse<object>> UpdateCodingAndArchive(string id, [FromBody] UpdateCodingDto req, CancellationToken ct)
+    public async Task<ApiResponse<object>> UpdateCodingAndArchive(string id, [FromBody] UpdateCodingDto req, CancellationToken ct = default)
     {
         long now = SystemTime.UtcNowMs;
         string drg = string.IsNullOrWhiteSpace(req.DrgGroupCode) && !string.IsNullOrWhiteSpace(req.PrimaryIcd10Code)

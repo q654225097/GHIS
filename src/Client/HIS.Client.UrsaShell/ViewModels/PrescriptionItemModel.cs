@@ -70,7 +70,7 @@ public class PrescriptionItemModel : ClientModelBase
 	private string _medicationNote = string.Empty;
 	private string _operatorName = !string.IsNullOrWhiteSpace(SessionContext.Current.DisplayName) ? SessionContext.Current.DisplayName : "录入人";
 	private string _deptName = "心血管门诊";
-	private string _createdAtText = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+	private string _createdAtText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 	private string _stopTimeText = "--";
 	private string _stopDoctor = "--";
 	private bool _isSelected = false;
@@ -191,7 +191,24 @@ public class PrescriptionItemModel : ClientModelBase
 		set
 		{
 			SetColumnValue("AMOUNT", value);
+			OnPropertyChanged(nameof(AmountNumeric));
 		}
+	}
+
+	public decimal AmountNumeric
+	{
+		get
+		{
+			var raw = Amount?.Replace("¥", "").Trim();
+			return decimal.TryParse(raw, out var v) ? v : 0m;
+		}
+	}
+
+	private bool _isPaid;
+	public bool IsPaid
+	{
+		get => _isPaid;
+		set => SetField(ref _isPaid, value, nameof(IsPaid));
 	}
 
 	public string SkinTestStatus
@@ -619,43 +636,6 @@ public class PrescriptionItemModel : ClientModelBase
 			}
 		}
 
-		int nextOrder = list.Count == 0 ? 0 : list.Max(x => x.SortOrder) + 1;
-		int quantityIndex = -1;
-		for (int index = 0; index < list.Count; index++)
-		{
-			if (list[index].FieldCode.Equals(QuantityCode, StringComparison.OrdinalIgnoreCase))
-			{
-				quantityIndex = index;
-				break;
-			}
-		}
-		void Ensure(string code, string label, string controlType, int width, int order)
-		{
-			if (list.Any(x => x.FieldCode.Equals(code, StringComparison.OrdinalIgnoreCase)))
-			{
-				return;
-			}
-			list.Add(new PrescriptionColumnModel
-			{
-				FieldCode = code,
-				FieldLabel = label,
-				DataType = controlType.Contains("Numeric", StringComparison.Ordinal) ? "NUMBER" : "STRING",
-				ControlType = controlType,
-				Width = width,
-				SortOrder = order,
-				IsSystemField = true,
-				IsEditable = true,
-				Placeholder = label
-			});
-		}
-
-		int insertAt = quantityIndex >= 0 ? quantityIndex : nextOrder;
-		Ensure(DoseCode, "单次剂量", "u:TextBox", 100, insertAt);
-		Ensure(FreqCode, "频次", "u:TextBox", 120, insertAt + 1);
-		Ensure(DaysCode, "天数", "u:NumericIntUpDown", 88, insertAt + 2);
-		Ensure(RouteCode, "用法", "u:TextBox", 100, insertAt + 3);
-		Ensure(QuantityCode, "数量", "u:NumericIntUpDown", 88, insertAt + 4);
-
 		PrescriptionColumnModel[] ordered = list.OrderBy(x => x.SortOrder).ToArray();
 		for (int index = 0; index < ordered.Length; index++)
 		{
@@ -666,10 +646,15 @@ public class PrescriptionItemModel : ClientModelBase
 	private static bool IsEditableCoreField(string fieldCode)
 	{
 		return fieldCode.Equals(DoseCode, StringComparison.OrdinalIgnoreCase)
+			|| fieldCode.Equals("SINGLE_DOSE", StringComparison.OrdinalIgnoreCase)
 			|| fieldCode.Equals(FreqCode, StringComparison.OrdinalIgnoreCase)
+			|| fieldCode.Equals("FREQ_CODE", StringComparison.OrdinalIgnoreCase)
 			|| fieldCode.Equals(RouteCode, StringComparison.OrdinalIgnoreCase)
+			|| fieldCode.Equals("ROUTE_NAME", StringComparison.OrdinalIgnoreCase)
 			|| fieldCode.Equals(DaysCode, StringComparison.OrdinalIgnoreCase)
-			|| fieldCode.Equals(QuantityCode, StringComparison.OrdinalIgnoreCase);
+			|| fieldCode.Equals(QuantityCode, StringComparison.OrdinalIgnoreCase)
+			|| fieldCode.Equals("TOTAL_QTY", StringComparison.OrdinalIgnoreCase)
+			|| fieldCode.Equals(DrugNameCode, StringComparison.OrdinalIgnoreCase);
 	}
 
 	public string GetColumnValue(string fieldCode)
@@ -678,8 +663,45 @@ public class PrescriptionItemModel : ClientModelBase
 		{
 			return string.Empty;
 		}
-		string value;
-		return _fieldValues.TryGetValue(fieldCode, out value) ? value : string.Empty;
+		string code = fieldCode.Trim().ToUpperInvariant();
+		if (_fieldValues.TryGetValue(code, out string value) && !string.IsNullOrWhiteSpace(value))
+		{
+			return value;
+		}
+		return code switch
+		{
+			"ORDER_TYPE" => _orderType,
+			"DRUG_NAME" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("DRUG_NAME")) ? _fieldValues["DRUG_NAME"] : string.Empty,
+			"SPEC" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("SPEC")) ? _fieldValues["SPEC"] : string.Empty,
+			"GROUP_NO" => _groupNo,
+			"SKIN_TEST" => _skinTest,
+			"SKIN_TEST_STATUS" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("SKIN_TEST_STATUS")) ? _fieldValues["SKIN_TEST_STATUS"] : _skinTest,
+			"TOTAL_QTY" or "TOTAL_QUANTITY" or "QUANTITY" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("QUANTITY")) ? _fieldValues["QUANTITY"] : _fieldValues.GetValueOrDefault("TOTAL_QTY", QuantityValue.ToString()),
+			"TOTAL_UNIT" => _totalUnit,
+			"SINGLE_DOSE" or "DOSE" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("DOSE")) ? _fieldValues["DOSE"] : (!string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("SINGLE_DOSE")) ? _fieldValues["SINGLE_DOSE"] : _singleDose),
+			"DOSE_UNIT" => _doseUnit,
+			"PKG_RATIO" => _packageRatio,
+			"PAYMENT_COUNT" => _paymentCount.ToString(),
+			"FREQ_CODE" or "FREQUENCY_CODE" or "FREQ" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("FREQ_CODE")) ? _fieldValues["FREQ_CODE"] : (!string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("FREQ")) ? _fieldValues["FREQ"] : _freqCode),
+			"ROUTE_NAME" or "ROUTE" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("ROUTE_NAME")) ? _fieldValues["ROUTE_NAME"] : (!string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("ROUTE")) ? _fieldValues["ROUTE"] : _routeName),
+			"HOSP_INJECT_CNT" or "HOSPITAL_INJECTION_COUNT" => _hospitalInjectionCount.ToString(),
+			"DOCTOR_NAME" => _doctorName,
+			"EXEC_DEPT" or "EXEC_DEPT_NAME" => _execDeptName,
+			"IS_URGENT" => _isUrgent ? "加急" : "常规",
+			"EXAM_PART" or "EXAM_BODY_PART" => _examBodyPart,
+			"SPECIMEN_TYPE" => _specimenType,
+			"DEDUCT_DEPT" or "DEDUCT_STOCK_DEPT" => _deductStockDept,
+			"MEDICATION_NOTE" => _medicationNote,
+			"OPERATOR" or "OPERATOR_NAME" => _operatorName,
+			"OPD_DEPT" or "DEPT_NAME" => _deptName,
+			"CREATED_AT" or "CREATED_AT_TEXT" => _createdAtText,
+			"STOP_TIME" or "STOP_TIME_TEXT" => _stopTimeText,
+			"STOP_DOCTOR" => _stopDoctor,
+			"AUDIT_STATUS" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("AUDIT_STATUS")) ? _fieldValues["AUDIT_STATUS"] : "待审方",
+			"DAYS" => DaysValue.ToString(),
+			"AMOUNT" => !string.IsNullOrWhiteSpace(_fieldValues.GetValueOrDefault("AMOUNT")) ? _fieldValues["AMOUNT"] : "¥0.00",
+			_ => _fieldValues.TryGetValue(fieldCode, out string extra) ? extra : string.Empty
+		};
 	}
 
 	public void SetColumnValue(string fieldCode, string? value)

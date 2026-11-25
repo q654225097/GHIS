@@ -65,6 +65,7 @@ public sealed class MultiDbConnectionFactory : IDbConnectionFactory
 
     public HisDbProviderKind ProviderKind => _providerKind;
     public string ConnectionString => _connectionString;
+    public SqliteConnectionFactory? SqliteDelegate => _sqliteDelegate;
     public DbTransaction? CurrentTransaction => _sqliteDelegate != null ? _sqliteDelegate.CurrentTransaction : CurrentScope.Value?.Transaction;
 
     static MultiDbConnectionFactory()

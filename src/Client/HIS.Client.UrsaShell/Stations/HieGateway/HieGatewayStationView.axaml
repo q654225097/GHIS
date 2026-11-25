@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.HieGateway"
+             x:Class="HIS.Client.UrsaShell.Stations.HieGateway.HieGatewayStationView"
+             x:DataType="local:HieGatewayStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <TextBlock Text="区域互联互通 HIE 与 EMPI 中心" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新交换日志" Classes="Primary" Height="30" Command="{Binding RefreshLogsCommand}"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="420,*" ColumnSpacing="12">
+            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="14">
+                <StackPanel Spacing="9">
+                    <TextBlock Text="患者 EMPI 主索引映射与跨院协同" FontSize="14" FontWeight="Bold"/>
+                    <TextBox Text="{Binding PatientId, Mode=TwoWay}" PlaceholderText="本地患者ID" Height="30"/>
+                    <TextBox Text="{Binding FullName, Mode=TwoWay}" PlaceholderText="患者姓名" Height="30"/>
+                    <TextBox Text="{Binding PeerOrgCode, Mode=TwoWay}" PlaceholderText="对端医联体医院编码" Height="30"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="EMPI 映射绑定" Classes="Primary" Height="32" Command="{Binding ResolveEmpiCommand}"/>
+                        <Button Content="拉取外院EHR" Classes="Secondary" Height="32" Command="{Binding FetchExternalEhrCommand}"/>
+                        <Button Content="推送FHIR档案" Classes="Success" Height="32" Command="{Binding PublishOutboundCommand}"/>
+                    </StackPanel>
+                    <TextBlock Text="外院健康档案调阅摘要" FontSize="12" FontWeight="Bold" Margin="0,6,0,0"/>
+                    <ScrollViewer MaxHeight="260">
+                        <TextBlock Text="{Binding ExternalEhrText}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SemiColorText2}"/>
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
+                <ListBox ItemsSource="{Binding Logs}" Background="Transparent" BorderThickness="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="local:HieExchangeLogVm">
+                            <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,6">
+                                <TextBlock Text="{Binding SummaryLine}" FontSize="12" TextWrapping="Wrap"/>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

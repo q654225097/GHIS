@@ -2,7 +2,7 @@ using HIS.Client.Core;
 
 namespace HIS.Client.UrsaShell.ViewModels;
 
-public class NursingTaskModel : ClientModelBase
+public partial class NursingTaskModel : ClientModelBase
 {
 	private string _status = "待执行";
 

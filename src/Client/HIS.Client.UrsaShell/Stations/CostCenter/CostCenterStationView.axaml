@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.CostCenter"
+             x:Class="HIS.Client.UrsaShell.Stations.CostCenter.CostCenterStationView"
+             x:DataType="local:CostCenterStationViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <TextBlock Text="医院全成本核算与绩效分摊中心" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新报表" Classes="Primary" Height="30" Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="360,*" ColumnSpacing="12">
+            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="14">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="科室期间成本归集与阶梯分摊" FontSize="14" FontWeight="Bold"/>
+                    <TextBox Text="{Binding DeptId, Mode=TwoWay}" PlaceholderText="科室ID (如 DEPT-IPD-01)" Height="30"/>
+                    <TextBox Text="{Binding Period, Mode=TwoWay}" PlaceholderText="会计期间 (yyyy-MM)" Height="30"/>
+                    <TextBlock Text="直接成本 (人力/耗材/折旧)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                    <NumericUpDown Value="{Binding DirectCost, Mode=TwoWay}" Minimum="0" Height="30"/>
+                    <TextBlock Text="间接分摊成本 (行政/后勤/医技分摊)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                    <NumericUpDown Value="{Binding AllocatedCost, Mode=TwoWay}" Minimum="0" Height="30"/>
+                    <TextBlock Text="本期医疗收入总额" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                    <NumericUpDown Value="{Binding Revenue, Mode=TwoWay}" Minimum="0" Height="30"/>
+                    <ComboBox ItemsSource="{Binding Methods}" SelectedItem="{Binding AllocationMethod, Mode=TwoWay}" Height="30"/>
+                    <Button Content="执行成本分摊核算并入账" Classes="Primary" Height="34" Command="{Binding AllocateCommand}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
+                <ItemsControl ItemsSource="{Binding Reports}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:CostCenterReportVm">
+                            <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12,9" Margin="0,0,0,6">
+                                <TextBlock Text="{Binding SummaryLine}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

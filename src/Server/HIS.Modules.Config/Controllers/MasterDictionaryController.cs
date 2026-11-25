@@ -36,7 +36,7 @@ public sealed class MasterDictionaryController : ControllerBase
     private string ActorName => _session?.DisplayName ?? _session?.UserName ?? ActorId;
 
     public sealed record SaveCategoryDto(string DictType, string DictName, string CategoryGroup, string? Description);
-    public sealed record SaveDictItemDto(string DictType, string ItemCode, string ItemName, string? PinyinCode, int SortOrder, bool IsDefault);
+    public sealed record SaveDictItemDto(string DictType, string ItemCode, string ItemName, string? PinyinCode, int SortOrder, bool IsDefault, string? StdMappingCode = null);
 
     [HttpGet("categories")]
     public async Task<ApiResponse<IReadOnlyList<object>>> GetCategories([FromQuery] string? keyword = null)
@@ -103,7 +103,8 @@ public sealed class MasterDictionaryController : ControllerBase
         using var conn = _connFactory.CreateConnection();
         string sql = @"
             SELECT id AS Id, dict_type AS DictType, item_code AS ItemCode, item_name AS ItemName,
-                   pinyin_code AS PinyinCode, sort_order AS SortOrder, is_default AS IsDefault, is_active AS IsActive
+                   pinyin_code AS PinyinCode, sort_order AS SortOrder, is_default AS IsDefault, is_active AS IsActive,
+                   std_mapping_code AS StdMappingCode
             FROM cfg_clinical_dictionaries
             WHERE UPPER(dict_type) = UPPER(@Type)";
         if (!includeInactive) sql += " AND is_active = 1";
@@ -139,19 +140,19 @@ public sealed class MasterDictionaryController : ControllerBase
             await conn.ExecuteAsync(@"
                 UPDATE cfg_clinical_dictionaries
                 SET item_name = @Name, pinyin_code = @Py, sort_order = @Sort, is_default = @IsDef, is_active = 1,
-                    updated_at_ms = @Now, updated_by = @Actor
+                    std_mapping_code = @StdMap, updated_at_ms = @Now, updated_by = @Actor
                 WHERE id = @Id",
-                new { Name = req.ItemName.Trim(), Py = req.PinyinCode?.Trim()?.ToUpperInvariant(), Sort = req.SortOrder, IsDef = req.IsDefault ? 1 : 0, Now = now, Actor = ActorId, Id = existingId });
+                new { Name = req.ItemName.Trim(), Py = req.PinyinCode?.Trim()?.ToUpperInvariant(), Sort = req.SortOrder, IsDef = req.IsDefault ? 1 : 0, StdMap = req.StdMappingCode?.Trim(), Now = now, Actor = ActorId, Id = existingId });
             return ApiResponse<object>.Success(new { Id = existingId, ItemCode = itemCode }, $"已更新字典项 [{itemCode}]");
         }
 
         string id = Guid.NewGuid().ToString("D");
         await conn.ExecuteAsync(@"
             INSERT INTO cfg_clinical_dictionaries
-            (id, dict_type, item_code, item_name, pinyin_code, sort_order, is_default, is_active, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+            (id, dict_type, item_code, item_name, pinyin_code, sort_order, is_default, is_active, std_mapping_code, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
             VALUES
-            (@Id, @Type, @Code, @Name, @Py, @Sort, @IsDef, 1, 1, @Now, @Actor, @Now, @Actor, 1)",
-            new { Id = id, Type = typeCode, Code = itemCode, Name = req.ItemName.Trim(), Py = req.PinyinCode?.Trim()?.ToUpperInvariant(), Sort = req.SortOrder, IsDef = req.IsDefault ? 1 : 0, Now = now, Actor = ActorId });
+            (@Id, @Type, @Code, @Name, @Py, @Sort, @IsDef, 1, @StdMap, 1, @Now, @Actor, @Now, @Actor, 1)",
+            new { Id = id, Type = typeCode, Code = itemCode, Name = req.ItemName.Trim(), Py = req.PinyinCode?.Trim()?.ToUpperInvariant(), Sort = req.SortOrder, IsDef = req.IsDefault ? 1 : 0, StdMap = req.StdMappingCode?.Trim(), Now = now, Actor = ActorId });
 
         if (_auditTrail != null)
             await _auditTrail.RecordAuditAsync("DICT_ITEM_SAVE", "cfg_clinical_dictionaries", id, $"维护主数据字典 [{typeCode}] 项：{itemCode} - {req.ItemName}", ActorId, ActorName, null, ct);

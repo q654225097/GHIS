@@ -11,6 +11,7 @@ namespace HIS.Client.Core;
 public class ClinicalAlertPayload
 {
     public string? EventType { get; set; }
+    public string? AlertId { get; set; }
     public string? EncounterId { get; set; }
     public string? PatientName { get; set; }
     public string? Item { get; set; }
@@ -18,11 +19,17 @@ public class ClinicalAlertPayload
     public string? Message { get; set; }
     public string? BedCode { get; set; }
     public string? Severity { get; set; }
+    public string? ClinicRoomName { get; set; }
+    public string? DoctorName { get; set; }
+    public int QueueNo { get; set; }
+    public string? TicketAction { get; set; }
+    public string? TtsAnnouncement { get; set; }
     public long Timestamp { get; set; }
 }
 
 public sealed class ClinicalAlertHubClient : IDisposable
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private static ClinicalAlertHubClient? _instance;
     public static ClinicalAlertHubClient Current => _instance ??= new ClinicalAlertHubClient();
 
@@ -36,6 +43,7 @@ public sealed class ClinicalAlertHubClient : IDisposable
     public event Action<ClinicalAlertPayload>? OnMonitoringAlarm;
     public event Action<ClinicalAlertPayload>? OnPrescriptionComment;
     public event Action<ClinicalAlertPayload>? OnCarePlanReminder;
+    public event Action<ClinicalAlertPayload>? OnOpdQueueCalled;
     public event Action<bool>? ConnectionStateChanged;
 
     public bool IsConnected => _webSocket?.State == WebSocketState.Open;
@@ -67,39 +75,37 @@ public sealed class ClinicalAlertHubClient : IDisposable
         var uriBuilder = new UriBuilder(baseAddress);
         uriBuilder.Scheme = uriBuilder.Scheme == "https" ? "wss" : "ws";
         uriBuilder.Path = "/hubs/clinical-alerts";
-
-        var token = SessionContext.Current.AccessToken;
-        if (!string.IsNullOrWhiteSpace(token))
-        {
-            uriBuilder.Query = $"access_token={Uri.EscapeDataString(token)}";
-        }
+        uriBuilder.Query = string.Empty;
 
         while (!ct.IsCancellationRequested && _isStarted)
         {
+            using var socket = new ClientWebSocket();
             try
             {
-                _webSocket = new ClientWebSocket();
+                _webSocket = socket;
+                var token = SessionContext.Current.AccessToken;
                 if (!string.IsNullOrWhiteSpace(token))
                 {
-                    _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {token}");
+                    socket.Options.SetRequestHeader("Authorization", $"Bearer {token}");
                 }
 
-                await _webSocket.ConnectAsync(uriBuilder.Uri, ct);
+                await socket.ConnectAsync(uriBuilder.Uri, ct);
+                if (ct.IsCancellationRequested) return;
                 ConnectionStateChanged?.Invoke(true);
 
                 // Send SignalR Handshake
                 var handshake = "{\"protocol\":\"json\",\"version\":1}\x1e";
                 var handshakeBytes = Encoding.UTF8.GetBytes(handshake);
-                await _webSocket.SendAsync(new ArraySegment<byte>(handshakeBytes), WebSocketMessageType.Text, true, ct);
+                await socket.SendAsync(new ArraySegment<byte>(handshakeBytes), WebSocketMessageType.Text, true, ct);
 
                 var buffer = new byte[8192];
-                while (_webSocket.State == WebSocketState.Open && !ct.IsCancellationRequested)
+                while (socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
                 {
                     using var ms = new MemoryStream();
                     WebSocketReceiveResult result;
                     do
                     {
-                        result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                        result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
                             break;
@@ -114,7 +120,7 @@ public sealed class ClinicalAlertHubClient : IDisposable
 
                     ms.Seek(0, SeekOrigin.Begin);
                     var text = Encoding.UTF8.GetString(ms.ToArray());
-                    ProcessSignalRMessages(text);
+                    if (!ct.IsCancellationRequested) ProcessSignalRMessages(text);
                 }
             }
             catch
@@ -123,11 +129,10 @@ public sealed class ClinicalAlertHubClient : IDisposable
             }
             finally
             {
-                ConnectionStateChanged?.Invoke(false);
-                if (_webSocket != null)
+                if (ReferenceEquals(_webSocket, socket))
                 {
-                    try { _webSocket.Dispose(); } catch { }
                     _webSocket = null;
+                    ConnectionStateChanged?.Invoke(false);
                 }
             }
 
@@ -156,21 +161,12 @@ public sealed class ClinicalAlertHubClient : IDisposable
                     string target = root.GetProperty("target").GetString() ?? string.Empty;
                     if (root.TryGetProperty("arguments", out var args) && args.GetArrayLength() > 0)
                     {
-                        var arg = args[0];
-                        var payload = new ClinicalAlertPayload
+                        var payload = args[0].Deserialize<ClinicalAlertPayload>(JsonOptions);
+                        if (payload != null)
                         {
-                            EventType = target,
-                            EncounterId = arg.TryGetProperty("EncounterId", out var e) ? e.GetString() : null,
-                            PatientName = arg.TryGetProperty("PatientName", out var p) ? p.GetString() : null,
-                            Item = arg.TryGetProperty("Item", out var i) ? i.GetString() : null,
-                            Value = arg.TryGetProperty("Value", out var v) ? v.GetString() : null,
-                            Message = arg.TryGetProperty("Message", out var m) ? m.GetString() : null,
-                            BedCode = arg.TryGetProperty("BedCode", out var b) ? b.GetString() : null,
-                            Severity = arg.TryGetProperty("Severity", out var s) ? s.GetString() : null,
-                            Timestamp = arg.TryGetProperty("Timestamp", out var t) ? t.GetInt64() : 0
-                        };
-
-                        TriggerEvent(target, payload);
+                            payload.EventType = target;
+                            TriggerEvent(target, payload);
+                        }
                     }
                 }
             }
@@ -205,6 +201,9 @@ public sealed class ClinicalAlertHubClient : IDisposable
             case nameof(OnCarePlanReminder):
             case "CarePlanReminder":
                 OnCarePlanReminder?.Invoke(payload);
+                break;
+            case "OpdQueueCalled":
+                OnOpdQueueCalled?.Invoke(payload);
                 break;
         }
     }

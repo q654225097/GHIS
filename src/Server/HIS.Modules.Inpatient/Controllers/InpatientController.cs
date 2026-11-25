@@ -19,7 +19,22 @@ public class InpatientController : ControllerBase
 {
 	public sealed record AdmitPatientRequestDto(string PatientId, string CampusId, string AdmitDeptId, string AdmitWardId, string BedCode, bool IsBorrowedBed, decimal PrepaymentAmount = 2000.00m);
 
-	public sealed record TransferEncounterRequestDto(string TransferType, string ToDeptId, string ToWardId, string ToBedCode, string? OperatorId = null);
+	public sealed record TransferEncounterRequestDto(
+		string TransferType,
+		string ToDeptId,
+		string ToWardId,
+		string ToBedCode,
+		string? OperatorId = null,
+		bool ReorganizeOrders = true,
+		string? SbarSituation = null,
+		string? SbarBackground = null,
+		string? SbarAssessment = null,
+		string? SbarRecommendation = null);
+
+	public sealed record TransferReorganizeRequestDto(
+		string EncounterId,
+		string DoctorId,
+		string? ReorganizeReason = "转科医嘱重整停嘱");
 
 	public sealed record AddPrepaymentRequestDto(decimal Amount, string? OperatorId = null);
 
@@ -88,18 +103,62 @@ public class InpatientController : ControllerBase
 			PrepaymentBalance = req.PrepaymentAmount,
 			Status = 1 // Admitted
 		};
-		await _encounterRepo.InsertAsync(encounter);
 
-		// Update bed status
-		var beds = await _bedRepo.QueryAsync(
-			"SELECT * FROM ipd_beds WHERE ward_id = @WardId AND bed_code = @BedCode",
-			new { WardId = req.AdmitWardId, BedCode = req.BedCode });
-		if (beds.Count > 0)
+		try
 		{
-			var bed = beds[0];
-			bed.BedStatus = 1; // Occupied
-			bed.CurrentEncounterId = encounter.Id;
-			await _bedRepo.UpdateAsync(bed);
+			await using (var grpConn = _connFactory.CreateConnection())
+			{
+				var grp = await grpConn.QueryFirstOrDefaultAsync<dynamic>(
+					"SELECT leader_staff_id AS LeaderStaffId FROM mdm_medical_groups WHERE dept_id = @DeptId AND is_active = 1 LIMIT 1",
+					new { DeptId = req.AdmitDeptId });
+				if (grp != null && string.IsNullOrWhiteSpace(encounter.AttendingDoctorId))
+					encounter.AttendingDoctorId = (string?)grp.LeaderStaffId;
+			}
+			await _connFactory.ExecuteInTransactionAsync(async ct =>
+			{
+				var beds = await _bedRepo.QueryAsync(
+					"SELECT * FROM ipd_beds WHERE ward_id = @WardId AND bed_code = @BedCode",
+					new { WardId = req.AdmitWardId, BedCode = req.BedCode }, ct);
+				if (beds.Count > 0)
+				{
+					var bed = beds[0];
+					if (bed.BedStatus == 1)
+					{
+						throw new InvalidOperationException($"病区 [{req.AdmitWardId}] 床位 [{req.BedCode}] 已被其他在院患者占用，禁止重复分配");
+					}
+					await using var mdmConn = _connFactory.CreateConnection();
+					var bedMeta = await mdmConn.QueryFirstOrDefaultAsync<dynamic>(
+						"SELECT is_open_bed, gender_limit FROM ipd_beds WHERE id = @Id", new { Id = bed.Id });
+					if (bedMeta != null && Convert.ToInt32(bedMeta.is_open_bed ?? 1) == 0)
+					{
+						throw new InvalidOperationException($"病区 [{req.AdmitWardId}] 床位 [{req.BedCode}] 为未开放编制床位，禁止收治患者");
+					}
+					string? genderLimit = ((string?)bedMeta?.gender_limit)?.Trim().ToUpperInvariant();
+					if (genderLimit is "M" or "F")
+					{
+						string? patGender = (await mdmConn.ExecuteScalarAsync<string?>(
+							"SELECT gender_code FROM pat_patients WHERE id = @PatId", new { PatId = req.PatientId }))?.Trim().ToUpperInvariant();
+						bool patIsMale = patGender is "1" or "M" or "MALE";
+						bool patIsFemale = patGender is "2" or "F" or "FEMALE";
+						if ((genderLimit == "M" && patIsFemale) || (genderLimit == "F" && patIsMale))
+						{
+							throw new InvalidOperationException($"床位 [{req.BedCode}] 限定性别 [{genderLimit}]，与患者性别 [{patGender}] 不符，禁止跨性别收治");
+						}
+					}
+					int claimed = await _bedRepo.ExecuteAsync(
+						"UPDATE ipd_beds SET bed_status = 1, current_encounter_id = @EncId, updated_at_ms = @Now, version_no = version_no + 1 WHERE id = @BedId AND bed_status = 0",
+						new { EncId = encounter.Id, Now = SystemTime.UtcNowMs, BedId = bed.Id }, ct);
+					if (claimed != 1)
+					{
+						throw new InvalidOperationException($"病区 [{req.AdmitWardId}] 床位 [{req.BedCode}] 已被并发占用，请刷新重试");
+					}
+				}
+				await _encounterRepo.InsertAsync(encounter, ct);
+			});
+		}
+		catch (InvalidOperationException ex)
+		{
+			return ApiResponse<IpdEncounter>.Fail(409, ex.Message);
 		}
 
 		return ApiResponse<IpdEncounter>.Success(encounter, req.IsBorrowedBed ? "跨病区借床入院登记成功" : "常规入院分床成功");
@@ -176,6 +235,30 @@ WHERE id = @Id AND status IN (1, 4)
 			{
 				throw new InvalidOperationException("住院记录床位已在其他终端变更，请刷新后重试");
 			}
+
+			int reorganizedCount = 0;
+			if (req.ReorganizeOrders && !string.Equals(enc.AdmitDeptId, req.ToDeptId, StringComparison.OrdinalIgnoreCase))
+			{
+				await using var txConn = _connFactory.CreateConnection();
+				reorganizedCount = await txConn.ExecuteAsync(new CommandDefinition(
+					"""
+					UPDATE ord_medical_orders
+					SET status = 3, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @OpId,
+					    updated_at_ms = @Now, updated_by = @OpId, version_no = version_no + 1
+					WHERE encounter_id = @EncId AND order_term_type = 1 AND status IN (0, 1, 2)
+					""",
+					new { EncId = enc.Id, Now = nowMs, OpId = req.OperatorId ?? "SYSTEM" }, cancellationToken: ct));
+
+				await txConn.ExecuteAsync(new CommandDefinition(
+					"""
+					UPDATE ord_execution_plans
+					SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1
+					WHERE encounter_id = @EncId AND exec_status = 0
+					  AND order_id IN (SELECT id FROM ord_medical_orders WHERE encounter_id = @EncId AND status = 3)
+					""",
+					new { EncId = enc.Id, Now = nowMs }, cancellationToken: ct));
+			}
+
 			IpdTransferLog transferLog = new IpdTransferLog
 			{
 				EncounterId = enc.Id,
@@ -188,6 +271,12 @@ WHERE id = @Id AND status IN (1, 4)
 				ToBedCode = req.ToBedCode,
 				HandoverOutAtMs = nowMs,
 				HandoverInAtMs = nowMs,
+				SbarSituation = req.SbarSituation,
+				SbarBackground = req.SbarBackground,
+				SbarAssessment = req.SbarAssessment,
+				SbarRecommendation = req.SbarRecommendation,
+				OrdersReorganized = (short)(reorganizedCount > 0 ? 1 : 0),
+				ReorganizedCount = reorganizedCount,
 				CreatedBy = req.OperatorId,
 				UpdatedBy = req.OperatorId
 			};
@@ -222,7 +311,38 @@ WHERE id = @Id AND status IN (1, 4)
 		{
 			await _auditTrail.RecordAuditAsync("IPD_TRANSFER", "IpdEncounter", enc.Id, $"住院患者转科/换床：[{log.FromDeptId}/{log.FromWardId}/{log.FromBedCode}] -> [{log.ToDeptId}/{log.ToWardId}/{log.ToBedCode}]", req.OperatorId);
 		}
-		return ApiResponse<IpdTransferLog>.Success(log, "患者转科/转病区/换床交接完成，床位与权责已实时切换");
+		return ApiResponse<IpdTransferLog>.Success(log, $"患者转科/转病区/换床交接完成，床位与权责已实时切换{(log.OrdersReorganized == 1 ? $"，原科室 {log.ReorganizedCount} 条长期医嘱已自动停止并进入重整" : "")}");
+	}
+
+	[HttpPost("encounters/{encounterId}/transfer-reorganize")]
+	public async Task<ApiResponse<object>> ReorganizeOrdersOnTransfer(string encounterId, [FromBody] TransferReorganizeRequestDto req)
+	{
+		long nowMs = SystemTime.UtcNowMs;
+		await using var conn = _connFactory.CreateConnection();
+		var count = await conn.ExecuteAsync(new CommandDefinition(
+			"""
+			UPDATE ord_medical_orders
+			SET status = 3, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId,
+			    updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1
+			WHERE encounter_id = @EncId AND order_term_type = 1 AND status IN (0, 1, 2)
+			""",
+			new { EncId = encounterId.Trim(), Now = nowMs, DoctorId = req.DoctorId }));
+
+		await conn.ExecuteAsync(new CommandDefinition(
+			"""
+			UPDATE ord_execution_plans
+			SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1
+			WHERE encounter_id = @EncId AND exec_status = 0
+			  AND order_id IN (SELECT id FROM ord_medical_orders WHERE encounter_id = @EncId AND status = 3)
+			""",
+			new { EncId = encounterId.Trim(), Now = nowMs }));
+
+		if (_auditTrail != null)
+		{
+			await _auditTrail.RecordAuditAsync("IPD_ORDER_REORGANIZE", "OrdMedicalOrder", encounterId, $"转科医嘱重整：自动停止原科室 {count} 条长期医嘱及关联执行计划", req.DoctorId);
+		}
+
+		return ApiResponse<object>.Success(new { stoppedOrdersCount = count }, $"转科医嘱重整完毕，已自动停止 {count} 条原科室长期医嘱，待转入科室医师重整下达");
 	}
 
 	[HttpPost("encounters/{encounterId}/prepayment")]

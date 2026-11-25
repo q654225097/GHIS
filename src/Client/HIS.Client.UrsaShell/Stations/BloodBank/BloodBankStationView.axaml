@@ -276,6 +276,34 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Step 3: Transfusion Execution, 15-Min Slow-Drip Check & Bag Recovery -->
+                        <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="环节三：床旁输注启动、15分钟慢滴监测与空袋24h冷链回收" FontWeight="Bold" FontSize="13"/>
+                                    <Button Grid.Column="1" Content="刷新输血执行单" Classes="Tertiary" Height="26" Command="{Binding RefreshExecutionsCommand}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Text="{Binding TransfusionWristbandInput, Mode=TwoWay}" PlaceholderText="腕带/PatientID (留空自动取当前)" Height="30"/>
+                                    <TextBox Grid.Column="1" Text="{Binding TransfusionDualNurseInput, Mode=TwoWay}" PlaceholderText="双人复核护士工号" Height="30"/>
+                                    <Button Grid.Column="2" Content="启动床旁输血" Classes="Primary" Height="30" Command="{Binding StartTransfusionCommand}"/>
+                                </Grid>
+                                <ComboBox ItemsSource="{Binding Executions}" SelectedItem="{Binding SelectedExecution, Mode=TwoWay}"
+                                          DisplayMemberBinding="{Binding DisplayLine}" PlaceholderText="选择输血执行单..." Height="30" HorizontalAlignment="Stretch"/>
+                                <Grid ColumnDefinitions="*,*,*,*,Auto" ColumnSpacing="6">
+                                    <NumericUpDown Grid.Column="0" Value="{Binding Mid15Temp, Mode=TwoWay}" Minimum="34" Maximum="42" Height="30"/>
+                                    <TextBox Grid.Column="1" Text="{Binding Mid15Bp, Mode=TwoWay}" PlaceholderText="血压如 120/78" Height="30"/>
+                                    <NumericUpDown Grid.Column="2" Value="{Binding Mid15DripRate, Mode=TwoWay}" Minimum="5" Maximum="100" Height="30"/>
+                                    <TextBox Grid.Column="3" Text="{Binding BagStorageLocation, Mode=TwoWay}" PlaceholderText="空袋留样冰箱位" Height="30"/>
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6">
+                                        <Button Content="15min慢滴监测" Classes="Warning" Height="30" Command="{Binding Record15MinCheckCommand}"/>
+                                        <Button Content="结束输血" Classes="Secondary" Height="30" Command="{Binding FinishTransfusionCommand}"/>
+                                        <Button Content="空袋24h回收" Classes="Success" Height="30" Command="{Binding RecoverBagCommand}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <!-- In-Stock Blood Bags Real Table -->
                         <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
                             <StackPanel Spacing="6">

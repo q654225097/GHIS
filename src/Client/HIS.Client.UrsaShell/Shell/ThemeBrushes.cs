@@ -16,15 +16,21 @@ public static class ThemeBrushes
         return fallback;
     }
 
+    public static IBrush Text0 => Get("SemiColorText0", Brushes.Black);
+
     public static IBrush Text1 => Get("SemiColorText1", Brushes.Gray);
 
     public static IBrush Text2 => Get("SemiColorText2", Brushes.DimGray);
 
     public static IBrush Text3 => Get("SemiColorText3", Brushes.Gray);
 
+    public static IBrush Background0 => Get("SemiColorBackground0", Brushes.Transparent);
+
     public static IBrush Border => Get("SemiColorBorder", Brushes.LightGray);
 
-    public static IBrush Surface => Get("SemiColorBackground1", Brushes.White);
+    public static IBrush Surface => Get("SemiColorBackground1", Brushes.Transparent);
+
+    public static IBrush Transparent => Brushes.Transparent;
 
     public static IBrush Primary => Get("SemiColorPrimary", Brushes.SteelBlue);
 

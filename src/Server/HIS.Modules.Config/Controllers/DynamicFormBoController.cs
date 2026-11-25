@@ -69,6 +69,8 @@ public sealed class DynamicFormBoController : ControllerBase
     private static readonly Dictionary<string, (string DisplayName, string TableName, string ModuleName, string ListSql)> BoRegistry =
         new(StringComparer.OrdinalIgnoreCase)
         {
+            ["OPD_PRESCRIPTION_ITEM"] = ("门诊处方明细", "opd_prescription_items", "门诊医生站",
+                "SELECT id AS Id, prescription_id AS BusinessNo, drug_name_snapshot AS Title, CAST(dose_once AS TEXT) || dose_unit || ' · ' || frequency_code || ' · 组' || CAST(group_no AS TEXT) AS SubTitle FROM opd_prescription_items ORDER BY created_at_ms DESC LIMIT 50"),
             ["OPD_VISIT"] = ("门诊就诊单", "opd_visits", "门诊医生站",
                 "SELECT v.id AS Id, v.visit_no AS BusinessNo, COALESCE(p.full_name, v.patient_id) AS Title, COALESCE(v.primary_diag_name, '门诊接诊') AS SubTitle FROM opd_visits v LEFT JOIN pat_patients p ON p.id = v.patient_id ORDER BY v.created_at_ms DESC LIMIT 50"),
             ["OPD_PRESCRIPTION"] = ("门诊处方单", "opd_prescriptions", "门诊/药房",
@@ -375,8 +377,29 @@ public sealed class DynamicFormBoController : ControllerBase
                     : (object?)v.ValString;
                 extDict[v.FieldCode] = val;
             }
-            string extJson = JsonSerializer.Serialize(new { dynamicFields = extDict, lastUpdatedAtMs = now });
-            if (extJson.Length > 3950) extJson = extJson[..3950];
+            // 读取原 BO 表 ext_data_json 并合并扩展字段，确保不覆盖原业务属性且绝不截断 JSON
+            string? existingExt = await conn.QuerySingleOrDefaultAsync<string>(
+                $"SELECT ext_data_json FROM {meta.TableName} WHERE id = @Id", new { Id = entityId.Trim() });
+            var root = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(existingExt))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(existingExt);
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        root[prop.Name] = JsonSerializer.Deserialize<object?>(prop.Value.GetRawText());
+                    }
+                }
+                catch { }
+            }
+            root["dynamicFields"] = extDict;
+            root["lastUpdatedAtMs"] = now;
+            string extJson = JsonSerializer.Serialize(root);
+            if (extJson.Length > 3950)
+            {
+                throw new InvalidOperationException("扩展数据总长度超过存储上限（3950字符），已拦截保存以防损坏结构化数据");
+            }
 
             await conn.ExecuteAsync(
                 $"UPDATE {meta.TableName} SET ext_data_json = @Ext, updated_at_ms = @Now, updated_by = @Actor WHERE id = @Id",

@@ -116,6 +116,21 @@ public sealed class AimsController : ControllerBase
         string room = req.OrRoomCode.Trim();
 
         using var conn = _connFactory.CreateConnection();
+        var orRoom = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT is_active AS IsActive FROM mdm_or_rooms WHERE room_code = @Room LIMIT 1",
+            new { Room = room });
+        if (orRoom != null && Convert.ToInt32(orRoom.IsActive) == 0)
+            return ApiResponse<object>.Fail(409, $"手术间主数据 [{room}] 已停用，禁止急诊插台排程");
+
+        if (!string.IsNullOrWhiteSpace(req.SurgeryCode))
+        {
+            var icd9 = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT is_active AS IsActive FROM cfg_icd9_operations WHERE icd9_code = @Code LIMIT 1",
+                new { Code = req.SurgeryCode.Trim() });
+            if (icd9 != null && Convert.ToInt32(icd9.IsActive) == 0)
+                return ApiResponse<object>.Fail(409, $"手术操作主数据 [{req.SurgeryCode}] 已停用，禁止排程");
+        }
+
         using var tx = conn.BeginTransaction();
         // 将该手术间所有尚未开始的择期手术台次顺延 +1
         int shifted = await conn.ExecuteAsync(

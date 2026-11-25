@@ -4,7 +4,7 @@ using HIS.Client.Core;
 
 namespace HIS.Client.UrsaShell.ViewModels;
 
-public class InpatientOrderModel : ClientModelBase
+public partial class InpatientOrderModel : ClientModelBase
 {
 	private string _status = "待护士校对";
 	private string _stopTime = "--";
@@ -122,7 +122,45 @@ public class InpatientOrderModel : ClientModelBase
 		}
 	}
 
-	public string GroupDisplay => !string.IsNullOrEmpty(GroupIcon) && GroupIcon != "-" ? GroupIcon : (string.IsNullOrEmpty(GroupNo) ? "-" : $"组{GroupNo}");
+	public string GroupDisplay => !string.IsNullOrEmpty(GroupIcon) && GroupIcon != "-" ? $"{GroupIcon} 组{GroupNo}" : (string.IsNullOrEmpty(GroupNo) || GroupNo == "0" ? "-" : $"组{GroupNo}");
+
+	public string GroupBracket => !string.IsNullOrEmpty(GroupIcon) && GroupIcon != "-" ? GroupIcon : " ";
+
+	public static void RefreshGroupSymbols(System.Collections.Generic.IEnumerable<InpatientOrderModel> orders)
+	{
+		var list = orders.ToList();
+		var grouped = list.Where(o => !string.IsNullOrWhiteSpace(o.GroupNo) && o.GroupNo != "-" && o.GroupNo != "0")
+						  .GroupBy(o => (o.OrderType, o.GroupNo));
+
+		foreach (var o in list)
+		{
+			if (string.IsNullOrWhiteSpace(o.GroupNo) || o.GroupNo == "-" || o.GroupNo == "0")
+			{
+				o.GroupIcon = "-";
+			}
+		}
+
+		foreach (var grp in grouped)
+		{
+			var items = grp.ToList();
+			if (items.Count == 1)
+			{
+				items[0].GroupIcon = "-";
+			}
+			else
+			{
+				for (int i = 0; i < items.Count; i++)
+				{
+					if (i == 0)
+						items[i].GroupIcon = "┌";
+					else if (i == items.Count - 1)
+						items[i].GroupIcon = "└";
+					else
+						items[i].GroupIcon = "├";
+				}
+			}
+		}
+	}
 
 	public string Spec
 	{

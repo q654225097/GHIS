@@ -150,7 +150,7 @@ public sealed class PreAdmissionEvalRow
     public long EvaluatedAtMs { get; set; }
 
     public string TimeText => EvaluatedAtMs > 0
-        ? DateTimeOffset.FromUnixTimeMilliseconds(EvaluatedAtMs).ToLocalTime().ToString("MM-dd HH:mm")
+        ? DateTimeOffset.FromUnixTimeMilliseconds(EvaluatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
         : "-";
 }
 

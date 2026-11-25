@@ -110,6 +110,19 @@ public sealed class UdiConsumablesController : ControllerBase
         if (dup > 0)
             return BadRequest(new { message = $"UDI 唯一码 [{udi}] 已存在，严禁重复入库。" });
 
+        var mdmConsumable = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT code AS Code, name AS Name, spec AS Spec, is_active AS IsActive FROM csm_consumables WHERE udi_di = @Di OR code = @Code LIMIT 1",
+            new { Di = di, Code = dto.MaterialCode?.Trim() ?? string.Empty });
+        if (mdmConsumable != null && Convert.ToInt32(mdmConsumable.IsActive) == 0)
+            return BadRequest(new { message = $"耗材主数据 [{mdmConsumable.Code}] 已停用，禁止 UDI 入库！" });
+
+        string resolvedCode = !string.IsNullOrWhiteSpace(dto.MaterialCode) ? dto.MaterialCode.Trim()
+            : (mdmConsumable != null ? (string)mdmConsumable.Code : di);
+        string resolvedName = !string.IsNullOrWhiteSpace(dto.MaterialName) ? dto.MaterialName.Trim()
+            : (mdmConsumable != null ? (string)mdmConsumable.Name : dto.MaterialName.Trim());
+        string? resolvedSpec = !string.IsNullOrWhiteSpace(dto.Spec) ? dto.Spec
+            : (mdmConsumable != null ? (string?)mdmConsumable.Spec : dto.Spec);
+
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var id = Guid.NewGuid().ToString("N");
         await conn.ExecuteAsync(@"
@@ -129,9 +142,9 @@ INSERT INTO udi_implant_inventory (
             Lot = lot,
             Serial = serial,
             Exp = expInt,
-            Code = string.IsNullOrWhiteSpace(dto.MaterialCode) ? di : dto.MaterialCode.Trim(),
-            Name = dto.MaterialName.Trim(),
-            Spec = dto.Spec,
+            Code = resolvedCode,
+            Name = resolvedName,
+            Spec = resolvedSpec,
             Sup = dto.SupplierName.Trim(),
             Consign = dto.IsConsignment ? 1 : 0,
             Cost = dto.CostPrice,
@@ -242,8 +255,13 @@ WHERE supplier_name = @Sup AND is_consignment = 1 AND status = 'CONSUMED' AND st
         if (items.Count == 0)
             return BadRequest(new { message = $"供应商 [{dto.SupplierName}] 当前没有待对账的已消耗代销高值耗材。" });
 
-        decimal totalCost = items.Sum(x => Convert.ToDecimal(x.cost_price));
-        decimal totalCharge = items.Sum(x => Convert.ToDecimal(x.unit_price));
+        decimal totalCost = 0m;
+        decimal totalCharge = 0m;
+        foreach (var x in items)
+        {
+            totalCost += Convert.ToDecimal((object)x.cost_price);
+            totalCharge += Convert.ToDecimal((object)x.unit_price);
+        }
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var stmtId = Guid.NewGuid().ToString("N");
         var stmtNo = $"CS{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(10, 99)}";

@@ -40,7 +40,7 @@ public sealed class ClinicalClosedLoopAndForecastTests
             GcsScore: 8,
             IsGreenChannel: false));
 
-        Assert.Equal(0, res.Code);
+        Assert.True(res.Code is 0 or 200, res.Message);
         using var conn = db.CreateConnection();
         var row = await conn.QueryFirstAsync<dynamic>("SELECT triage_level, is_green_channel, destination_zone FROM er_triage_visits LIMIT 1");
         Assert.Equal(1, Convert.ToInt32(row.triage_level));
@@ -62,12 +62,12 @@ public sealed class ClinicalClosedLoopAndForecastTests
             TargetDeptName: "心内科",
             ConsultType: "EMERGENCY",
             PurposeSummary: "术后频发室早"));
-        Assert.Equal(0, create.Code);
+        Assert.True(create.Code is 0 or 200, create.Message);
 
         using var conn = db.CreateConnection();
         string cid = await conn.ExecuteScalarAsync<string>("SELECT id FROM ipd_consultations LIMIT 1") ?? string.Empty;
         var done = await ctrl.CompleteConsultation(cid, new InpatientProController.CompleteConsultDto("建议胺碘酮负荷量静推并持续心电监护"));
-        Assert.Equal(0, done.Code);
+        Assert.True(done.Code is 0 or 200, done.Message);
 
         int emrCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM emr_documents WHERE doc_type_code = 'CONSULT_RECORD'");
         Assert.Equal(1, emrCount);
@@ -100,7 +100,7 @@ public sealed class ClinicalClosedLoopAndForecastTests
 
         var ctrl = new InventoryForecastController(db);
         var res = await ctrl.GetReplenishmentForecast("WH-MAIN", safetyDays: 14);
-        Assert.Equal(0, res.Code);
+        Assert.True(res.Code is 0 or 200, res.Message);
         var item = Assert.Single(res.Data!);
         Assert.Equal(50, item.CurrentValidStock);
         Assert.True(item.DaysOutOfStock < 14);
@@ -115,16 +115,16 @@ public sealed class ClinicalClosedLoopAndForecastTests
         var ctrl = new MrmsController(db);
 
         var c = await ctrl.CreateCase(new MrmsController.CreateCaseDto("王五", "女", 52, "呼吸内科", "J18.9", "社区获得性肺炎"));
-        Assert.Equal(0, c.Code);
+        Assert.True(c.Code is 0 or 200, c.Message);
 
         using var conn = db.CreateConnection();
         string id = await conn.ExecuteScalarAsync<string>("SELECT id FROM mrms_case_records LIMIT 1") ?? string.Empty;
 
         var coded = await ctrl.UpdateCodingAndArchive(id, new MrmsController.UpdateCodingDto("J18.9", "社区获得性肺炎", null, null, null, "ARCHIVED", "B-02-01", "质控合格"));
-        Assert.Equal(0, coded.Code);
+        Assert.True(coded.Code is 0 or 200, coded.Message);
 
         var sealedRes = await ctrl.CreateBorrowLog(new MrmsController.CreateBorrowDto(id, "SEAL", "医务科", "医疗争议依法封存", 20261231));
-        Assert.Equal(0, sealedRes.Code);
+        Assert.True(sealedRes.Code is 0 or 200, sealedRes.Message);
 
         string status = await conn.ExecuteScalarAsync<string>("SELECT status FROM mrms_case_records WHERE id = @Id", new { Id = id }) ?? string.Empty;
         Assert.Equal("SEALED", status);

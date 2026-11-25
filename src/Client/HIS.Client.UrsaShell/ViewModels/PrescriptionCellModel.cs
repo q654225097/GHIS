@@ -58,6 +58,17 @@ public sealed class PrescriptionCellModel : ClientModelBase
 
 	public bool IsDrugName => Column.FieldCode.Equals("DRUG_NAME", StringComparison.OrdinalIgnoreCase);
 
+	public bool IsGroupNo => Column.FieldCode.Equals("GROUP_NO", StringComparison.OrdinalIgnoreCase);
+
+	public bool IsSkinTest => Column.FieldCode.Equals("SKIN_TEST", StringComparison.OrdinalIgnoreCase)
+		|| Column.FieldCode.Equals("SKIN_TEST_STATUS", StringComparison.OrdinalIgnoreCase);
+
+	public bool IsUrgent => Column.FieldCode.Equals("IS_URGENT", StringComparison.OrdinalIgnoreCase);
+
+	public bool IsSpecialControl => IsDrugName || IsGroupNo || IsSkinTest || IsUrgent;
+
+	public bool IsStandardField => !IsSpecialControl;
+
 	public bool ShowBlockedBadge => IsDrugName && Item.IsBlocked;
 
 	public string Value
@@ -299,31 +310,32 @@ public sealed class PrescriptionCellModel : ClientModelBase
 		}
 	}
 
-	public IBrush ValueForegroundBrush => Brush.Parse(ValueForeground);
-
-	public IBrush ValueBackgroundBrush => Brush.Parse(ValueBackground);
-
-	public IBrush EditorBackgroundBrush => Brush.Parse(EditorBackground);
-
-	public IBrush EditorBorderBrushValue => Brush.Parse(EditorBorderBrush);
-
-	public IBrush CellBorderBrush
+	public IBrush ValueForegroundBrush => Column.FieldCode switch
 	{
-		get
-		{
-			IBrush result;
-			if (!ShowStatusBorder)
-			{
-				IBrush transparent = Brushes.Transparent;
-				result = transparent;
-			}
-			else
-			{
-				result = Brush.Parse(ValueForeground);
-			}
-			return result;
-		}
-	}
+		"DRUG_NAME" when Item.IsBlocked => HIS.Client.UrsaShell.Shell.ThemeBrushes.Danger,
+		"SKIN_TEST_STATUS" when Item.SkinTestClass == "Danger" => HIS.Client.UrsaShell.Shell.ThemeBrushes.Danger,
+		"SKIN_TEST_STATUS" when Item.SkinTestClass == "Warning" => HIS.Client.UrsaShell.Shell.ThemeBrushes.Warning,
+		"AUDIT_STATUS" when Item.AuditClass == "Danger" => HIS.Client.UrsaShell.Shell.ThemeBrushes.Danger,
+		"AUDIT_STATUS" when Item.AuditClass == "Success" => HIS.Client.UrsaShell.Shell.ThemeBrushes.Success,
+		"AMOUNT" => HIS.Client.UrsaShell.Shell.ThemeBrushes.Primary,
+		_ => HIS.Client.UrsaShell.Shell.ThemeBrushes.Text0
+	};
+
+	public IBrush ValueBackgroundBrush => Column.FieldCode switch
+	{
+		"DRUG_NAME" when Item.IsBlocked => HIS.Client.UrsaShell.Shell.ThemeBrushes.DangerLight,
+		"SKIN_TEST_STATUS" when Item.SkinTestClass == "Danger" => HIS.Client.UrsaShell.Shell.ThemeBrushes.DangerLight,
+		"SKIN_TEST_STATUS" when Item.SkinTestClass == "Warning" => HIS.Client.UrsaShell.Shell.ThemeBrushes.WarningLight,
+		"AUDIT_STATUS" when Item.AuditClass == "Danger" => HIS.Client.UrsaShell.Shell.ThemeBrushes.DangerLight,
+		"AUDIT_STATUS" when Item.AuditClass == "Success" => HIS.Client.UrsaShell.Shell.ThemeBrushes.SuccessLight,
+		_ => Brushes.Transparent
+	};
+
+	public IBrush EditorBackgroundBrush => IsStatusColumn ? ValueBackgroundBrush : Brushes.Transparent;
+
+	public IBrush EditorBorderBrushValue => IsStatusColumn ? Brushes.Transparent : HIS.Client.UrsaShell.Shell.ThemeBrushes.Border;
+
+	public IBrush CellBorderBrush => ShowStatusBorder ? ValueForegroundBrush : Brushes.Transparent;
 
 	public Thickness CellBorderThickness => new Thickness(ShowStatusBorder ? 1 : 0);
 
@@ -333,6 +345,17 @@ public sealed class PrescriptionCellModel : ClientModelBase
 	{
 		Item = item;
 		Column = column;
+		Column.PropertyChanged += (s, e) =>
+		{
+			if (e.PropertyName == nameof(PrescriptionColumnModel.Width))
+			{
+				OnPropertyChanged(nameof(Width));
+			}
+			else if (e.PropertyName == nameof(PrescriptionColumnModel.FieldLabel))
+			{
+				OnPropertyChanged(nameof(FieldLabel));
+			}
+		};
 	}
 
 	public void NotifyItemChanged()

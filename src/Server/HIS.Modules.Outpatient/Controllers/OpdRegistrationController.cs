@@ -106,6 +106,7 @@ public class OpdRegistrationController : ControllerBase
         public string? PaymentChannel { get; set; }
         public long? PaidAtMs { get; set; }
         public int Status { get; set; }
+        public int CheckinStatus { get; set; } = 1;
         public int? VisitStatus { get; set; }
         public string? VisitId { get; set; }
         public string? PaymentId { get; set; }
@@ -116,6 +117,15 @@ public class OpdRegistrationController : ControllerBase
     public sealed record SettleRegistrationRequestDto(
         string PatientId,
         string ScheduleId,
+        string PaymentChannel,
+        string? RequestKey = null);
+
+    public sealed record ReserveRegistrationRequestDto(
+        string PatientId,
+        string ScheduleId,
+        string? RequestKey = null);
+
+    public sealed record CheckinRegistrationRequestDto(
         string PaymentChannel,
         string? RequestKey = null);
 
@@ -265,7 +275,8 @@ public class OpdRegistrationController : ControllerBase
     [HttpGet("registrations")]
     public async Task<ApiResponse<IReadOnlyList<RegistrationListItem>>> GetRegistrations(
         [FromQuery] string? date = null,
-        [FromQuery] string? keyword = null)
+        [FromQuery] string? keyword = null,
+        [FromQuery] bool includeReserved = false)
     {
         if (!CanOperateRegistration())
             return ApiResponse<IReadOnlyList<RegistrationListItem>>.Fail(403, "仅收费员或系统管理员可以查询门诊挂号记录");
@@ -298,6 +309,7 @@ public class OpdRegistrationController : ControllerBase
                    a.payment_channel AS PaymentChannel,
                    a.paid_at_ms AS PaidAtMs,
                    a.status AS Status,
+                   a.checkin_status AS CheckinStatus,
                    v.status AS VisitStatus,
                    a.visit_id AS VisitId,
                    a.payment_id AS PaymentId,
@@ -310,14 +322,286 @@ public class OpdRegistrationController : ControllerBase
             LEFT JOIN sys_users u ON u.id = s.doctor_id
             LEFT JOIN opd_visits v ON v.id = a.visit_id
             WHERE s.schedule_date_int = @DateInt
-              AND a.status <> 0
+              AND (@IncludeReserved = 1 OR a.status <> 0)
               AND (@Search = '' OR p.full_name LIKE @Like
                    OR p.medical_record_no LIKE @Like OR a.appointment_no LIKE @Like)
-            ORDER BY a.paid_at_ms DESC, a.created_at_ms DESC
+            ORDER BY COALESCE(a.paid_at_ms, a.created_at_ms) DESC, a.created_at_ms DESC
             LIMIT 300
             """,
-            new { DateInt = dateInt, Search = search, Like = "%" + search + "%" });
+            new { DateInt = dateInt, IncludeReserved = includeReserved ? 1 : 0, Search = search, Like = "%" + search + "%" });
         return ApiResponse<IReadOnlyList<RegistrationListItem>>.Success(registrations.ToList());
+    }
+
+    [HttpGet("registrations/reserved")]
+    public async Task<ApiResponse<IReadOnlyList<RegistrationListItem>>> GetReservedAppointments(
+        [FromQuery] string? date = null,
+        [FromQuery] string? keyword = null)
+    {
+        if (!CanOperateRegistration())
+            return ApiResponse<IReadOnlyList<RegistrationListItem>>.Fail(403, "仅收费员或系统管理员可以查询预约待取号记录");
+        var search = keyword?.Trim() ?? string.Empty;
+        int? dateInt = null;
+        if (!string.IsNullOrWhiteSpace(date) && TryParseDateInt(date, out var parsed))
+            dateInt = parsed;
+
+        using var connection = _connectionFactory.CreateConnection();
+        var list = await connection.QueryAsync<RegistrationListItem>(
+            """
+            SELECT a.id AS Id,
+                   a.appointment_no AS AppointmentNo,
+                   a.patient_id AS PatientId,
+                   COALESCE(p.full_name, a.patient_id) AS PatientName,
+                   COALESCE(p.medical_record_no, '') AS MedicalRecordNo,
+                   COALESCE(p.gender_code, '') AS GenderCode,
+                   p.phone_masked AS PhoneMasked,
+                   a.schedule_id AS ScheduleId,
+                   COALESCE(s.schedule_date_int, 0) AS ScheduleDateInt,
+                   COALESCE(d.dept_name, s.opd_dept_id, '') AS DeptName,
+                   COALESCE(u.display_name, s.doctor_id, '') AS DoctorName,
+                   COALESCE(s.reg_level_code, '') AS RegLevelCode,
+                   COALESCE(s.slot_period_code, '') AS SlotPeriodCode,
+                   COALESCE(s.starts_at_ms, 0) AS StartsAtMs,
+                   a.queue_no AS QueueNo,
+                   a.paid_amount AS PaidAmount,
+                   a.payment_channel AS PaymentChannel,
+                   a.paid_at_ms AS PaidAtMs,
+                   a.status AS Status,
+                   a.checkin_status AS CheckinStatus,
+                   v.status AS VisitStatus,
+                   a.visit_id AS VisitId,
+                   a.payment_id AS PaymentId,
+                   a.refund_id AS RefundId,
+                   a.refund_reason AS RefundReason
+            FROM opd_appointments a
+            LEFT JOIN pat_patients p ON p.id = a.patient_id
+            LEFT JOIN opd_schedule_slots s ON s.id = a.schedule_id
+            LEFT JOIN sys_departments d ON d.id = s.opd_dept_id
+            LEFT JOIN sys_users u ON u.id = s.doctor_id
+            LEFT JOIN opd_visits v ON v.id = a.visit_id
+            WHERE a.status = 0 AND a.checkin_status = 0
+              AND (@DateInt IS NULL OR s.schedule_date_int = @DateInt)
+              AND (@Search = '' OR p.full_name LIKE @Like
+                   OR p.medical_record_no LIKE @Like OR a.appointment_no LIKE @Like)
+            ORDER BY COALESCE(s.starts_at_ms, a.created_at_ms) ASC
+            LIMIT 200
+            """,
+            new { DateInt = dateInt, Search = search, Like = "%" + search + "%" });
+        return ApiResponse<IReadOnlyList<RegistrationListItem>>.Success(list.ToList());
+    }
+
+    [HttpPost("registrations/reserve")]
+    public async Task<ApiResponse<RegistrationListItem>> ReserveRegistration(
+        [FromBody] ReserveRegistrationRequestDto request)
+    {
+        if (!CanOperateRegistration())
+            return ApiResponse<RegistrationListItem>.Fail(403, "仅收费员或系统管理员可以办理预约锁号");
+        if (request == null || string.IsNullOrWhiteSpace(request.PatientId) || string.IsNullOrWhiteSpace(request.ScheduleId))
+            return ApiResponse<RegistrationListItem>.Fail(400, "请选择患者和预约号源");
+
+        var requestKey = string.IsNullOrWhiteSpace(request.RequestKey) ? null : request.RequestKey.Trim();
+        try
+        {
+            var result = await _connectionFactory.ExecuteInTransactionAsync(async ct =>
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                var transaction = _connectionFactory.CurrentTransaction;
+
+                if (requestKey != null)
+                {
+                    var original = await FindRegistrationAsync(connection, transaction, null, requestKey, ct);
+                    if (original != null)
+                        return RegistrationSettlementResult.Success(original, true);
+                }
+
+                var patient = await connection.QuerySingleOrDefaultAsync<PatientSearchItem>(
+                    new CommandDefinition(
+                        """
+                        SELECT id AS Id, medical_record_no AS MedicalRecordNo, full_name AS FullName,
+                               gender_code AS GenderCode, phone_masked AS PhoneMasked, is_temp_emergency AS IsTempEmergency
+                        FROM pat_patients
+                        WHERE id = @PatientId AND is_active = 1 AND merged_to_patient_id IS NULL
+                        """,
+                        new { PatientId = request.PatientId.Trim() }, transaction, cancellationToken: ct));
+                if (patient == null)
+                    return RegistrationSettlementResult.Fail(404, "患者不存在、已停用或已合并");
+
+                var slot = await GetSlotAsync(connection, transaction, request.ScheduleId.Trim(), ct);
+                if (slot == null)
+                    return RegistrationSettlementResult.Fail(404, "号源不存在");
+                if (slot.SlotStatus != 1 || slot.ReservedCount >= slot.TotalCapacity)
+                    return RegistrationSettlementResult.Fail(409, "该时段号源已约满或已停诊");
+
+                var activeReg = await connection.QuerySingleOrDefaultAsync<string>(
+                    new CommandDefinition(
+                        "SELECT id FROM opd_appointments WHERE patient_id = @PatientId AND schedule_id = @ScheduleId AND active_unique_token = @ActiveToken LIMIT 1",
+                        new { PatientId = patient.Id, ScheduleId = slot.Id, ActiveToken = ActiveRegistrationToken },
+                        transaction, cancellationToken: ct));
+                if (activeReg != null)
+                    return RegistrationSettlementResult.Fail(409, "该患者已预约或已挂该时段号源");
+
+                var nowMs = SystemTime.UtcNowMs;
+                var operatorId = CurrentOperatorId;
+                int updated = await connection.ExecuteAsync(new CommandDefinition(
+                    """
+                    UPDATE opd_schedule_slots
+                    SET reserved_count = reserved_count + 1,
+                        slot_status = CASE WHEN reserved_count + 1 >= total_capacity THEN 2 ELSE 1 END,
+                        updated_at_ms = @Now, updated_by = @Op, version_no = version_no + 1
+                    WHERE id = @ScheduleId AND slot_status = 1 AND reserved_count < total_capacity
+                    """,
+                    new { ScheduleId = slot.Id, Now = nowMs, Op = operatorId }, transaction, cancellationToken: ct));
+                if (updated != 1)
+                    return RegistrationSettlementResult.Fail(409, "号源已被占用，请刷新后重试");
+
+                int queueNo = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+                    "SELECT COALESCE(MAX(queue_no), 0) + 1 FROM opd_appointments WHERE schedule_id = @ScheduleId AND status <> 4",
+                    new { ScheduleId = slot.Id }, transaction, cancellationToken: ct));
+
+                var appointment = new OpdAppointment
+                {
+                    AppointmentNo = "APT" + DateTime.UtcNow.ToString("yyMMddHHmmssfff") + Guid.NewGuid().ToString("N")[..3].ToUpperInvariant(),
+                    RequestKey = requestKey,
+                    PatientId = patient.Id,
+                    ScheduleId = slot.Id,
+                    ActiveUniqueToken = ActiveRegistrationToken,
+                    QueueNo = queueNo,
+                    Status = 0,
+                    CheckinStatus = 0,
+                    LockExpiresAtMs = Math.Max(nowMs + 3_600_000L, slot.EndsAtMs),
+                    PaidAmount = 0m,
+                    CreatedBy = operatorId,
+                    UpdatedBy = operatorId
+                };
+                await _appointmentRepo.InsertAsync(appointment, ct);
+
+                var item = await FindRegistrationAsync(connection, transaction, appointment.Id, null, ct);
+                return RegistrationSettlementResult.Success(item ?? throw new InvalidOperationException("预约写入失败"), false);
+            });
+
+            if (!result.IsSuccess || result.Item == null)
+                return ApiResponse<RegistrationListItem>.Fail(result.Code, result.Message);
+
+            return ApiResponse<RegistrationListItem>.Success(result.Item,
+                $"预约锁号成功：{result.Item.AppointmentNo}（排队序号 {result.Item.QueueNo}），请提示患者到院后在窗口或自助机签到取号缴费");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<RegistrationListItem>.Fail(500, "预约锁号失败：" + ex.Message);
+        }
+    }
+
+    [HttpPost("registrations/{appointmentId}/checkin")]
+    public async Task<ApiResponse<RegistrationListItem>> CheckinReservedAppointment(
+        string appointmentId,
+        [FromBody] CheckinRegistrationRequestDto request)
+    {
+        if (!CanOperateRegistration())
+            return ApiResponse<RegistrationListItem>.Fail(403, "仅收费员或系统管理员可以办理到院签到取号");
+        if (request == null)
+            return ApiResponse<RegistrationListItem>.Fail(400, "请选择支付渠道");
+
+        var channel = request.PaymentChannel?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (!PaymentChannels.Contains(channel))
+            return ApiResponse<RegistrationListItem>.Fail(400, "支付渠道无效，请选择现金、微信、支付宝或医保");
+
+        var requestKey = string.IsNullOrWhiteSpace(request.RequestKey) ? null : request.RequestKey.Trim();
+        try
+        {
+            var result = await _connectionFactory.ExecuteInTransactionAsync(async ct =>
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                var transaction = _connectionFactory.CurrentTransaction;
+
+                var appointment = await connection.QuerySingleOrDefaultAsync<OpdAppointment>(
+                    new CommandDefinition("SELECT * FROM opd_appointments WHERE id = @Id", new { Id = appointmentId },
+                    transaction, cancellationToken: ct));
+                if (appointment == null)
+                    return RegistrationSettlementResult.Fail(404, "预约记录不存在");
+                if (appointment.Status == 1 && appointment.CheckinStatus == 1)
+                {
+                    var already = await FindRegistrationAsync(connection, transaction, appointment.Id, null, ct);
+                    return RegistrationSettlementResult.Success(already!, true);
+                }
+                if (appointment.Status != 0 || appointment.CheckinStatus != 0)
+                    return RegistrationSettlementResult.Fail(409, "仅待签到锁号记录允许办理到院取号");
+
+                var slot = await GetSlotAsync(connection, transaction, appointment.ScheduleId, ct);
+                if (slot == null)
+                    return RegistrationSettlementResult.Fail(404, "对应排班号源不存在");
+
+                long nowMs = SystemTime.UtcNowMs;
+                string operatorId = CurrentOperatorId;
+                var payment = await _settlement.CreateRegistrationPaymentAsync(
+                    new RegistrationPaymentRequestDto(
+                        RequestKey: requestKey,
+                        PatientId: appointment.PatientId,
+                        AppointmentId: appointment.Id,
+                        TotalAmount: slot.RegistrationFee,
+                        PaymentChannel: channel,
+                        OrderDeptId: slot.OpdDeptId,
+                        AppointmentNo: appointment.AppointmentNo,
+                        OperatorId: operatorId,
+                        PaidAtMs: nowMs),
+                    ct);
+
+                var visit = new OpdVisit
+                {
+                    VisitNo = "VIS" + DateTime.UtcNow.ToString("yyMMddHHmmssfff") + Guid.NewGuid().ToString("N")[..3].ToUpperInvariant(),
+                    CampusId = slot.CampusId,
+                    OpdDeptId = slot.OpdDeptId,
+                    ClinicRoomId = slot.ClinicRoomId,
+                    PatientId = appointment.PatientId,
+                    ScheduleId = slot.Id,
+                    DoctorId = slot.DoctorId,
+                    Status = 1,
+                    CreatedBy = operatorId,
+                    UpdatedBy = operatorId
+                };
+                await _visitRepo.InsertAsync(visit, ct);
+
+                await _queueRepo.InsertAsync(new OpdTriageQueue
+                {
+                    VisitId = visit.Id,
+                    OpdDeptId = visit.OpdDeptId,
+                    ClinicRoomId = visit.ClinicRoomId,
+                    PriorityScore = Math.Max(10, 200 - appointment.QueueNo),
+                    QueueStatus = 1,
+                    CheckinAtMs = nowMs,
+                    CreatedBy = operatorId,
+                    UpdatedBy = operatorId
+                }, ct);
+
+                appointment.Status = 1;
+                appointment.CheckinStatus = 1;
+                appointment.PaymentId = payment.PaymentId;
+                appointment.PaidAmount = slot.RegistrationFee;
+                appointment.PaymentChannel = channel;
+                appointment.PaidAtMs = nowMs;
+                appointment.VisitId = visit.Id;
+                appointment.UpdatedAtMs = nowMs;
+                appointment.UpdatedBy = operatorId;
+                await _appointmentRepo.UpdateAsync(appointment, ct);
+
+                var item = await FindRegistrationAsync(connection, transaction, appointment.Id, null, ct);
+                return RegistrationSettlementResult.Success(item ?? throw new InvalidOperationException("签到取号读取失败"), false);
+            });
+
+            if (!result.IsSuccess || result.Item == null)
+                return ApiResponse<RegistrationListItem>.Fail(result.Code, result.Message);
+
+            if (!result.IsIdempotentHit && _auditTrail != null)
+            {
+                await _auditTrail.RecordAuditAsync("OPD_APPOINTMENT_CHECKIN", nameof(OpdAppointment), result.Item.Id,
+                    $"预约到院取号缴费 {result.Item.AppointmentNo}，患者 {result.Item.PatientName}，金额 ¥{result.Item.PaidAmount:0.00}",
+                    CurrentOperatorId, _userSession?.DisplayName, _userSession?.ActiveDeptId);
+            }
+
+            return ApiResponse<RegistrationListItem>.Success(result.Item, "预约到院取号缴费成功，已进入诊室候诊队列");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<RegistrationListItem>.Fail(500, "到院取号签到失败：" + ex.Message);
+        }
     }
 
     [HttpPost("registrations/settle")]
@@ -825,7 +1109,8 @@ public class OpdRegistrationController : ControllerBase
                    COALESCE(s.starts_at_ms, 0) AS StartsAtMs,
                    a.queue_no AS QueueNo, a.paid_amount AS PaidAmount,
                    a.payment_channel AS PaymentChannel, a.paid_at_ms AS PaidAtMs,
-                   a.status AS Status, v.status AS VisitStatus, a.visit_id AS VisitId,
+                   a.status AS Status, a.checkin_status AS CheckinStatus,
+                   v.status AS VisitStatus, a.visit_id AS VisitId,
                    a.payment_id AS PaymentId, a.refund_id AS RefundId,
                    a.refund_reason AS RefundReason
             FROM opd_appointments a

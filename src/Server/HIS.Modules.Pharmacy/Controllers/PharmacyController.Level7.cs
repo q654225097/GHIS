@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
+using HIS.BuildingBlocks.Security;
 using HIS.Contracts;
 using HIS.Modules.Pharmacy.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -62,9 +63,11 @@ public partial class PharmacyController
         string SourceOrgCode,
         string SourceOrgName,
         string PatientId,
-        object RxPayload
+        object RxPayload,
+        string? CaSignature = null
     );
 
+    [RequireRole(RoleCode.Pharmacist, "PHARMACY", "PHM", RoleCode.Admin)]
     [HttpPost("comments/sample")]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<object>>>> SamplePrescriptionsForReview(
         [FromQuery] string sourceType,
@@ -74,13 +77,14 @@ public partial class PharmacyController
     {
         var factory = connFactory ?? _connFactory;
         using var conn = factory.CreateConnection();
-        string table = sourceType.Equals("IPD", StringComparison.OrdinalIgnoreCase)
+        string table = string.Equals(sourceType, "IPD", StringComparison.OrdinalIgnoreCase)
             ? "ord_medical_orders"
             : "opd_prescriptions";
+        int clampedLimit = Math.Clamp(sampleCount, 1, 200);
 
         var list = await conn.QueryAsync(
             $"SELECT id, created_at_ms, patient_id FROM {table} ORDER BY RANDOM() LIMIT @Limit",
-            new { Limit = sampleCount });
+            new { Limit = clampedLimit });
 
         return Ok(ApiResponse<IReadOnlyList<object>>.Success(list.ToList(), "随机抽样待点评处方成功"));
     }
@@ -272,7 +276,7 @@ public partial class PharmacyController
             SourceOrgName = req.SourceOrgName,
             PatientId = req.PatientId,
             RxPayloadJson = JsonSerializer.Serialize(req.RxPayload),
-            CaSignatureVerified = 1,
+            CaSignatureVerified = (short)(!string.IsNullOrWhiteSpace(req.CaSignature) ? 1 : 0),
             DispenseStatus = "PENDING",
             CreatedAtMs = now,
             CreatedBy = "HIE_IMPORT",

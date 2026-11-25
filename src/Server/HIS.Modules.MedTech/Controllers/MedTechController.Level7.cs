@@ -535,66 +535,39 @@ public partial class MedTechController
     public sealed record SurgeryScanIdentifyDto(string PatientWristband, string OperatingRoomTag);
 
     [HttpPost("surgeries/{id}/scan-identify")]
-    public async Task<ApiResponse<dynamic>> ScanIdentifySurgery(string id, [FromBody] SurgeryScanIdentifyDto req)
+    public async Task<ApiResponse<dynamic>> ScanIdentifySurgery(string id, [FromBody] SurgeryScanIdentifyDto req, CancellationToken ct)
     {
-        await using var conn = _connFactory.CreateConnection();
-        var surg = await conn.QuerySingleOrDefaultAsync<dynamic>(
-            "SELECT * FROM mte_surgery_schedules WHERE id = @Id", new { Id = id });
-
-        if (surg == null)
+        var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
+        if (schedule == null || !CanReadSurgery(schedule))
             return ApiResponse<dynamic>.Fail(404, "手术排班记录不存在");
 
-        if (!string.Equals((string)surg.patient_id, req.PatientWristband.Trim(), StringComparison.OrdinalIgnoreCase)
-            && !req.PatientWristband.Contains((string)surg.patient_id, StringComparison.OrdinalIgnoreCase))
-        {
-            return ApiResponse<dynamic>.Fail(409, "手术患者腕带核验失败：患者条码与手术排班患者不一致，严禁入室！");
-        }
-
-        return ApiResponse<dynamic>.Success(new
-        {
-            SurgeryId = id,
-            PatientVerified = true,
-            RoomTagVerified = true,
-            CheckTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-        }, "术前双重身份扫码核验一致");
+        return ApiResponse<dynamic>.Fail(409, "未配置腕带及手术间条码来源；请按实际患者及手术间信息逐项核查");
     }
 
     [HttpGet("surgeries/{id}/high-risk-check")]
-    public async Task<ApiResponse<dynamic>> GetSurgeryHighRiskCheck(string id)
+    public async Task<ApiResponse<dynamic>> GetSurgeryHighRiskCheck(string id, CancellationToken ct)
     {
-        await using var conn = _connFactory.CreateConnection();
-        var surg = await conn.QuerySingleOrDefaultAsync<dynamic>(
-            "SELECT * FROM mte_surgery_schedules WHERE id = @Id", new { Id = id });
-
-        return ApiResponse<dynamic>.Success(new
-        {
-            SurgeryId = id,
-            AsaLevel = 2,
-            HasAnticoagulantUse = false,
-            AirwayEvaluation = "MALLAMPATI_CLASS_II",
-            AllergyAlerts = "青霉素过敏",
-            FastingHours = 10,
-            CanProceedToAnesthesia = true
-        }, "高风险术前评估就绪");
+        var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
+        return schedule == null || !CanReadSurgery(schedule)
+            ? ApiResponse<dynamic>.Fail(404, "手术排班记录不存在")
+            : ApiResponse<dynamic>.Fail(409, "无经确认的术前评估汇总，请查阅患者实际评估记录");
     }
 
     public sealed record SurgeryMilestoneDto(string MilestoneCode, string MilestoneName, string? Note = null);
 
     [HttpPost("surgeries/{id}/milestones")]
-    public async Task<ApiResponse<dynamic>> RecordSurgeryMilestone(string id, [FromBody] SurgeryMilestoneDto req)
+    public async Task<ApiResponse<dynamic>> RecordSurgeryMilestone(string id, [FromBody] SurgeryMilestoneDto req, CancellationToken ct)
     {
-        await using var conn = _connFactory.CreateConnection();
-        var surg = await conn.QuerySingleOrDefaultAsync<dynamic>(
-            "SELECT * FROM mte_surgery_schedules WHERE id = @Id", new { Id = id });
-        if (surg != null && (req.MilestoneCode == "SURGERY_START" || req.MilestoneCode == "ANESTHESIA_START"))
-        {
-            if (!string.IsNullOrWhiteSpace((string?)surg.approval_status) &&
-                !string.Equals((string?)surg.approval_status, "APPROVED", StringComparison.OrdinalIgnoreCase))
-            {
-                return ApiResponse<dynamic>.Fail(409, $"该手术排班尚未审批通过(当前状态: {surg.approval_status})，禁止开台执行！");
-            }
-        }
+        string code = req.MilestoneCode.Trim().ToUpperInvariant();
+        var schedule = await _surgeryScheduleRepo.GetByIdAsync(id, ct);
+        if (schedule == null || !CanReadSurgery(schedule))
+            return ApiResponse<dynamic>.Fail(404, "手术排班记录不存在");
+        if (CurrentSurgeryDuty(SurgeryTeam(schedule)) == null)
+            return ApiResponse<dynamic>.Fail(403, "须由本台手术参与人记录");
+        if (code is "SURGERY_START" or "ANESTHESIA_START" or "SURGERY_END" or "ANESTHESIA_END")
+            return ApiResponse<dynamic>.Fail(409, "开台、结束及麻醉起止时间由对应正式操作记录");
 
+        using var conn = _connFactory.CreateConnection();
         long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         string milestoneId = Guid.NewGuid().ToString();
 
@@ -605,10 +578,10 @@ public partial class MedTechController
             {
                 Id = milestoneId,
                 SurgId = id,
-                Code = req.MilestoneCode,
+                Code = code,
                 Name = req.MilestoneName,
                 Now = nowMs,
-                User = _session?.UserId ?? "OR_NURSE",
+                User = CurrentUserId,
                 Note = req.Note
             });
 
@@ -625,51 +598,8 @@ public partial class MedTechController
     );
 
     [HttpPost("surgeries/{id}/item-counts")]
-    public async Task<ApiResponse<dynamic>> RecordItemCounts(string id, [FromBody] ItemCountsDto req)
-    {
-        await using var conn = _connFactory.CreateConnection();
-        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        string countId = Guid.NewGuid().ToString();
-
-        // Check if unbalanced compared to pre-incision
-        if (req.CountStage != "PRE_INCISION")
-        {
-            var pre = await conn.QuerySingleOrDefaultAsync<dynamic>(@"
-                SELECT * FROM mte_surgery_item_counts WHERE surgery_id = @Id AND count_stage = 'PRE_INCISION' ORDER BY created_at_ms DESC LIMIT 1",
-                new { Id = id });
-
-            if (pre != null)
-            {
-                int preGauze = Convert.ToInt32(pre.gauze_count ?? 0);
-                int preNeedle = Convert.ToInt32(pre.needle_count ?? 0);
-                int preInst = Convert.ToInt32(pre.instrument_count ?? 0);
-
-                if (preGauze != req.GauzeCount || preNeedle != req.NeedleCount || preInst != req.InstrumentCount)
-                {
-                    return ApiResponse<dynamic>.Fail(409,
-                        $"手术清点严重失衡拦截：纱布(初始{preGauze} vs 当前{req.GauzeCount})、缝针(初始{preNeedle} vs 当前{req.NeedleCount})、器械(初始{preInst} vs 当前{req.InstrumentCount})数目不符，严禁缝合关腹！");
-                }
-            }
-        }
-
-        await conn.ExecuteAsync(@"
-            INSERT INTO mte_surgery_item_counts (id, surgery_id, count_stage, gauze_count, needle_count, instrument_count, is_balanced, scrub_nurse_id, circulating_nurse_id, schema_version, created_at_ms, updated_at_ms, version_no)
-            VALUES (@Id, @SurgId, @Stage, @Gauze, @Needle, @Inst, 1, @Scrub, @Circ, 1, @Now, @Now, 1)",
-            new
-            {
-                Id = countId,
-                SurgId = id,
-                Stage = req.CountStage,
-                Gauze = req.GauzeCount,
-                Needle = req.NeedleCount,
-                Inst = req.InstrumentCount,
-                Scrub = req.ScrubNurseId,
-                Circ = req.CirculatingNurseId,
-                Now = nowMs
-            });
-
-        return ApiResponse<dynamic>.Success(new { Id = countId, req.CountStage, IsBalanced = true }, "器械纱布清点核对一致");
-    }
+    public ApiResponse<dynamic> RecordItemCounts(string id, [FromBody] ItemCountsDto req) =>
+        ApiResponse<dynamic>.Fail(409, "清点须由巡回护士和器械护士在当前阶段分别录入，不能代签");
 
     public sealed record IngestTelemetryDto(
         int HeartRateBpm,
@@ -810,5 +740,249 @@ public partial class MedTechController
             TargetOrg = req.TargetOrgName,
             Status = "SENT_TO_HIE_GATEWAY"
         }, "跨机构医联体外送检验/检查申请单已成功发送至 HIE 网关");
+    }
+
+    // ==========================================
+    // 7. Specimen Courier Chain & DICOM Study Query
+    // ==========================================
+
+    public sealed record SpecimenHandoverDto(
+        string Id,
+        string HandoverNo,
+        string RequestId,
+        string PatientId,
+        string? WardId,
+        string SampleBarcode,
+        string DrawnByNurseId,
+        long DrawnAtMs,
+        string? CourierId,
+        long? DispatchedAtMs,
+        string? LabReceiverId,
+        long? ReceivedAtMs,
+        string Status,
+        string? RejectionReason,
+        string? Notes);
+
+    public sealed record SpecimenDrawRequestDto(
+        string RequestId,
+        string PatientId,
+        string SampleBarcode,
+        string? WardId = null,
+        string? Notes = null);
+
+    public sealed record SpecimenDispatchRequestDto(
+        string CourierId,
+        string? Notes = null);
+
+    public sealed record SpecimenRejectRequestDto(
+        string Reason);
+
+    public sealed class DicomStudySummaryDto
+    {
+        public string Id { get; set; } = string.Empty;
+        public string StudyInstanceUid { get; set; } = string.Empty;
+        public string AccessionNo { get; set; } = string.Empty;
+        public string PatientId { get; set; } = string.Empty;
+        public string Modality { get; set; } = string.Empty;
+        public int SeriesCount { get; set; }
+        public int InstanceCount { get; set; }
+        public long StudyTimeMs { get; set; }
+    }
+
+    [HttpGet("specimens")]
+    public async Task<ApiResponse<IReadOnlyList<SpecimenHandoverDto>>> GetSpecimens(
+        [FromQuery] string? status = null,
+        [FromQuery] string? requestId = null,
+        [FromQuery] string? patientId = null)
+    {
+        await using var conn = _connFactory.CreateConnection();
+        var rows = (await conn.QueryAsync<SpecimenHandoverDto>(@"
+SELECT id AS Id, handover_no AS HandoverNo, request_id AS RequestId, patient_id AS PatientId,
+       ward_id AS WardId, sample_barcode AS SampleBarcode, drawn_by_nurse_id AS DrawnByNurseId,
+       drawn_at_ms AS DrawnAtMs, courier_id AS CourierId, dispatched_at_ms AS DispatchedAtMs,
+       lab_receiver_id AS LabReceiverId, received_at_ms AS ReceivedAtMs, status AS Status,
+       rejection_reason AS RejectionReason, notes AS Notes
+FROM mtc_specimen_handovers
+WHERE (@Status IS NULL OR status = @Status)
+  AND (@RequestId IS NULL OR request_id = @RequestId)
+  AND (@PatId IS NULL OR patient_id = @PatId)
+ORDER BY drawn_at_ms DESC LIMIT 200",
+            new { Status = status, RequestId = requestId, PatId = patientId })).ToList();
+        return ApiResponse<IReadOnlyList<SpecimenHandoverDto>>.Success(rows);
+    }
+
+    [HttpPost("specimens/draw")]
+    public async Task<ApiResponse<SpecimenHandoverDto>> DrawSpecimen([FromBody] SpecimenDrawRequestDto req)
+    {
+        if (req == null || string.IsNullOrWhiteSpace(req.RequestId) || string.IsNullOrWhiteSpace(req.SampleBarcode))
+            return ApiResponse<SpecimenHandoverDto>.Fail(400, "申请单号与标本条码不能为空");
+
+        string reqKey = req.RequestId.Trim();
+        await using var conn = _connFactory.CreateConnection();
+        var serviceReq = await conn.QuerySingleOrDefaultAsync<MtcServiceRequest>(
+            "SELECT * FROM mtc_service_requests WHERE id = @K OR request_no = @K LIMIT 1",
+            new { K = reqKey });
+
+        string resolvedReqId = serviceReq?.Id ?? reqKey;
+        string patientId = !string.IsNullOrWhiteSpace(req.PatientId)
+            ? req.PatientId.Trim()
+            : (serviceReq?.PatientId ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(patientId))
+            return ApiResponse<SpecimenHandoverDto>.Fail(400, "患者编号不能为空");
+
+        string nurseId = _session?.UserId ?? "SYSTEM";
+        long now = SystemTime.UtcNowMs;
+        string id = Guid.NewGuid().ToString("D");
+        string handoverNo = $"SPC-{DateTime.UtcNow:yyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..3].ToUpperInvariant()}";
+
+        await conn.ExecuteAsync(@"
+INSERT INTO mtc_specimen_handovers
+    (id, handover_no, request_id, patient_id, ward_id, sample_barcode, drawn_by_nurse_id, drawn_at_ms,
+     status, notes, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+VALUES
+    (@Id, @No, @ReqId, @PatId, @WardId, @Barcode, @NurseId, @Now,
+     'DRAWN', @Notes, 1, @Now, @NurseId, @Now, @NurseId, 1)",
+            new
+            {
+                Id = id,
+                No = handoverNo,
+                ReqId = resolvedReqId,
+                PatId = patientId,
+                WardId = req.WardId?.Trim() ?? serviceReq?.OrderWardId,
+                Barcode = req.SampleBarcode.Trim(),
+                NurseId = nurseId,
+                Now = now,
+                Notes = req.Notes?.Trim()
+            });
+
+        var saved = await conn.QuerySingleAsync<SpecimenHandoverDto>(@"
+SELECT id AS Id, handover_no AS HandoverNo, request_id AS RequestId, patient_id AS PatientId,
+       ward_id AS WardId, sample_barcode AS SampleBarcode, drawn_by_nurse_id AS DrawnByNurseId,
+       drawn_at_ms AS DrawnAtMs, courier_id AS CourierId, dispatched_at_ms AS DispatchedAtMs,
+       lab_receiver_id AS LabReceiverId, received_at_ms AS ReceivedAtMs, status AS Status,
+       rejection_reason AS RejectionReason, notes AS Notes
+FROM mtc_specimen_handovers WHERE id = @Id", new { Id = id });
+        return ApiResponse<SpecimenHandoverDto>.Success(saved, $"标本采集条码 [{req.SampleBarcode.Trim()}] 已登记待转运");
+    }
+
+    [HttpPost("specimens/{id}/dispatch")]
+    public async Task<ApiResponse<SpecimenHandoverDto>> DispatchSpecimen(string id, [FromBody] SpecimenDispatchRequestDto req)
+    {
+        if (req == null || string.IsNullOrWhiteSpace(req.CourierId))
+            return ApiResponse<SpecimenHandoverDto>.Fail(400, "物流转运员姓名/工号不能为空");
+
+        long now = SystemTime.UtcNowMs;
+        string op = _session?.UserId ?? "SYSTEM";
+        await using var conn = _connFactory.CreateConnection();
+        int rows = await conn.ExecuteAsync(@"
+UPDATE mtc_specimen_handovers
+SET courier_id = @CourierId, dispatched_at_ms = @Now, status = 'IN_TRANSIT',
+    notes = COALESCE(@Notes, notes), updated_at_ms = @Now, updated_by = @Op, version_no = version_no + 1
+WHERE (id = @Id OR handover_no = @Id OR sample_barcode = @Id) AND status = 'DRAWN'",
+            new { Id = id.Trim(), CourierId = req.CourierId.Trim(), Now = now, Notes = req.Notes?.Trim(), Op = op });
+
+        if (rows == 0)
+            return ApiResponse<SpecimenHandoverDto>.Fail(409, "标本记录不存在或当前状态不允许出发转运");
+
+        var updated = await conn.QuerySingleAsync<SpecimenHandoverDto>(@"
+SELECT id AS Id, handover_no AS HandoverNo, request_id AS RequestId, patient_id AS PatientId,
+       ward_id AS WardId, sample_barcode AS SampleBarcode, drawn_by_nurse_id AS DrawnByNurseId,
+       drawn_at_ms AS DrawnAtMs, courier_id AS CourierId, dispatched_at_ms AS DispatchedAtMs,
+       lab_receiver_id AS LabReceiverId, received_at_ms AS ReceivedAtMs, status AS Status,
+       rejection_reason AS RejectionReason, notes AS Notes
+FROM mtc_specimen_handovers WHERE id = @Id OR handover_no = @Id OR sample_barcode = @Id LIMIT 1",
+            new { Id = id.Trim() });
+        return ApiResponse<SpecimenHandoverDto>.Success(updated, $"标本 [{updated.SampleBarcode}] 已由转运员 [{req.CourierId.Trim()}] 扫码发出");
+    }
+
+    [HttpPost("specimens/{id}/receive")]
+    public async Task<ApiResponse<SpecimenHandoverDto>> ReceiveSpecimen(string id)
+    {
+        long now = SystemTime.UtcNowMs;
+        string receiverId = _session?.UserId ?? "LAB_TECH";
+        await using var conn = _connFactory.CreateConnection();
+        SpecimenHandoverDto? updated = null;
+        int rows = 0;
+        await _connFactory.ExecuteInTransactionAsync(async ct =>
+        {
+            await using var txConn = _connFactory.CreateConnection();
+            var tx = _connFactory.CurrentTransaction;
+            rows = await txConn.ExecuteAsync(new CommandDefinition(@"
+UPDATE mtc_specimen_handovers
+SET lab_receiver_id = @ReceiverId, received_at_ms = @Now, status = 'RECEIVED',
+    updated_at_ms = @Now, updated_by = @ReceiverId, version_no = version_no + 1
+WHERE (id = @Id OR handover_no = @Id OR sample_barcode = @Id) AND status IN ('DRAWN', 'IN_TRANSIT')",
+                new { Id = id.Trim(), ReceiverId = receiverId, Now = now }, tx, cancellationToken: ct));
+
+            if (rows == 0)
+                return 0;
+
+            updated = await txConn.QuerySingleAsync<SpecimenHandoverDto>(new CommandDefinition(@"
+SELECT id AS Id, handover_no AS HandoverNo, request_id AS RequestId, patient_id AS PatientId,
+       ward_id AS WardId, sample_barcode AS SampleBarcode, drawn_by_nurse_id AS DrawnByNurseId,
+       drawn_at_ms AS DrawnAtMs, courier_id AS CourierId, dispatched_at_ms AS DispatchedAtMs,
+       lab_receiver_id AS LabReceiverId, received_at_ms AS ReceivedAtMs, status AS Status,
+       rejection_reason AS RejectionReason, notes AS Notes
+FROM mtc_specimen_handovers WHERE id = @Id OR handover_no = @Id OR sample_barcode = @Id LIMIT 1",
+                new { Id = id.Trim() }, tx, cancellationToken: ct));
+
+            await txConn.ExecuteAsync(new CommandDefinition(
+                "UPDATE mtc_service_requests SET status = CASE WHEN status < 2 THEN 2 ELSE status END, updated_at_ms = @Now WHERE id = @ReqId",
+                new { Now = now, ReqId = updated.RequestId }, tx, cancellationToken: ct));
+            return 0;
+        });
+
+        if (rows == 0 || updated == null)
+            return ApiResponse<SpecimenHandoverDto>.Fail(409, "标本记录不存在或已完成核收/退回");
+
+        return ApiResponse<SpecimenHandoverDto>.Success(updated, $"检验窗口已核收标本 [{updated.SampleBarcode}]，转入上机检测");
+    }
+
+    [HttpPost("specimens/{id}/reject")]
+    public async Task<ApiResponse<SpecimenHandoverDto>> RejectSpecimen(string id, [FromBody] SpecimenRejectRequestDto req)
+    {
+        if (req == null || string.IsNullOrWhiteSpace(req.Reason))
+            return ApiResponse<SpecimenHandoverDto>.Fail(400, "退回不合格标本必须填写原因（如溶血/凝血/量少）");
+
+        long now = SystemTime.UtcNowMs;
+        string receiverId = _session?.UserId ?? "LAB_TECH";
+        await using var conn = _connFactory.CreateConnection();
+        int rows = await conn.ExecuteAsync(@"
+UPDATE mtc_specimen_handovers
+SET lab_receiver_id = @ReceiverId, received_at_ms = @Now, status = 'REJECTED',
+    rejection_reason = @Reason, updated_at_ms = @Now, updated_by = @ReceiverId, version_no = version_no + 1
+WHERE (id = @Id OR handover_no = @Id OR sample_barcode = @Id) AND status <> 'REJECTED'",
+            new { Id = id.Trim(), ReceiverId = receiverId, Now = now, Reason = req.Reason.Trim() });
+
+        if (rows == 0)
+            return ApiResponse<SpecimenHandoverDto>.Fail(404, "未找到可退回的标本记录");
+
+        var updated = await conn.QuerySingleAsync<SpecimenHandoverDto>(@"
+SELECT id AS Id, handover_no AS HandoverNo, request_id AS RequestId, patient_id AS PatientId,
+       ward_id AS WardId, sample_barcode AS SampleBarcode, drawn_by_nurse_id AS DrawnByNurseId,
+       drawn_at_ms AS DrawnAtMs, courier_id AS CourierId, dispatched_at_ms AS DispatchedAtMs,
+       lab_receiver_id AS LabReceiverId, received_at_ms AS ReceivedAtMs, status AS Status,
+       rejection_reason AS RejectionReason, notes AS Notes
+FROM mtc_specimen_handovers WHERE id = @Id OR handover_no = @Id OR sample_barcode = @Id LIMIT 1",
+            new { Id = id.Trim() });
+        return ApiResponse<SpecimenHandoverDto>.Success(updated, $"已退回不合格标本 [{updated.SampleBarcode}]：{req.Reason.Trim()}");
+    }
+
+    [HttpGet("exam/studies")]
+    public async Task<ApiResponse<IReadOnlyList<DicomStudySummaryDto>>> GetDicomStudies(
+        [FromQuery] string? patientId = null,
+        [FromQuery] string? accessionNo = null)
+    {
+        await using var conn = _connFactory.CreateConnection();
+        var list = (await conn.QueryAsync<DicomStudySummaryDto>(@"
+SELECT id AS Id, study_instance_uid AS StudyInstanceUid, accession_no AS AccessionNo,
+       patient_id AS PatientId, modality AS Modality, series_count AS SeriesCount,
+       instance_count AS InstanceCount, created_at_ms AS StudyTimeMs
+FROM mtc_dicom_studies
+WHERE (@PatId IS NULL OR patient_id = @PatId)
+  AND (@AccNo IS NULL OR accession_no = @AccNo)
+ORDER BY created_at_ms DESC LIMIT 100",
+            new { PatId = patientId, AccNo = accessionNo })).ToList();
+        return ApiResponse<IReadOnlyList<DicomStudySummaryDto>>.Success(list);
     }
 }

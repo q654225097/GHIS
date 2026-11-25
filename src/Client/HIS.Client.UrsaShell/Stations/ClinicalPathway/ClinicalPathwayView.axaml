@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.ClinicalPathway"
+             x:Class="HIS.Client.UrsaShell.Stations.ClinicalPathway.ClinicalPathwayView"
+             x:DataType="local:ClinicalPathwayViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <TextBlock Text="临床路径管理系统 (CPW)" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBox Text="{Binding EncounterId, Mode=TwoWay}" PlaceholderText="住院就诊ID" Width="150" Height="30"/>
+                    <TextBox Text="{Binding IcdCode, Mode=TwoWay}" PlaceholderText="ICD前缀 (如 I25/J18)" Width="130" Height="30"/>
+                    <Button Content="匹配路径" Classes="Primary" Height="30" Command="{Binding MatchPathwaysCommand}"/>
+                    <Button Content="查询在径状态" Classes="Secondary" Height="30" Command="{Binding RefreshEnrollmentCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="360,*" ColumnSpacing="12">
+            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8">
+                    <TextBlock Grid.Row="0" Text="匹配的临床路径模板" FontSize="14" FontWeight="Bold"/>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding MatchedPathways}" SelectedItem="{Binding SelectedMatch, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:CpwPathwayMatchVm">
+                                <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,6">
+                                    <TextBlock Text="{Binding DisplayLine}" FontSize="12" TextWrapping="Wrap"/>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Button Grid.Row="2" Content="患者准入进入该临床路径" Classes="Primary" Height="34" Command="{Binding EnrollCommand}"/>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="14">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="12">
+                        <Border Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="6" Padding="12">
+                            <TextBlock Text="{Binding EnrollmentHeader}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>
+                        </Border>
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="路径医嘱吻合度对比" FontSize="13" FontWeight="Bold"/>
+                                    <Button Content="执行当前在院医嘱对比" Classes="Secondary" Height="30" Command="{Binding CompareOrdersCommand}"/>
+                                    <TextBlock Text="{Binding ComparisonSummary}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SemiColorText2}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="EMR 病历融合段落预览" FontSize="13" FontWeight="Bold"/>
+                                    <Button Content="生成病历融合文本" Classes="Secondary" Height="30" Command="{Binding PullEmrFusionCommand}"/>
+                                    <TextBlock Text="{Binding EmrFusionSnippet}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SemiColorText2}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="临床路径变异上报" FontSize="13" FontWeight="Bold"/>
+                                <Grid ColumnDefinitions="150,180,*,Auto" ColumnSpacing="8">
+                                    <ComboBox Grid.Column="0" ItemsSource="{Binding VarianceTypeOptions}" SelectedItem="{Binding VarianceType, Mode=TwoWay}" Height="30"/>
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding VarianceCategoryOptions}" SelectedItem="{Binding VarianceReasonCategory, Mode=TwoWay}" Height="30"/>
+                                    <TextBox Grid.Column="2" Text="{Binding VarianceReasonDetail, Mode=TwoWay}" PlaceholderText="变异说明" Height="30"/>
+                                    <Button Grid.Column="3" Content="记录路径变异" Classes="Warning" Height="30" Command="{Binding RecordVarianceCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

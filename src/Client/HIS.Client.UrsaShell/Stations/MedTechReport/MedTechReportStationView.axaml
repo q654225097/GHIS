@@ -130,6 +130,18 @@
                                 <TextBlock Text="{Binding SelectedReport.RejectReason, StringFormat=⚠ 退回修改意见：{0}}"
                                            FontSize="12" Foreground="{DynamicResource SemiColorDanger}"
                                            IsVisible="{Binding SelectedReport.RejectReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                                <Border Padding="8,6" CornerRadius="6"
+                                        Background="{DynamicResource SemiColorBackground0}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBlock Text="{Binding DicomSummaryText}" FontSize="11"
+                                                   Foreground="{DynamicResource SemiColorPrimary}"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1" Content="刷新DICOM" Classes="Tertiary" Height="24" Padding="8,0" FontSize="11"
+                                                Command="{Binding RefreshDicomStudiesCommand}"/>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
 
                             <!-- 动态渲染的科室表单字段 -->

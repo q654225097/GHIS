@@ -5,7 +5,7 @@ using HIS.Modules.Finance.Models;
 
 namespace HIS.Modules.Finance.Services;
 
-public sealed class FinanceSettlementContract : IFinanceSettlementContract
+public sealed class FinanceSettlementContract : IFinanceSettlementContract, IOpdServicePaymentProofContract
 {
     private readonly IRepository<FinPaymentOrder> _paymentRepo;
     private readonly IRepository<FinRefundOrder> _refundRepo;
@@ -22,6 +22,25 @@ public sealed class FinanceSettlementContract : IFinanceSettlementContract
         _refundRepo = refundRepo;
         _chargeRepo = chargeRepo;
         _connectionFactory = connectionFactory;
+    }
+
+    public async Task<OpdServicePaymentProof?> FindValidPaymentAsync(OpdServicePaymentProofRequest request, CancellationToken ct = default)
+    {
+        using var conn = _connectionFactory.CreateConnection();
+        var rows = (await conn.QueryAsync<OpdServicePaymentProof>(new CommandDefinition("""
+            SELECT l.source_service_request_id AS RequestId, p.id AS PaymentOrderId,
+                   p.payment_no AS PaymentNo, l.total_amount AS Amount
+            FROM fin_charge_ledgers l
+            JOIN fin_payment_orders p ON p.id = l.payment_order_id
+            WHERE l.source_service_request_id = @RequestId
+              AND l.patient_id = @PatientId AND l.visit_or_encounter_id = @VisitId
+              AND l.item_code = @ItemCode AND l.total_amount = @Amount
+              AND l.status = 1 AND l.refund_amount = 0
+              AND p.scene = 'OPD' AND p.status = 1
+              AND p.patient_id = @PatientId AND p.visit_or_encounter_id = @VisitId
+            LIMIT 2
+            """, request, cancellationToken: ct))).ToArray();
+        return rows.Length == 1 ? rows[0] : null;
     }
 
     public static string GenerateFiscalInvoiceNo(string prefix = "BILL")

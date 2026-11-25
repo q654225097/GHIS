@@ -5,6 +5,7 @@ using Dapper;
 using HIS.BuildingBlocks.Common;
 using HIS.BuildingBlocks.Database;
 using HIS.BuildingBlocks.Security;
+using HIS.Contracts;
 using HIS.Modules.Finance.Controllers;
 using HIS.Modules.Finance.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -44,7 +45,7 @@ public sealed class FinanceCashAndVoucherTests
     public async Task SettlePayment_Rejects_NonCashier_Rbac_Violation()
     {
         var db = await CreateFreshDbAsync();
-        var ctrl = CreateController(db, RoleCode.Doctor, "DOC-01");
+        var ctrl = CreateController(db, RoleCode.OpdDoctor, "DOC-01");
 
         var res = await ctrl.SettlePayment(new FinanceController.SettlePaymentRequestDto(
             Scene: "OPD",
@@ -75,12 +76,12 @@ public sealed class FinanceCashAndVoucherTests
             InsuranceAmount: 0m,
             PrepaymentDeduct: 0m,
             SelfPayAmount: 100m,
-            PaymentChannel: "WECHAT",
+            PaymentChannel: "CRYPTO",
             ChargeItems: null,
             CashTendered: 100m));
 
         Assert.Equal(400, res.Code);
-        Assert.Contains("仅开放现金", res.Message);
+        Assert.Contains("不支持渠道", res.Message);
     }
 
     [Fact]

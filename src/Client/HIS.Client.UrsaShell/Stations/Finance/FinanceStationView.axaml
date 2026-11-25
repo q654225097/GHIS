@@ -212,6 +212,32 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
+
+            <!-- Tab 5: 门诊就诊卡预交充值 -->
+            <TabItem Header="门诊就诊卡充值">
+                <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="18" Margin="0,8,0,0">
+                    <StackPanel Spacing="12" MaxWidth="560" HorizontalAlignment="Left">
+                        <TextBlock Text="门诊就诊卡钱包充值与余额查询" FontSize="16" FontWeight="Bold"/>
+                        <TextBlock Text="支持窗口现金、微信、支付宝及银行卡为患者门诊就诊卡充值，充值后医生可直接开展诊间结算扣费。"
+                                   FontSize="12" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}"
+                                BorderThickness="1" CornerRadius="6" Padding="12">
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Text="{Binding CardPatientId, Mode=TwoWay}" PlaceholderText="输入患者ID (如 PAT85061801)" Height="32"/>
+                                    <Button Grid.Column="1" Content="查询账户余额" Classes="Secondary" Height="32" Command="{Binding QueryCardBalanceCommand}"/>
+                                </Grid>
+                                <TextBlock Text="{Binding CardBalanceSummary}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>
+                                <Grid ColumnDefinitions="*,140,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Text="{Binding CardRechargeAmount, Mode=TwoWay}" PlaceholderText="充值金额 (元)" Height="32"/>
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding RechargeChannels}" SelectedItem="{Binding CardPaymentChannel, Mode=TwoWay}" Height="32"/>
+                                    <Button Grid.Column="2" Content="确认充值并入账" Classes="Primary" Height="32" Padding="14,0" Command="{Binding RechargeCardCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </UserControl>

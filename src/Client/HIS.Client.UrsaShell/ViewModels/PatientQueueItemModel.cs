@@ -189,7 +189,11 @@ public class PatientQueueItemModel : ClientModelBase
 		}
 	}
 
-	public string CardBorderBrush => IsSelected ? "#165DFF" : "Transparent";
+	public global::Avalonia.Media.IBrush CardBorderBrush => IsSelected
+		? global::HIS.Client.UrsaShell.Shell.ThemeBrushes.Primary
+		: global::Avalonia.Media.Brushes.Transparent;
 
-	public string CardBackground => IsSelected ? "#1A253A" : "Transparent";
+	public global::Avalonia.Media.IBrush CardBackground => IsSelected
+		? global::HIS.Client.UrsaShell.Shell.ThemeBrushes.PrimaryLight
+		: global::Avalonia.Media.Brushes.Transparent;
 }

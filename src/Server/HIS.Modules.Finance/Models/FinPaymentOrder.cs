@@ -31,4 +31,5 @@ public class FinPaymentOrder : BaseEntity
 	public long? PaidAtMs { get; set; }
 
 	public string? InvoiceOfdId { get; set; }
+	public string CampusId { get; set; } = "CAMPUS-01";
 }

@@ -546,6 +546,8 @@ INSERT INTO csm_sterile_packages (
         var pkg = await conn.QuerySingleOrDefaultAsync<CsmSterilePackage>(
             "SELECT * FROM csm_sterile_packages WHERE id = @Id", new { Id = packageId });
         if (pkg == null) throw new KeyNotFoundException("灭菌包不存在");
+        if (string.IsNullOrWhiteSpace(pkg.ContentsJson) || pkg.ContentsJson.Trim() == "[]")
+            throw new InvalidOperationException("空器械包禁止灭菌放行，必须包含有效器械或敷料明细");
 
         long now = SystemTime.UtcNowMs;
         long validUntil = now + (req.ValidDays * 86400000L);
@@ -586,6 +588,8 @@ WHERE id = @Id", new { BatchNo = req.SterilizationBatchNo, ValidUntil = validUnt
         var pkg = await conn.QuerySingleOrDefaultAsync<CsmSterilePackage>(
             "SELECT * FROM csm_sterile_packages WHERE id = @Id", new { Id = packageId });
         if (pkg == null) throw new KeyNotFoundException("灭菌包不存在");
+        if (string.IsNullOrWhiteSpace(pkg.ContentsJson) || pkg.ContentsJson.Trim() == "[]")
+            throw new InvalidOperationException("空器械包禁止灭菌放行，必须包含有效器械或敷料明细");
         if (pkg.Status != "STERILIZED") throw new InvalidOperationException($"仅已灭菌包可发放，当前状态: {pkg.Status}");
 
         long now = SystemTime.UtcNowMs;
@@ -626,6 +630,8 @@ INSERT INTO csm_package_movements (
         var pkg = await conn.QuerySingleOrDefaultAsync<CsmSterilePackage>(
             "SELECT * FROM csm_sterile_packages WHERE id = @Id", new { Id = packageId });
         if (pkg == null) throw new KeyNotFoundException("灭菌包不存在");
+        if (string.IsNullOrWhiteSpace(pkg.ContentsJson) || pkg.ContentsJson.Trim() == "[]")
+            throw new InvalidOperationException("空器械包禁止灭菌放行，必须包含有效器械或敷料明细");
 
         long now = SystemTime.UtcNowMs;
         string fromLoc = pkg.CurrentLocation;

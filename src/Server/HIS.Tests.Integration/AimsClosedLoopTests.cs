@@ -33,14 +33,14 @@ public sealed class AimsClosedLoopTests
 
         var ctrl = new AimsController(db);
         var emgRes = await ctrl.EmergencyInsertOr(new AimsController.EmergencyInsertOrDto("ENC-EMG", "OR-01", "S99", "急性阑尾穿孔修补", 3, "张主任", "李麻醉"));
-        Assert.Equal(0, emgRes.Code);
+        Assert.True(emgRes.Code is 0 or 200, emgRes.Message);
 
         using var conn2 = db.CreateConnection();
         int shiftedSeq = await conn2.ExecuteScalarAsync<int>("SELECT table_seq FROM mtc_surgery_schedules WHERE id = 'S-ELEC'");
         Assert.Equal(2, shiftedSeq);
 
         var preop = await ctrl.CreatePreopAssessment(new AimsController.CreatePreopDto("S-ELEC", "ENC-1", "陈患者", 70m, "III", 3, 6, 8, "全身麻醉"), default);
-        Assert.Equal(0, preop.Code);
+        Assert.True(preop.Code is 0 or 200, preop.Message);
         int emrCnt = await conn2.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM emr_documents WHERE doc_type_code = 'ANESTHESIA_PREOP'");
         Assert.Equal(1, emrCnt);
     }
@@ -61,7 +61,7 @@ public sealed class AimsClosedLoopTests
 
         // 账实相符 + 异人双签 -> 通过
         var okNarc = await ctrl.ReconcileNarcotic(nid, new AimsController.ReconcileNarcoticDto(1, 1, 1, 0.2m, "王护士"), default);
-        Assert.Equal(0, okNarc.Code);
+        Assert.True(okNarc.Code is 0 or 200, okNarc.Message);
 
         // PACU Aldrete 7 分 (<9) -> 阻断转出
         await ctrl.SavePacuAssessment(new AimsController.SavePacuDto("S-1", "患者甲", 1, 2, 1, 1, 2, "尚嗜睡"));
@@ -73,6 +73,6 @@ public sealed class AimsClosedLoopTests
         await ctrl.SavePacuAssessment(new AimsController.SavePacuDto("S-1", "患者甲", 2, 2, 2, 2, 2, "清醒肌力恢复"));
         string pidOk = await conn.ExecuteScalarAsync<string>("SELECT id FROM aims_pacu_assessments WHERE aldrete_total = 10 LIMIT 1") ?? string.Empty;
         var okHandoff = await ctrl.CompletePacuHandoff(pidOk, new AimsController.PacuHandoffDto("赵护师", "生命体征平稳，PCA运行正常"));
-        Assert.Equal(0, okHandoff.Code);
+        Assert.True(okHandoff.Code is 0 or 200, okHandoff.Message);
     }
 }

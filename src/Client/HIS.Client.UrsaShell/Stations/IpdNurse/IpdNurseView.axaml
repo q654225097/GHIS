@@ -166,18 +166,19 @@
                                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                                     <StackPanel MinWidth="1280">
                                         <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="10,6" Margin="0,0,0,6">
-                                            <Grid ColumnDefinitions="80,128,*,70,70,118,78,90,90,128,100">
+                                            <Grid ColumnDefinitions="80,50,128,*,70,70,118,78,90,90,128,100">
                                                 <TextBlock Grid.Column="0" Text="类别" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="1" Text="起始时间" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="2" Text="医嘱内容与规格" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="3" Text="剂量" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="4" Text="途径" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="5" Text="频次" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="6" Text="开立医师" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="7" Text="状态" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="8" Text="校对护士" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="9" Text="停止时间" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Grid.Column="10" Text="护士操作" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="1" Text="成组" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}" HorizontalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="起始时间" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="3" Text="医嘱内容与规格" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="4" Text="剂量" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="5" Text="途径" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="6" Text="频次" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="7" Text="开立医师" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="8" Text="状态" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="9" Text="校对护士" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="10" Text="停止时间" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Grid.Column="11" Text="护士操作" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
                                             </Grid>
                                         </Border>
 
@@ -187,21 +188,22 @@
                                                     <Border Padding="10,6" Margin="0,0,0,5" CornerRadius="5"
                                                             Background="{DynamicResource SemiColorBackground0}"
                                                             BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                                        <Grid ColumnDefinitions="80,128,*,70,70,118,78,90,90,128,100">
+                                                        <Grid ColumnDefinitions="80,50,128,*,70,70,118,78,90,90,128,100">
                                                             <Border Grid.Column="0" Background="{DynamicResource SemiColorPrimaryLight}" CornerRadius="3"
                                                                     Padding="4,2" HorizontalAlignment="Left" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding OrderType}" FontSize="12" FontWeight="Bold" Foreground="{Binding StatusBrush}"/>
                                                             </Border>
-                                                            <TextBlock Grid.Column="1" Text="{Binding StartTime}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="2" Text="{Binding Content}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="3" Text="{Binding Dose}" FontSize="12" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="4" Text="{Binding Route}" FontSize="12" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="5" Text="{Binding Frequency}" FontSize="12" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="6" Text="{Binding DoctorName}" FontSize="12" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="7" Text="{Binding Status}" FontSize="12" FontWeight="Bold" Foreground="{Binding StatusBrush}" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="8" Text="{Binding NurseSign}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="9" Text="{Binding StopTime}" FontSize="12" Foreground="{DynamicResource SemiColorText3}" VerticalAlignment="Center"/>
-                                                            <StackPanel Grid.Column="10" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                            <TextBlock Grid.Column="1" Text="{Binding GroupDisplay}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding StartTime}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="3" Text="{Binding Content}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="4" Text="{Binding Dose}" FontSize="12" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="5" Text="{Binding Route}" FontSize="12" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="6" Text="{Binding Frequency}" FontSize="12" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="7" Text="{Binding DoctorName}" FontSize="12" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="8" Text="{Binding Status}" FontSize="12" FontWeight="Bold" Foreground="{Binding StatusBrush}" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="9" Text="{Binding NurseSign}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="10" Text="{Binding StopTime}" FontSize="12" Foreground="{DynamicResource SemiColorText3}" VerticalAlignment="Center"/>
+                                                            <StackPanel Grid.Column="11" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                                                 <Button Content="校对审签" Height="24" Padding="6,0" Classes="Success"
                                                                         IsVisible="{Binding IsPendingReview}"
                                                                         Command="{Binding $parent[UserControl].((local:IpdNurseViewModel)DataContext).ReviewSingleOrderCommand}"

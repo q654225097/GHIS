@@ -14,7 +14,7 @@ using HIS.Client.UrsaShell.Services;
 
 namespace HIS.Client.UrsaShell.ViewModels;
 
-public sealed class RegistrationCashierViewModel : ClientModelBase
+public sealed partial class RegistrationCashierViewModel : ClientModelBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -107,7 +107,26 @@ public sealed class RegistrationCashierViewModel : ClientModelBase
     public string QueryDate
     {
         get => _queryDate;
-        set => SetField(ref _queryDate, value ?? string.Empty);
+        set
+        {
+            if (SetField(ref _queryDate, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(QueryDateDateTime));
+            }
+        }
+    }
+
+    public DateTime? QueryDateDateTime
+    {
+        get => DateTime.TryParse(QueryDate, out var date) ? date.Date : DateTime.Today;
+        set
+        {
+            var next = (value ?? DateTime.Today).ToString("yyyy-MM-dd");
+            if (QueryDate != next)
+            {
+                QueryDate = next;
+            }
+        }
     }
 
     public DateTimeOffset QueryDateValue
@@ -1180,6 +1199,17 @@ public sealed class RegistrationCashierViewModel : ClientModelBase
             .ToString("HH:mm");
     }
 
+    public static string FormatLocalDateTime(long? utcMillis)
+    {
+        if (utcMillis is null or <= 0)
+        {
+            return "--";
+        }
+        return DateTimeOffset.FromUnixTimeMilliseconds(utcMillis.Value)
+            .ToOffset(TimeSpan.FromHours(8))
+            .ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
     public static string PaymentLabel(string? code) => code?.ToUpperInvariant() switch
     {
         "CASH" => "现金",
@@ -1189,14 +1219,7 @@ public sealed class RegistrationCashierViewModel : ClientModelBase
         _ => string.IsNullOrWhiteSpace(code) ? "--" : code
     };
 
-    public static string PeriodLabel(string? code) => code?.ToUpperInvariant() switch
-    {
-        "MORNING" => "上午",
-        "AFTERNOON" => "下午",
-        "EVENING" => "夜间",
-        "ALL_DAY" => "全天",
-        _ => string.IsNullOrWhiteSpace(code) ? "门诊" : code
-    };
+    public static string PeriodLabel(string? code) => ScheduleWorkstationViewModel.FormatPeriodCode(code);
 
     public static string LevelLabel(string? code) => code?.ToUpperInvariant() switch
     {
@@ -1411,7 +1434,7 @@ public sealed class RegistrationRecordItem : ClientModelBase
     public string QueueText => QueueNo.ToString("D3");
     public string PaidAmountText => "¥" + PaidAmount.ToString("N2");
     public string PaymentChannelLabel => RegistrationCashierViewModel.PaymentLabel(PaymentChannelCode);
-    public string PaidTimeText => RegistrationCashierViewModel.FormatLocalTime(PaidAtMs);
+    public string PaidTimeText => RegistrationCashierViewModel.FormatLocalDateTime(PaidAtMs);
     public string StatusLabel => Status switch
     {
         1 => "已收费 · 待接诊",

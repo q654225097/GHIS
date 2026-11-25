@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
@@ -1636,7 +1637,7 @@ public partial class WorkbenchModel : ClientModelBase
 
 	public IReadOnlyList<string> FormDataTypes { get; } = new string[8] { "STRING", "TEXT", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "DATETIME", "ENUM" };
 
-	public IReadOnlyList<string> FormControlTypes { get; } = new string[7] { "u:TextBox", "u:TextArea", "u:NumericIntUpDown", "u:NumericDoubleUpDown", "ComboBox", "DatePicker", "CheckBox" };
+	public IReadOnlyList<string> FormControlTypes { get; } = new string[] { "u:TextBox", "u:TextArea", "u:NumericIntUpDown", "u:NumericDoubleUpDown", "ComboBox", "u:DatePicker", "u:DateTimePicker", "CheckBox" };
 
 	public IReadOnlyList<string> FormVisibilityRules { get; } = new string[3] { "ALL", "MALE_ONLY", "FEMALE_ONLY" };
 
@@ -3457,6 +3458,16 @@ public partial class WorkbenchModel : ClientModelBase
 		InitOfdArchives();
 		InitDynamicFormTemplates();
 		InitPrescriptionColumns();
+		Prescriptions.CollectionChanged += (object? _, NotifyCollectionChangedEventArgs e) =>
+		{
+			if (e.NewItems != null)
+			{
+				foreach (PrescriptionItemModel item in e.NewItems.OfType<PrescriptionItemModel>())
+				{
+					item.RebuildCells(PrescriptionColumns);
+				}
+			}
+		};
 		InitTimelineEvents();
 		_ = LoadAvailableDrugsCatalogAsync();
 		InitAdminData();
@@ -4767,6 +4778,10 @@ public partial class WorkbenchModel : ClientModelBase
 		_fieldEditSnapshot = null;
 		EditingTemplate.NotifyDerived();
 		RefreshEditingFormPreview();
+		if (IsPrescriptionSchemaDesigner)
+		{
+			SyncPrescriptionColumnsFromEditingTemplate();
+		}
 		if (closeEditor)
 		{
 			IsFieldEditorOpen = false;
@@ -4794,6 +4809,10 @@ public partial class WorkbenchModel : ClientModelBase
 			ReorderFields(EditingTemplate);
 			EditingTemplate.NotifyDerived();
 			RefreshEditingFormPreview();
+			if (IsPrescriptionSchemaDesigner)
+			{
+				SyncPrescriptionColumnsFromEditingTemplate();
+			}
 			IsFieldEditorOpen = false;
 			EditingField = null;
 			SystemNotice = (IsPrescriptionSchemaDesigner ? "字段已从处方表格配置中移除；保存模板后软删除，历史处方值仍保留" : "字段已移除，保存模板后生效");
@@ -4815,6 +4834,10 @@ public partial class WorkbenchModel : ClientModelBase
 				EditingTemplate.Fields.Move(num, num2);
 				ReorderFields(EditingTemplate);
 				RefreshEditingFormPreview();
+				if (IsPrescriptionSchemaDesigner)
+				{
+					SyncPrescriptionColumnsFromEditingTemplate();
+				}
 			}
 		}
 	}
@@ -6874,7 +6897,7 @@ public partial class WorkbenchModel : ClientModelBase
 		EmrPrintLayoutConfigModel activeEmrPrintLayout = ActiveEmrPrintLayout;
 		string text = selectedEmrTemplate?.EmrScene ?? SelectedEmrSceneCode;
 		int num = Math.Clamp((activeEmrPrintLayout.SignLevelCount > 0) ? activeEmrPrintLayout.SignLevelCount : (selectedEmrTemplate?.RequiredSignLevels ?? 1), 1, 3);
-		string signedTimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+		string signedTimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 		if (text == "WARD")
 		{
 			PreviewSignatureSlots.Add(new EmrSignatureSlotPreviewModel
@@ -7562,18 +7585,31 @@ public partial class WorkbenchModel : ClientModelBase
 	{
 		return new[]
 		{
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-01", "DRUG_NAME", "药品名称", 130, 0, system: true, editable: true, "输入药品名称"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-02", "SPEC", "规格", 95, 1, system: true, editable: true, "输入规格"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-03", "DOSE", "剂量", 70, 2, system: true, editable: true, "输入剂量"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-04", "FREQ", "频次", 90, 3, system: true, editable: true, "输入频次"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-12", "DAYS", "天数", 58, 4, system: true, editable: true, "输入用药天数"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-05", "ROUTE", "途径", 70, 5, system: true, editable: true, "输入给药途径"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-06", "QUANTITY", "数量", 55, 6, system: true, editable: true, "输入数量"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-07", "AMOUNT", "金额", 65, 7, system: true, editable: true, "输入金额"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-08", "SKIN_TEST_STATUS", "皮试状态", 95, 8, system: true, editable: false, string.Empty),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-09", "AUDIT_STATUS", "审核结果", 80, 9, system: true, editable: false, string.Empty),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-10", "MEDICATION_NOTE", "用药备注", 120, 10, system: true, editable: true, "补充用药说明"),
-			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-11", "INFUSION_NOTE", "给药说明", 130, 11, system: true, editable: true, "例如：静脉滴注 40 滴/分")
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-01", "ORDER_TYPE", "医嘱类型", 80, 0, system: true, editable: true, "选择或输入医嘱类型"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-02", "DRUG_NAME", "医嘱名称", 200, 1, system: true, editable: true, "输入医嘱/药品名称"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-03", "SPEC", "规格", 95, 2, system: true, editable: true, "规格"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-04", "GROUP_NO", "组", 60, 3, system: true, editable: true, "组号"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-05", "SKIN_TEST", "皮试", 85, 4, system: true, editable: true, "免试/需皮试/阴性/阳性"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-06", "TOTAL_QTY", "总量", 55, 5, system: true, editable: true, "总量"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-07", "TOTAL_UNIT", "总单位", 55, 6, system: true, editable: true, "总单位"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-08", "DOSE", "每次用量", 70, 7, system: true, editable: true, "每次用量"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-09", "DOSE_UNIT", "单位", 50, 8, system: true, editable: true, "单位"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-10", "PAYMENT_COUNT", "付数", 50, 9, system: true, editable: true, "付数"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-11", "FREQ_CODE", "频次编码", 75, 10, system: true, editable: true, "频次编码"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-12", "ROUTE_NAME", "用法名称", 85, 11, system: true, editable: true, "用法名称"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-13", "HOSP_INJECT_CNT", "院注次数", 70, 12, system: true, editable: true, "院注次数"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-14", "DOCTOR_NAME", "开立医生", 75, 13, system: true, editable: false, "开立医生"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-15", "EXEC_DEPT", "执行科室", 95, 14, system: true, editable: true, "执行科室"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-16", "IS_URGENT", "加急", 55, 15, system: true, editable: true, "加急"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-17", "EXAM_PART", "检查部位", 85, 16, system: true, editable: true, "检查部位"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-18", "SPECIMEN_TYPE", "样本类型", 75, 17, system: true, editable: true, "样本类型"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-19", "DEDUCT_DEPT", "扣库科室", 95, 18, system: true, editable: true, "扣库科室"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-20", "MEDICATION_NOTE", "备注", 110, 19, system: true, editable: true, "用药说明/特别医嘱"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-21", "OPERATOR", "录入人", 75, 20, system: true, editable: false, "录入人"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-22", "OPD_DEPT", "开立科室", 85, 21, system: true, editable: false, "开立科室"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-23", "CREATED_AT", "开立时间", 120, 22, system: true, editable: false, "开立时间"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-24", "STOP_TIME", "停止时间", 80, 23, system: true, editable: false, "停止时间"),
+			CreateDefaultPrescriptionColumn("FIELD-RX-ITEM-25", "STOP_DOCTOR", "停止人", 70, 24, system: true, editable: false, "停止人")
 		};
 	}
 
@@ -7611,20 +7647,43 @@ public partial class WorkbenchModel : ClientModelBase
 		return prescriptionColumnModel;
 	}
 
+	public void SyncPrescriptionColumnsFromEditingTemplate()
+	{
+		if (EditingTemplate == null || !IsPrescriptionSchemaDesigner)
+		{
+			return;
+		}
+		var list = new List<PrescriptionColumnModel>();
+		foreach (DynamicFormFieldModel f in EditingTemplate.Fields)
+		{
+			list.Add(new PrescriptionColumnModel
+			{
+				Id = f.Id,
+				FieldCode = f.FieldCode,
+				FieldLabel = f.FieldLabel,
+				DataType = f.DataType,
+				ControlType = f.UrsaControlType,
+				Placeholder = f.Placeholder,
+				UnitText = f.UnitText,
+				DictCode = f.DictCode,
+				Width = f.ColumnWidth > 0 ? f.ColumnWidth : 100,
+				SortOrder = f.SortOrder,
+				IsSystemField = f.IsSystemField,
+				IsEditable = f.IsEditable,
+				IsRequired = f.IsRequired
+			});
+		}
+		ReplacePrescriptionColumns(list);
+	}
+
 	private void ReplacePrescriptionColumns(IEnumerable<PrescriptionColumnModel> columns)
 	{
-		// Keep this a mutable list: missing core columns are appended below. Converting
-		// to an array first made the append path fail with NotSupportedException and
-		// prevented prescription fields loaded from the server from being rendered.
 		List<PrescriptionColumnModel> merged = columns
 			.Where(x => x != null && !string.IsNullOrWhiteSpace(x.FieldCode))
 			.OrderBy(x => x.SortOrder)
 			.ToList();
 		foreach (PrescriptionColumnModel required in CreateDefaultPrescriptionColumns()
-			.Where(x => string.Equals(x.FieldCode, PrescriptionItemModel.DoseCode, StringComparison.OrdinalIgnoreCase)
-				|| string.Equals(x.FieldCode, PrescriptionItemModel.FreqCode, StringComparison.OrdinalIgnoreCase)
-				|| string.Equals(x.FieldCode, PrescriptionItemModel.DaysCode, StringComparison.OrdinalIgnoreCase)
-				|| string.Equals(x.FieldCode, PrescriptionItemModel.QuantityCode, StringComparison.OrdinalIgnoreCase)))
+			.Where(x => string.Equals(x.FieldCode, "DRUG_NAME", StringComparison.OrdinalIgnoreCase)))
 		{
 			if (!merged.Any(x => string.Equals(x.FieldCode, required.FieldCode, StringComparison.OrdinalIgnoreCase)))
 			{

@@ -251,8 +251,8 @@ public sealed class WorkbenchHomeViewModel : ClientModelBase, IStationLifecycle
                 var current = Workbench.PatientQueue.FirstOrDefault(p => p.IsInProgress);
                 if (Workbench.HasActiveCriticalValue)
                 {
-                    PrimaryActionLabel = "处理危急值";
-                    PrimaryActionHint = "打开危急值双签抽屉";
+                    PrimaryActionLabel = "查看危急值提醒";
+                    PrimaryActionHint = "打开本会话的危急值提醒";
                 }
                 else if (waiting != null)
                 {
@@ -275,8 +275,8 @@ public sealed class WorkbenchHomeViewModel : ClientModelBase, IStationLifecycle
                 var firstIpd = FirstActionableInpatient();
                 if (Workbench.HasActiveCriticalValue)
                 {
-                    PrimaryActionLabel = "处理危急值";
-                    PrimaryActionHint = "打开危急值双签抽屉";
+                    PrimaryActionLabel = "查看危急值提醒";
+                    PrimaryActionHint = "打开本会话的危急值提醒";
                 }
                 else if (firstIpd != null)
                 {
@@ -317,7 +317,7 @@ public sealed class WorkbenchHomeViewModel : ClientModelBase, IStationLifecycle
         if (Workbench.HasActiveCriticalValue)
         {
             _shell.OpenCriticalValueDrawerCommand.Execute(null);
-            LastActionMessage = "已打开危急值处理抽屉";
+            LastActionMessage = "已打开危急值提醒";
             return;
         }
 
@@ -387,7 +387,7 @@ public sealed class WorkbenchHomeViewModel : ClientModelBase, IStationLifecycle
         if (todo.IsCritical)
         {
             _shell.OpenCriticalValueDrawerCommand.Execute(null);
-            LastActionMessage = "已打开危急值处理抽屉";
+            LastActionMessage = "已打开危急值提醒";
             return;
         }
 
@@ -434,22 +434,25 @@ public sealed class WorkbenchHomeViewModel : ClientModelBase, IStationLifecycle
             .FirstOrDefault();
     }
 
+    private void AddCriticalValueTodo(List<WorkbenchTodoItem> items)
+    {
+        if (!Workbench.HasActiveCriticalValue) return;
+        items.Add(new WorkbenchTodoItem
+        {
+            Title = "危急值待闭环",
+            Context = Workbench.CurrentRoleDisplayName,
+            Detail = $"{Workbench.PendingCriticalValueCount} 条可查看记录",
+            Status = "危急",
+            ActionLabel = "查看签收",
+            NavigationKey = "critical_values",
+            IsCritical = true
+        });
+    }
+
     private List<WorkbenchTodoItem> BuildOpdTodos()
     {
         var result = new List<WorkbenchTodoItem>();
-        if (Workbench.HasActiveCriticalValue)
-        {
-            result.Add(new WorkbenchTodoItem
-            {
-                Title = "危急值待双签",
-                Context = Workbench.CriticalValueAlert.PatientName,
-                Detail = Workbench.CriticalValueAlert.TestItem,
-                Status = "危急",
-                ActionLabel = "处理",
-                NavigationKey = "medtech",
-                IsCritical = true
-            });
-        }
+        AddCriticalValueTodo(result);
 
         foreach (var patient in Workbench.PatientQueue.Where(p => !p.IsCompleted).Take(8))
         {
@@ -472,19 +475,7 @@ public sealed class WorkbenchHomeViewModel : ClientModelBase, IStationLifecycle
     private List<WorkbenchTodoItem> BuildIpdDoctorTodos()
     {
         var result = new List<WorkbenchTodoItem>();
-        if (Workbench.HasActiveCriticalValue)
-        {
-            result.Add(new WorkbenchTodoItem
-            {
-                Title = "危急值待双签",
-                Context = Workbench.CriticalValueAlert.PatientName,
-                Detail = Workbench.CriticalValueAlert.TestItem,
-                Status = "危急",
-                ActionLabel = "处理",
-                NavigationKey = "medtech",
-                IsCritical = true
-            });
-        }
+        AddCriticalValueTodo(result);
 
         foreach (var patient in Workbench.InpatientRecords.Where(p => p.IsActiveInpatient))
         {
@@ -507,19 +498,7 @@ public sealed class WorkbenchHomeViewModel : ClientModelBase, IStationLifecycle
     private List<WorkbenchTodoItem> BuildWardNurseTodos()
     {
         var result = new List<WorkbenchTodoItem>();
-        if (Workbench.HasActiveCriticalValue)
-        {
-            result.Add(new WorkbenchTodoItem
-            {
-                Title = "危急值待双签",
-                Context = Workbench.CriticalValueAlert.PatientName,
-                Detail = Workbench.CriticalValueAlert.TestItem,
-                Status = "危急",
-                ActionLabel = "处理",
-                NavigationKey = "medtech",
-                IsCritical = true
-            });
-        }
+        AddCriticalValueTodo(result);
 
         foreach (var patient in Workbench.InpatientRecords.Where(p => p.IsActiveInpatient))
         {

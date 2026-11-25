@@ -47,6 +47,8 @@ public sealed class CreateIpdDischargeRequest
 
 public sealed class SettleIpdDischargeRequest
 {
+    public string? PreviewVersion { get; set; }
+
     public decimal TotalAmount { get; set; }
 
     public decimal InsuranceAmount { get; set; }
@@ -66,6 +68,8 @@ public sealed class SettleIpdDischargeRequest
 
 public sealed class IpdSettlementPreviewView
 {
+    public string PreviewVersion { get; set; } = string.Empty;
+
     public string RequestId { get; set; } = string.Empty;
 
     public string EncounterId { get; set; } = string.Empty;

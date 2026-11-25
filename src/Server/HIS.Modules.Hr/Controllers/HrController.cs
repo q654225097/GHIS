@@ -188,6 +188,8 @@ public class HrController : ControllerBase
                    e.job_position AS JobPosition, e.employment_status AS EmploymentStatus,
                    e.resign_date_int AS ResignDateInt, e.resign_reason AS ResignReason,
                    e.approval_status AS ApprovalStatus, e.remark AS Remark,
+                   e.yb_staff_code AS YbStaffCode, e.practice_cert_no AS PracticeCertNo,
+                   e.prescribe_level AS PrescribeLevel, e.antibiotic_level AS AntibioticLevel, e.narcotic_level AS NarcoticLevel,
                    u.user_name AS LoginUserName, u.is_active AS AccountActive
             FROM hr_employees e
             LEFT JOIN sys_departments d ON d.id = e.primary_dept_id
@@ -345,6 +347,10 @@ public class HrController : ControllerBase
                 UpdatedBy = ActorId
             };
             await _empRepo.InsertAsync(emp, token);
+            if (req.PrescribeLevel > 0)
+            {
+                await txConn.ExecuteAsync("UPDATE hr_employees SET prescribe_level = @Rx WHERE id = @Id", new { Rx = req.PrescribeLevel, Id = empId });
+            }
 
             if (req.ContractEndDateInt.HasValue)
             {

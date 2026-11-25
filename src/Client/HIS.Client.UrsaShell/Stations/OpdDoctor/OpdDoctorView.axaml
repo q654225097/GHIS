@@ -45,14 +45,31 @@
                     </Border>
                 </Grid>
 
-                <Button Grid.Row="2"
-                        Content="叫号下一位 (F2)"
-                        Classes="Primary"
-                        Height="32"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center"
-                        Margin="0,0,0,8"
-                        Command="{Binding CallNextCommand}"/>
+                <Grid Grid.Row="2" ColumnDefinitions="2*,*,*" Margin="0,0,0,8">
+                    <Button Grid.Column="0"
+                            Content="叫号 (F2)"
+                            Classes="Primary"
+                            Height="32"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            Command="{Binding CallNextCommand}"/>
+                    <Button Grid.Column="1"
+                            Content="重呼"
+                            Classes="Secondary"
+                            Height="32"
+                            Margin="4,0,0,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            Command="{Binding RecallCommand}"/>
+                    <Button Grid.Column="2"
+                            Content="过号"
+                            Classes="Warning"
+                            Height="32"
+                            Margin="4,0,0,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            Command="{Binding PassCommand}"/>
+                </Grid>
 
                 <ScrollViewer Grid.Row="3">
                     <ItemsControl ItemsSource="{Binding Workbench.FilteredPatientQueue}">
@@ -127,7 +144,7 @@
                                 <StackPanel Spacing="14">
                                     <!-- Patient Summary Header Strip -->
                                     <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12,10" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                                                 <TextBlock Text="当前接诊患者:" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="{Binding Workbench.SelectedPatient.PatientName, FallbackValue='未选择患者'}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center"/>
@@ -136,7 +153,10 @@
                                                 <TextBlock Text="{Binding Workbench.SelectedPatient.VisitNo, StringFormat='就诊号: {0}', FallbackValue=''}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
                                                 <controls:StatusTag Text="{Binding Workbench.SelectedPatient.OpdDeptName, FallbackValue='普通门诊'}" Kind="Primary"/>
                                             </StackPanel>
-                                            <Border Grid.Column="2" IsVisible="{Binding Workbench.HasSelectedPatientAllergy}" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="8,4">
+                                            <Border Grid.Column="2" Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4" Padding="8,4" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding PatientCardBalanceText}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}" FontWeight="Bold"/>
+                                            </Border>
+                                            <Border Grid.Column="3" IsVisible="{Binding Workbench.HasSelectedPatientAllergy}" Background="{DynamicResource SemiColorDangerLight}" CornerRadius="4" Padding="8,4">
                                                 <TextBlock Text="{Binding Workbench.SelectedPatientAllergyText, StringFormat='⚠ 过敏警示: {0}'}" FontSize="11" Foreground="{DynamicResource SemiColorDanger}" FontWeight="SemiBold"/>
                                             </Border>
                                         </Grid>
@@ -333,36 +353,10 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- Quick Clinical Order Input Box (严格对照门诊医嘱开立截图1) -->
-                                <Border Background="#DCF8E6" BorderBrush="#A7D8B5" BorderThickness="1" CornerRadius="4" Padding="8,6">
-                                    <Border.Styles>
-                                        <Style Selector="TextBlock">
-                                            <Setter Property="Foreground" Value="#111827"/>
-                                            <Setter Property="FontSize" Value="12"/>
-                                        </Style>
-                                        <Style Selector="TextBox">
-                                            <Setter Property="Background" Value="#FFFFFF"/>
-                                            <Setter Property="Foreground" Value="#111827"/>
-                                            <Setter Property="BorderBrush" Value="#9CA3AF"/>
-                                        </Style>
-                                        <Style Selector="ComboBox">
-                                            <Setter Property="Background" Value="#FFFFFF"/>
-                                            <Setter Property="Foreground" Value="#111827"/>
-                                            <Setter Property="BorderBrush" Value="#9CA3AF"/>
-                                        </Style>
-                                        <Style Selector="u|NumericIntUpDown">
-                                            <Setter Property="Background" Value="#FFFFFF"/>
-                                            <Setter Property="Foreground" Value="#111827"/>
-                                            <Setter Property="BorderBrush" Value="#9CA3AF"/>
-                                        </Style>
-                                        <Style Selector="u|NumericDoubleUpDown">
-                                            <Setter Property="Background" Value="#FFFFFF"/>
-                                            <Setter Property="Foreground" Value="#111827"/>
-                                            <Setter Property="BorderBrush" Value="#9CA3AF"/>
-                                        </Style>
-                                    </Border.Styles>
+                                <!-- Quick Clinical Order Input Box -->
+                                <Border Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorSuccess}" BorderThickness="1" CornerRadius="6" Padding="8,6">
                                     <StackPanel Spacing="5">
-                                        <!-- Row 1: [全部 v] [简拼] 名称: [亮黄输入框] 数量 [ ^v] [ 单位 v] [亮黄规格/金额] [+ 录入 (Enter)] -->
+                                        <!-- Row 1 -->
                                         <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6" VerticalAlignment="Center">
                                             <ComboBox Grid.Column="0"
                                                       ItemsSource="{Binding OrderTypeOptions}"
@@ -377,8 +371,9 @@
                                                 <TextBox x:Name="DrugSearchBox"
                                                          Text="{Binding DrugSearchQuery, Mode=TwoWay}"
                                                          PlaceholderText="输入药品/诊疗项目名称快速检索 (按 / 或 F2 聚焦)..."
-                                                         Background="#FFFF55"
-                                                         Foreground="#000000"
+                                                         Background="{DynamicResource SemiColorWarningLight}"
+                                                         BorderBrush="{DynamicResource SemiColorWarning}"
+                                                         Foreground="{DynamicResource SemiColorText0}"
                                                          FontWeight="Bold"
                                                          Height="28"
                                                          FontSize="12"
@@ -435,8 +430,9 @@
                                             <TextBox Grid.Column="7"
                                                      Text="{Binding OrderQuantityInput, StringFormat='{}{0}.000'}"
                                                      IsReadOnly="True"
-                                                     Background="#FFFF55"
-                                                     Foreground="#000000"
+                                                     Background="{DynamicResource SemiColorWarningLight}"
+                                                     BorderBrush="{DynamicResource SemiColorWarning}"
+                                                     Foreground="{DynamicResource SemiColorText0}"
                                                      FontWeight="Bold"
                                                      Width="90"
                                                      Height="28"
@@ -456,7 +452,7 @@
                                         <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <CheckBox IsChecked="{Binding IsUrgentInput, Mode=TwoWay}"
                                                       Content="加急"
-                                                      Foreground="#DC2626"
+                                                      Foreground="{DynamicResource SemiColorDanger}"
                                                       FontWeight="Bold"
                                                       FontSize="12"
                                                       Margin="0,0,10,0"
@@ -568,6 +564,14 @@
                                                 FontSize="11"
                                                 FontWeight="Bold"
                                                 Command="{Binding SubmitPrescriptionCommand}"/>
+                                        <Button Content="💳 诊间划扣结算"
+                                                Classes="Success"
+                                                Height="28"
+                                                Padding="12,0"
+                                                FontSize="11"
+                                                FontWeight="Bold"
+                                                Command="{Binding SettlePrescriptionInClinicCommand}"
+                                                ToolTip.Tip="直接从患者门诊就诊卡/预交金账户划扣处方费，免去窗口排队"/>
                                         <controls:StatusTag Text="{Binding Workbench.PrescriptionWorkflowStatusText}" Kind="Info"/>
                                     </StackPanel>
                                 </Grid>
@@ -578,35 +582,25 @@
                         <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="10">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                                 <StackPanel HorizontalAlignment="Left">
-                                    <!-- Table Header Strip strictly matching screenshot -->
+                                    <!-- Table Header Strip dynamically synchronized with Dynamic Form BO Configuration -->
                                     <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="0,7" Margin="0,0,0,4">
                                         <StackPanel Orientation="Horizontal">
                                             <Border Width="36" Padding="8,0"><CheckBox Command="{Binding SelectAllOrdersCommand}" CommandParameter="True"/></Border>
                                             <Border Width="30" Padding="4,0"><TextBlock Text="!" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextAlignment="Center"/></Border>
-                                            <Border Width="80" Padding="6,0"><TextBlock Text="医嘱类型" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="200" Padding="6,0"><TextBlock Text="医嘱名称" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="60" Padding="6,0"><TextBlock Text="组" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="85" Padding="6,0"><TextBlock Text="皮试" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="55" Padding="6,0"><TextBlock Text="总量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="55" Padding="6,0"><TextBlock Text="总单位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="70" Padding="6,0"><TextBlock Text="每次用量" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="50" Padding="6,0"><TextBlock Text="单位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="50" Padding="6,0"><TextBlock Text="付数" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="75" Padding="6,0"><TextBlock Text="频次编码" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="85" Padding="6,0"><TextBlock Text="用法名称" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="70" Padding="6,0"><TextBlock Text="院注次数" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="75" Padding="6,0"><TextBlock Text="开立医生" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="95" Padding="6,0"><TextBlock Text="执行科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="55" Padding="6,0"><TextBlock Text="加急" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="85" Padding="6,0"><TextBlock Text="检查部位" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="75" Padding="6,0"><TextBlock Text="样本类型" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="95" Padding="6,0"><TextBlock Text="扣库科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="110" Padding="6,0"><TextBlock Text="备注" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="75" Padding="6,0"><TextBlock Text="录入人" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="85" Padding="6,0"><TextBlock Text="开立科室" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="120" Padding="6,0"><TextBlock Text="开立时间" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="80" Padding="6,0"><TextBlock Text="停止时间" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
-                                            <Border Width="70" Padding="6,0"><TextBlock Text="停止人" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
+                                            <ItemsControl ItemsSource="{Binding Workbench.PrescriptionColumns}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:PrescriptionColumnModel">
+                                                        <Border Width="{Binding Width}" Padding="6,0">
+                                                            <TextBlock Text="{Binding FieldLabel}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                             <Border Width="95" Padding="6,0"><TextBlock Text="操作" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/></Border>
                                         </StackPanel>
                                     </Border>
@@ -627,112 +621,42 @@
                                                         <Border Width="30" Padding="4,0" VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding StatusAlertIcon}" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center"/>
                                                         </Border>
-                                                        <!-- 3. 医嘱类型 -->
-                                                        <Border Width="80" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding OrderType}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 4. 医嘱名称 -->
-                                                        <Border Width="200" Padding="6,0" VerticalAlignment="Center">
-                                                            <StackPanel Spacing="1">
-                                                                <TextBlock Text="{Binding DrugName}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                                <TextBlock Text="{Binding Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" IsVisible="{Binding Spec, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                                                <TextBlock Text="{Binding CustomFieldsSummary}" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CustomFieldsSummary}" IsVisible="{Binding CustomFieldsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                                            </StackPanel>
-                                                        </Border>
-                                                        <!-- 5. 组 -->
-                                                        <Border Width="60" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding GroupNoDisplay}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                        <!-- 6. 皮试 -->
-                                                        <Border Width="85" Padding="6,0" VerticalAlignment="Center">
-                                                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="3" Padding="4,1" HorizontalAlignment="Left">
-                                                                <TextBlock Text="{Binding SkinTest}" FontSize="11" FontWeight="SemiBold"/>
-                                                            </Border>
-                                                        </Border>
-                                                        <!-- 7. 总量 -->
-                                                        <Border Width="55" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding TotalQuantity}" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                        <!-- 8. 总单位 -->
-                                                        <Border Width="55" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding TotalUnit}" FontSize="12" HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                        <!-- 9. 每次用量 -->
-                                                        <Border Width="70" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding SingleDose}" FontSize="12" HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                        <!-- 10. 单位 -->
-                                                        <Border Width="50" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding DoseUnit}" FontSize="12" HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                        <!-- 11. 付数 -->
-                                                        <Border Width="50" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding PaymentCount}" FontSize="12" HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                        <!-- 12. 频次编码 -->
-                                                        <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding FrequencyCode}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 13. 用法名称 -->
-                                                        <Border Width="85" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding RouteName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 14. 院注次数 -->
-                                                        <Border Width="70" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding HospitalInjectionCount}" FontSize="12" HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                        <!-- 15. 开立医生 -->
-                                                        <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding DoctorName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 16. 执行科室 -->
-                                                        <Border Width="95" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding ExecDeptName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 17. 加急 -->
-                                                        <Border Width="55" Padding="6,0" VerticalAlignment="Center">
-                                                            <Panel HorizontalAlignment="Center">
-                                                                <TextBlock Text="{Binding IsUrgentText}" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" IsVisible="{Binding IsUrgent}"/>
-                                                                <TextBlock Text="常规" Foreground="{DynamicResource SemiColorText2}" IsVisible="{Binding !IsUrgent}"/>
-                                                            </Panel>
-                                                        </Border>
-                                                        <!-- 18. 检查部位 -->
-                                                        <Border Width="85" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding ExamBodyPart}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 19. 样本类型 -->
-                                                        <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding SpecimenType}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 20. 扣库科室 -->
-                                                        <Border Width="95" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding DeductStockDept}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 21. 备注 -->
-                                                        <Border Width="110" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding MedicationNote}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding MedicationNote}"/>
-                                                        </Border>
-                                                        <!-- 22. 录入人 -->
-                                                        <Border Width="75" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding OperatorName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 23. 开立科室 -->
-                                                        <Border Width="85" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding DeptName}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 24. 开立时间 -->
-                                                        <Border Width="120" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding CreatedAtText}" FontSize="11" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 25. 停止时间 -->
-                                                        <Border Width="80" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding StopTimeText}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 26. 停止人 -->
-                                                        <Border Width="70" Padding="6,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding StopDoctor}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
-                                                        </Border>
-                                                        <!-- 27. 操作 -->
+                                                        <!-- 3. 动态 BO 字段列 (由动态表单配置实时驱动) -->
+                                                        <ItemsControl ItemsSource="{Binding Cells}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <StackPanel Orientation="Horizontal"/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:PrescriptionCellModel">
+                                                                    <Border Width="{Binding Width}" Padding="6,0" VerticalAlignment="Center">
+                                                                        <Panel>
+                                                                            <!-- 医嘱名称（含规格与动态字段摘要） -->
+                                                                            <StackPanel Spacing="1" IsVisible="{Binding IsDrugName}">
+                                                                                <TextBlock Text="{Binding Item.DrugName}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                                                <TextBlock Text="{Binding Item.Spec}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis" IsVisible="{Binding Item.Spec, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                                                <TextBlock Text="{Binding Item.CustomFieldsSummary}" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Item.CustomFieldsSummary}" IsVisible="{Binding Item.CustomFieldsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                                            </StackPanel>
+                                                                            <!-- 组号 -->
+                                                                            <TextBlock Text="{Binding Item.GroupNoDisplay}" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center" IsVisible="{Binding IsGroupNo}"/>
+                                                                            <!-- 皮试 -->
+                                                                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="3" Padding="4,1" HorizontalAlignment="Left" IsVisible="{Binding IsSkinTest}">
+                                                                                <TextBlock Text="{Binding Item.SkinTest}" FontSize="11" FontWeight="SemiBold"/>
+                                                                            </Border>
+                                                                            <!-- 加急 -->
+                                                                            <Panel HorizontalAlignment="Center" IsVisible="{Binding IsUrgent}">
+                                                                                <TextBlock Text="{Binding Item.IsUrgentText}" FontWeight="Bold" Foreground="{DynamicResource SemiColorDanger}" IsVisible="{Binding Item.IsUrgent}"/>
+                                                                                <TextBlock Text="常规" Foreground="{DynamicResource SemiColorText2}" IsVisible="{Binding !Item.IsUrgent}"/>
+                                                                            </Panel>
+                                                                            <!-- 其他所有业务字段及用户自定义扩展字段：直接展示 DisplayValue -->
+                                                                            <TextBlock Text="{Binding DisplayValue}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayValue}" IsVisible="{Binding IsStandardField}"/>
+                                                                        </Panel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <!-- 4. 操作 -->
                                                         <Border Width="95" Padding="6,0" VerticalAlignment="Center">
                                                             <Button Content="删除" Height="26" Padding="8,0" FontSize="11" Classes="Danger"
                                                                     Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).DeleteItemWithUndoCommand}"
@@ -798,9 +722,10 @@
                         <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
                             <ScrollViewer>
                                 <StackPanel Spacing="10">
-                                    <Grid ColumnDefinitions="*,Auto">
+                                    <Grid ColumnDefinitions="*,Auto,Auto">
                                         <TextBlock Grid.Column="0" Text="医技项目开单与执行路由 (步骤 3)" FontSize="15" FontWeight="Bold"/>
-                                        <Button Grid.Column="1" Content="+ 新增医技申请" Classes="Primary" Height="30" Command="{Binding AddMedTechOrderCommand}"/>
+                                        <Button Grid.Column="1" Content="查看报告与影像 (PACS/HIE)" Classes="Secondary" Height="30" Margin="0,0,8,0" Command="{Binding ViewMedTechReportsCommand}"/>
+                                        <Button Grid.Column="2" Content="+ 选择检查/检验项目开单" Classes="Primary" Height="30" Command="{Binding AddMedTechOrderCommand}"/>
                                     </Grid>
 
                                     <ItemsControl ItemsSource="{Binding Workbench.MedTechOrders}">
@@ -1022,9 +947,10 @@
                                                                                       Content="{Binding ElementName}"/>
 
                                                                             <!-- DatePicker -->
-                                                                            <DatePicker IsVisible="{Binding ShowDateEditor}"
-                                                                                        SelectedDate="{Binding DateValue, Mode=TwoWay}"
-                                                                                        Height="32"/>
+                                                                            <u:DatePicker IsVisible="{Binding ShowDateEditor}"
+                                                                                          SelectedDate="{Binding DateValueDateTime, Mode=TwoWay}"
+                                                                                          DisplayFormat="yyyy-MM-dd"
+                                                                                          Height="32"/>
                                                                         </StackPanel>
                                                                     </DataTemplate>
                                                                 </ItemsControl.ItemTemplate>
@@ -1097,6 +1023,122 @@
                     <controls:BoDynamicFormPanel EntityType="OPD_VISIT"
                                                  EntityId="{Binding Workbench.SelectedPatient.VisitId}"/>
                 </ScrollViewer>
+            </TabItem>
+
+            <!-- Step 6: 中药饮片处方与代煎服务 -->
+            <TabItem Header="⑥ 中药饮片处方">
+                <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="10">
+                    <!-- Top Preset Formulas & Quick Actions -->
+                    <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <TextBlock Text="🌿 常用经方经典名方快速套用:" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                <Button Content="四君子汤 (益气健脾)" Classes="Secondary" Height="28" Command="{Binding LoadQuickFormulaCommand}" CommandParameter="SI_JUN_ZI"/>
+                                <Button Content="补中益气汤 (升阳举陷)" Classes="Secondary" Height="28" Command="{Binding LoadQuickFormulaCommand}" CommandParameter="BU_ZHONG"/>
+                                <Button Content="生脉散 (益气复脉)" Classes="Secondary" Height="28" Command="{Binding LoadQuickFormulaCommand}" CommandParameter="SHENG_MAI"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="➕ 添加自选饮片" Classes="Primary" Height="28" Command="{Binding AddCustomHerbCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Prescription Parameters: Dose Count, Route, Frequency, Decoction Option -->
+                    <Border Grid.Row="1" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                        <Grid ColumnDefinitions="*,*,*,*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,8,0">
+                                <TextBlock Text="处方付数 (剂数):" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <NumericUpDown Value="{Binding TcmDoseCount, Mode=TwoWay}" Minimum="1" Maximum="30" Height="30"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="3" Margin="0,0,8,0">
+                                <TextBlock Text="给药途径:" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBox Text="{Binding TcmRoute, Mode=TwoWay}" Height="30"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="3" Margin="0,0,8,0">
+                                <TextBlock Text="服药频次:" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBox Text="{Binding TcmFrequency, Mode=TwoWay}" Height="30"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" Spacing="3" Margin="0,0,8,0">
+                                <TextBlock Text="代煎服务:" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <CheckBox IsChecked="{Binding TcmRequiresDecoction, Mode=TwoWay}" Content="医院代煎真空包装 (￥5/剂)" Height="30"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="4" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock Text="代煎服务费小计:" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                <TextBlock Text="{Binding TcmDecoctionTotalFee, StringFormat='￥{0:F2}'}" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Herb Items Matrix -->
+                    <Border Grid.Row="2" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="14">
+                        <Grid RowDefinitions="Auto,*">
+                            <TextBlock Grid.Row="0" Text="📋 饮片组方明细 (单剂克数与特殊煎服法)" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}" Margin="0,0,0,10"/>
+                            <ScrollViewer Grid.Row="1">
+                                <ItemsControl ItemsSource="{Binding TcmHerbItems}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="opd:TcmHerbItemModel">
+                                            <Border Width="230"
+                                                    Margin="0,0,10,10"
+                                                    Padding="12,10"
+                                                    Background="{DynamicResource SemiColorBackground0}"
+                                                    BorderBrush="{DynamicResource SemiColorBorder}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="6">
+                                                <StackPanel Spacing="4">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding HerbName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource SemiColorText0}"/>
+                                                        <Button Grid.Column="1" Content="✕" Classes="Tertiary" Height="22" Width="22" Padding="0"
+                                                                Command="{Binding $parent[UserControl].((opd:OpdDoctorViewModel)DataContext).RemoveTcmHerbCommand}"
+                                                                CommandParameter="{Binding}"/>
+                                                    </Grid>
+                                                    <Grid ColumnDefinitions="Auto,*">
+                                                        <TextBlock Grid.Column="0" Text="单剂剂量:" FontSize="11" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+                                                            <NumericUpDown Value="{Binding SingleDoseG, Mode=TwoWay}" Minimum="1" Maximum="100" Height="26" Width="90"/>
+                                                            <TextBlock Text="g" FontSize="11" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding TotalWeightG, StringFormat='总重: {0}g'}" FontSize="11" Foreground="{DynamicResource SemiColorText1}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding ItemTotal, StringFormat='￥{0:F2}'}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding SpecialInstructions, StringFormat='特殊煎服: {0}'}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <!-- Bottom Cost Calculation & Submit CTA -->
+                    <Border Grid.Row="3" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Padding="16,12" Margin="0,10,0,0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="24" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding TcmHerbItems.Count, StringFormat='味数: {0} 味'}" FontSize="13" Foreground="{DynamicResource SemiColorText1}"/>
+                                <TextBlock Text="{Binding TcmDoseCount, StringFormat='付数: {0} 付'}" FontSize="13" Foreground="{DynamicResource SemiColorText1}"/>
+                                <TextBlock Text="{Binding TcmHerbsTotalAmount, StringFormat='饮片药费: ￥{0:F2}'}" FontSize="13" Foreground="{DynamicResource SemiColorText1}"/>
+                                <TextBlock Text="{Binding TcmDecoctionTotalFee, StringFormat='代煎费: ￥{0:F2}'}" FontSize="13" Foreground="{DynamicResource SemiColorText1}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="处方总计:" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding TcmGrandTotal, StringFormat='￥{0:F2}'}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <Button Grid.Column="1"
+                                    Content="开立中药饮片处方"
+                                    Classes="Primary"
+                                    Height="36"
+                                    Padding="20,0"
+                                    FontWeight="Bold"
+                                    Command="{Binding SubmitTcmPrescriptionCommand}"/>
+                        </Grid>
+                    </Border>
+                </Grid>
             </TabItem>
         </TabControl>
         </Grid>

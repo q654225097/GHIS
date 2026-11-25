@@ -10,6 +10,10 @@ public class MedTechOrderItemModel : ClientModelBase
 
 	private bool _isFeeLocked;
 
+	public string RequestId { get; set; } = string.Empty;
+
+	public string PatientId { get; set; } = string.Empty;
+
 	public string RequestNo { get; set; } = string.Empty;
 
 	public string ItemName { get; set; } = string.Empty;

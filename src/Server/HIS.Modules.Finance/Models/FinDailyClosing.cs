@@ -17,4 +17,5 @@ public class FinDailyClosing : BaseEntity
 	public decimal NetAmount { get; set; }
 
 	public int ReconciledStatus { get; set; } = 1;
+	public string CampusId { get; set; } = "CAMPUS-01";
 }

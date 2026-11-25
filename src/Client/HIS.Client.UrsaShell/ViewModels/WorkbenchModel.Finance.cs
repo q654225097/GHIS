@@ -3,111 +3,202 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Threading.Tasks;
+using HIS.BuildingBlocks.Common;
 using HIS.Client.Core;
 
 namespace HIS.Client.UrsaShell.ViewModels;
 
+public sealed class FinPaymentOrderDto
+{
+	public string Id { get; set; } = string.Empty;
+	public string PaymentNo { get; set; } = string.Empty;
+	public decimal TotalAmount { get; set; }
+	public int Status { get; set; }
+}
+
+public sealed class FinRefundOrderDto
+{
+	public string Id { get; set; } = string.Empty;
+	public string RefundNo { get; set; } = string.Empty;
+	public decimal RefundAmount { get; set; }
+	public int Status { get; set; }
+}
+
+public sealed class FinDailyClosingDto
+{
+	public string Id { get; set; } = string.Empty;
+	public string ClosingNo { get; set; } = string.Empty;
+	public decimal TotalIncome { get; set; }
+	public decimal TotalRefund { get; set; }
+	public decimal NetAmount { get; set; }
+}
+
 public partial class WorkbenchModel
 {
-	public void CashierSettleAndNotifyPharmacy(PharmacyDispenseModel? item = null)
+	public bool LastFinancialOperationSuccess { get; set; }
+
+	public async Task<bool> CashierSettleAndNotifyPharmacyAsync(PharmacyDispenseModel? item = null)
 	{
 		EnsurePharmacyWarehouseFinanceInitialized();
 		if (!CanOperateFinance)
 		{
+			LastFinancialOperationSuccess = false;
 			SystemNotice = "🛡️ [职责分离 SoD 权限拦截] 处方收费结算属于【财务处收费员 (ROLE-CASHIER)】专属职责！当前角色无收费权限，请点击「切换为财务收费员」后再操作。";
-			return;
+			return false;
 		}
-		PharmacyDispenseModel pharmacyDispenseModel = item ?? PharmacyRecords.FirstOrDefault((PharmacyDispenseModel x) => !x.IsPaidNotified && !x.IsOrderClosed && !x.IsReturned);
-		if (pharmacyDispenseModel == null)
+
+		PharmacyDispenseModel? target = item;
+		if (target == null)
 		{
-			SystemNotice = "⚠️ [A➔B➔C 闭环门禁拦截] 当前无处于【步骤A：医生已签发·待收费】的处方！请先在「门诊医生站」按 A(接诊)➔B(病历审签)➔C(签署处方推送) 推送处方后再执行收费结算。";
-			return;
+			LastFinancialOperationSuccess = false;
+			SystemNotice = "⚠️ [操作拦截] 请先在列表中明确选中需要收费结算的处方订单，系统禁止未选单自动结算！";
+			return false;
 		}
-		if (pharmacyDispenseModel.IsPaidNotified)
+
+		if (target.IsPaidNotified)
 		{
-			SystemNotice = "处方 [" + pharmacyDispenseModel.PrescriptionNo + "] 已完成【步骤B：财务收费通知】，请直接执行【步骤C：药房条码核验发药】！";
-			return;
+			LastFinancialOperationSuccess = false;
+			SystemNotice = $"处方 [{target.PrescriptionNo}] 已完成收费通知，请直接执行【步骤C：药房条码核验发药】！";
+			return false;
 		}
-		string value = $"PAY{DateTime.Now:yyMMddHHmmss}";
-		pharmacyDispenseModel.PaymentOrderNo = value;
-		pharmacyDispenseModel.IsPaidNotified = true;
-		pharmacyDispenseModel.CanDispense = !pharmacyDispenseModel.IsAllergyBlocked;
-		pharmacyDispenseModel.DispenseStatus = (pharmacyDispenseModel.IsAllergyBlocked ? "⚠️ 已收费 · 但被过敏红线阻断" : "已收费通知药房 · 待扫码发药");
-		pharmacyDispenseModel.PaymentNoticeStatus = $"✓ [步骤B完成] 收费员刘洋已收费 ({value} · ¥{pharmacyDispenseModel.TotalAmount:0.00}) -> 处方状态变更为 [已收费(3)] 并实时通知药房可发药！";
-		RecalculateDrugStockAndFinanceMetrics();
-		SystemNotice = $"💰 [步骤B：收费状态变更通知药房完成] 处方 [{pharmacyDispenseModel.PrescriptionNo}] ({pharmacyDispenseModel.PatientName}) 已完成收费结算 ({value})，已解锁【步骤C：药房扫码发药并关单】！";
+
+		string clientRequestKey = "CASHIER_" + Guid.NewGuid().ToString("N");
+		var patientId = !string.IsNullOrWhiteSpace(target.PatientId) ? target.PatientId : "PAT-OPD-01";
+		var visitId = !string.IsNullOrWhiteSpace(target.VisitId) ? target.VisitId : target.PrescriptionNo;
 
 		try
 		{
 			using HttpClient http = CreateConfigHttpClient();
-			var patientId = !string.IsNullOrWhiteSpace(pharmacyDispenseModel.PatientId)
-				? pharmacyDispenseModel.PatientId
-				: "PAT-OPD-01";
-			var visitId = !string.IsNullOrWhiteSpace(pharmacyDispenseModel.VisitId)
-				? pharmacyDispenseModel.VisitId
-				: pharmacyDispenseModel.PrescriptionNo;
 			var settleDto = new
 			{
 				Scene = "OPD",
 				PatientId = patientId,
 				VisitOrEncounterId = visitId,
-				TotalAmount = pharmacyDispenseModel.TotalAmount,
+				TotalAmount = target.TotalAmount,
 				InsuranceAmount = 0m,
 				PrepaymentDeduct = 0m,
-				SelfPayAmount = pharmacyDispenseModel.TotalAmount,
+				SelfPayAmount = target.TotalAmount,
 				PaymentChannel = "CASH",
 				ChargeItems = (object?)null,
-				RequestKey = "CASHIER_" + value
+				RequestKey = clientRequestKey
 			};
-			_ = http.PostAsJsonAsync("/api/v4/finance/settle", settleDto);
+
+			var response = await http.PostAsJsonAsync("/api/v4/finance/settle", settleDto);
+			var envelope = await response.Content.ReadFromJsonAsync<ApiResponse<FinPaymentOrderDto>>();
+
+			if (!response.IsSuccessStatusCode || envelope == null || envelope.Code is not (0 or 200) || envelope.Data == null)
+			{
+				LastFinancialOperationSuccess = false;
+				string errMsg = envelope?.Message ?? response.ReasonPhrase ?? "服务端结算处理失败";
+				SystemNotice = $"❌ [收费失败] 处方 [{target.PrescriptionNo}] 结算被服务端拦截: {errMsg}";
+				return false;
+			}
+
+			string serverPaymentNo = !string.IsNullOrWhiteSpace(envelope.Data.PaymentNo)
+				? envelope.Data.PaymentNo
+				: (!string.IsNullOrWhiteSpace(envelope.Data.Id) ? envelope.Data.Id : $"PAY{DateTime.Now:yyMMddHHmmss}");
+
+			target.PaymentOrderNo = serverPaymentNo;
+			target.IsPaidNotified = true;
+			target.CanDispense = !target.IsAllergyBlocked;
+			target.DispenseStatus = (target.IsAllergyBlocked ? "⚠️ 已收费 · 但被过敏红线阻断" : "已收费通知药房 · 待扫码发药");
+			target.PaymentNoticeStatus = $"✓ [已完成收费] 收费单号: {serverPaymentNo} · 实收 ¥{target.TotalAmount:0.00} -> 处方状态变更为 [已收费(3)] 并实时通知药房可发药！";
+			RecalculateDrugStockAndFinanceMetrics();
+			LastFinancialOperationSuccess = true;
+			SystemNotice = $"💰 [步骤B：收费完成] 处方 [{target.PrescriptionNo}] ({target.PatientName}) 结算成功 (后台凭证: {serverPaymentNo} · ¥{target.TotalAmount:0.00})，已推送药房发药队列！";
+			return true;
 		}
-		catch { }
+		catch (Exception ex)
+		{
+			LastFinancialOperationSuccess = false;
+			SystemNotice = $"❌ [收费超时/网络异常] 处方 [{target.PrescriptionNo}] 结算请求未获确认: {ex.Message}，未更改本地支付状态，请核对原单后重试！";
+			return false;
+		}
 	}
 
-	public void ExecuteFinancialRefundForOrder(PharmacyDispenseModel? item = null)
+	public void CashierSettleAndNotifyPharmacy(PharmacyDispenseModel? item = null)
+	{
+		_ = CashierSettleAndNotifyPharmacyAsync(item);
+	}
+
+	public async Task<bool> ExecuteFinancialRefundForOrderAsync(PharmacyDispenseModel? item = null)
 	{
 		EnsurePharmacyWarehouseFinanceInitialized();
 		if (!CanOperateFinance)
 		{
+			LastFinancialOperationSuccess = false;
 			SystemNotice = "🛡️ [职责分离 SoD 权限拦截] 原路退费结清属于【财务处收费员 (ROLE-CASHIER)】专属职责！药房仅负责退药入库，严禁药房直接退钱，请切换为财务收费员执行步骤E退费。";
-			return;
+			return false;
 		}
-		PharmacyDispenseModel pharmacyDispenseModel = item ?? PharmacyRecords.FirstOrDefault((PharmacyDispenseModel x) => x.IsReturned && !x.IsFinancialRefunded);
-		if (pharmacyDispenseModel == null)
-		{
-			SystemNotice = "⚠️ [C➔D➔E 顺序门禁拦截] 必须先由药房完成【步骤D：退药扫码质检入库 (drug_return_confirmed=1)】，财务窗口方可解锁执行【步骤E：退费结清】！";
-			return;
-		}
-		if (!pharmacyDispenseModel.IsReturned)
-		{
-			SystemNotice = "⚠️ [C➔D➔E 顺序门禁拦截] 处方 [" + pharmacyDispenseModel.PrescriptionNo + "] 药品尚未退回药房（drug_return_confirmed=0），严禁在未退药情况下直接退费！";
-			return;
-		}
-		if (pharmacyDispenseModel.IsFinancialRefunded)
-		{
-			SystemNotice = "处方 [" + pharmacyDispenseModel.PrescriptionNo + "] 已完成财务退费结清，不能重复退费。";
-			return;
-		}
-		string value = $"REF{DateTime.Now:yyMMddHHmmss}";
-		pharmacyDispenseModel.IsFinancialRefunded = true;
-		pharmacyDispenseModel.DispenseStatus = "✓ 步骤A~E全闭环: 已退药回库并完成财务退费";
-		pharmacyDispenseModel.PaymentNoticeStatus = $"✓ [步骤E完成] 财务收费员刘洋已凭药房退药单完成原路退费 ({value} · -¥{pharmacyDispenseModel.TotalAmount:0.00})，医-药-财五步闭环完毕！";
-		RecalculateDrugStockAndFinanceMetrics();
-		SystemNotice = $"💸 [步骤E：财务退费结清完成] 处方 [{pharmacyDispenseModel.PrescriptionNo}] ({pharmacyDispenseModel.PatientName}) 已凭药房退药确认回执完成退费 (-¥{pharmacyDispenseModel.TotalAmount:0.00}，单号 {value})，A➔B➔C➔D➔E 全链路闭环！";
 
+		PharmacyDispenseModel? target = item;
+		if (target == null)
+		{
+			LastFinancialOperationSuccess = false;
+			SystemNotice = "⚠️ [操作拦截] 请先在列表中明确选中需要退费冲红的订单，系统禁止未选单自动退款！";
+			return false;
+		}
+
+		if (!target.IsReturned)
+		{
+			LastFinancialOperationSuccess = false;
+			SystemNotice = $"⚠️ [C➔D➔E 顺序门禁拦截] 处方 [{target.PrescriptionNo}] 药品尚未退回药房（drug_return_confirmed=0），严禁在未退药情况下直接退费！";
+			return false;
+		}
+		if (target.IsFinancialRefunded)
+		{
+			LastFinancialOperationSuccess = false;
+			SystemNotice = $"处方 [{target.PrescriptionNo}] 已完成财务退费结清，不能重复退费。";
+			return false;
+		}
+
+		string clientRequestKey = "REFUND_" + Guid.NewGuid().ToString("N");
 		try
 		{
 			using HttpClient http = CreateConfigHttpClient();
 			var refundDto = new
 			{
-				PaymentOrderId = pharmacyDispenseModel.PaymentOrderNo ?? pharmacyDispenseModel.PrescriptionNo,
-				RefundAmount = pharmacyDispenseModel.TotalAmount,
+				PaymentOrderId = target.PaymentOrderNo ?? target.PrescriptionNo,
+				RefundAmount = target.TotalAmount,
 				Reason = "药房已完成实物退药入库质检，财务处依药房退药单办理原路退费冲红",
-				RequestKey = "REFUND_" + value
+				RequestKey = clientRequestKey
 			};
-			_ = http.PostAsJsonAsync("/api/v4/finance/refund", refundDto);
+
+			var response = await http.PostAsJsonAsync("/api/v4/finance/refund", refundDto);
+			var envelope = await response.Content.ReadFromJsonAsync<ApiResponse<FinRefundOrderDto>>();
+
+			if (!response.IsSuccessStatusCode || envelope == null || envelope.Code is not (0 or 200) || envelope.Data == null)
+			{
+				LastFinancialOperationSuccess = false;
+				string errMsg = envelope?.Message ?? response.ReasonPhrase ?? "服务端退费处理失败";
+				SystemNotice = $"❌ [退费失败] 处方 [{target.PrescriptionNo}] 退款被服务端拦截: {errMsg}";
+				return false;
+			}
+
+			string serverRefundNo = !string.IsNullOrWhiteSpace(envelope.Data.RefundNo)
+				? envelope.Data.RefundNo
+				: (!string.IsNullOrWhiteSpace(envelope.Data.Id) ? envelope.Data.Id : $"REF{DateTime.Now:yyMMddHHmmss}");
+
+			target.IsFinancialRefunded = true;
+			target.DispenseStatus = "✓ 步骤A~E全闭环: 已退药回库并完成财务退费";
+			target.PaymentNoticeStatus = $"✓ [步骤E完成] 财务收费员已凭药房退药单完成原路退费 (红字单据: {serverRefundNo} · -¥{target.TotalAmount:0.00})，医-药-财五步闭环完毕！";
+			RecalculateDrugStockAndFinanceMetrics();
+			LastFinancialOperationSuccess = true;
+			SystemNotice = $"💸 [步骤E：财务退费冲红完成] 处方 [{target.PrescriptionNo}] ({target.PatientName}) 已凭药房退药确认回执完成原路退款 (-¥{target.TotalAmount:0.00}，单号 {serverRefundNo})！";
+			return true;
 		}
-		catch { }
+		catch (Exception ex)
+		{
+			LastFinancialOperationSuccess = false;
+			SystemNotice = $"❌ [退费超时/网络异常] 处方 [{target.PrescriptionNo}] 退款请求未获确认: {ex.Message}，未更改本地状态，请核对原单！";
+			return false;
+		}
+	}
+
+	public void ExecuteFinancialRefundForOrder(PharmacyDispenseModel? item = null)
+	{
+		_ = ExecuteFinancialRefundForOrderAsync(item);
 	}
 
 	public void SettleInpatientInsuranceForPatient(InpatientRecordModel? patient = null)
@@ -140,29 +231,50 @@ public partial class WorkbenchModel
 		}
 	}
 
-	public void GenerateCashierDailyClosing()
+	public async Task<bool> GenerateCashierDailyClosingAsync()
 	{
 		EnsurePharmacyWarehouseFinanceInitialized();
 		if (!CanOperateFinance)
 		{
+			LastFinancialOperationSuccess = false;
 			SystemNotice = "🛡️ [职责分离 SoD 权限拦截] 收费员日结轧账单生成属于【财务收费员 (ROLE-CASHIER)】专属职责！";
-			return;
+			return false;
 		}
-		List<PharmacyDispenseModel> list = PharmacyRecords.Where((PharmacyDispenseModel x) => x.IsPaidNotified).ToList();
-		List<PharmacyDispenseModel> list2 = PharmacyRecords.Where((PharmacyDispenseModel x) => x.IsFinancialRefunded).ToList();
-		List<InpatientRecordModel> list3 = AllInpatientRecords.Where((InpatientRecordModel x) => x.PrepaymentCleared).ToList();
-		decimal num = list.Sum((PharmacyDispenseModel x) => x.TotalAmount) + list3.Sum((InpatientRecordModel x) => x.ActualSelfPay);
-		decimal num2 = list2.Sum((PharmacyDispenseModel x) => x.TotalAmount);
-		decimal value = num - num2;
-		string value2 = $"CLS-{DateTime.Now:yyyyMMdd-HHmmss}";
-		DailyClosingStatusText = $"✓ 日结轧账完成 · 日结单 [{value2}] 已生成 | 收费员: {CurrentOperatorName} | 门急诊收费:{list.Count}笔 | 退费冲红:{list2.Count}笔 (-¥{num2:N2}) | 住院结清:{list3.Count}人 | 实收净额: ¥{value:N2}";
-		SystemNotice = $"📊 [财务日结轧账完成] 已生成收费员日结单 [{value2}]，实收净额 ¥{value:N2}，账实相符并已锁定日结区间！";
 
 		try
 		{
 			using HttpClient http = CreateConfigHttpClient();
-			_ = http.PostAsync("/api/v4/finance/daily-closing", null);
+			var response = await http.PostAsync("/api/v4/finance/daily-closing", null);
+			var envelope = await response.Content.ReadFromJsonAsync<ApiResponse<FinDailyClosingDto>>();
+
+			if (!response.IsSuccessStatusCode || envelope == null || envelope.Code is not (0 or 200) || envelope.Data == null)
+			{
+				LastFinancialOperationSuccess = false;
+				string errMsg = envelope?.Message ?? response.ReasonPhrase ?? "服务端日结处理失败";
+				SystemNotice = $"❌ [日结失败] 日结请求被服务端拦截: {errMsg}";
+				return false;
+			}
+
+			var closing = envelope.Data;
+			string serverClosingNo = !string.IsNullOrWhiteSpace(closing.ClosingNo)
+				? closing.ClosingNo
+				: (!string.IsNullOrWhiteSpace(closing.Id) ? closing.Id : $"CLS-{DateTime.Now:yyyyMMdd-HHmmss}");
+
+			DailyClosingStatusText = $"✓ 服务端日结完成 · 日结单 [{serverClosingNo}] | 收费员: {CurrentOperatorName} | 门诊/住院实收: ¥{closing.TotalIncome:N2} | 退款冲红: -¥{closing.TotalRefund:N2} | 实缴净额: ¥{closing.NetAmount:N2}";
+			LastFinancialOperationSuccess = true;
+			SystemNotice = $"📊 [财务日结轧账完成] 服务端已锁定今日流水，正式日结单 [{serverClosingNo}]，实收净额 ¥{closing.NetAmount:N2}！";
+			return true;
 		}
-		catch { }
+		catch (Exception ex)
+		{
+			LastFinancialOperationSuccess = false;
+			SystemNotice = $"❌ [日结超时/网络异常] 日结请求未获确认: {ex.Message}";
+			return false;
+		}
+	}
+
+	public void GenerateCashierDailyClosing()
+	{
+		_ = GenerateCashierDailyClosingAsync();
 	}
 }

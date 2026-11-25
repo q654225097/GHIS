@@ -19,4 +19,8 @@ public static class SystemTime
 
 	public static long TomorrowStartUtcMs =>
 		new DateTimeOffset(ShanghaiNow.Date.AddDays(1), ShanghaiOffset).ToUnixTimeMilliseconds();
+
+	public static string NowDateTimeString => ShanghaiNow.ToString(DateTimeStandards.DateTimeFormat);
+
+	public static string TodayDateString => ShanghaiNow.ToString(DateTimeStandards.DateFormat);
 }

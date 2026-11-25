@@ -17,7 +17,27 @@ namespace HIS.Modules.Ordering.Controllers;
 [Route("api/v4/orders")]
 public class OrderingController : ControllerBase
 {
-	public sealed record CreateOrderRequestDto(string EncounterId, string PatientId, string OrderIpdDeptId, string PatientWardId, string ExecTargetDeptId, int OrderTermType, int GroupNo, string OrderCategory, string ItemCode, string ItemName, decimal Dosage, string FrequencyCode, string RouteCode, string OrderDoctorId);
+	public sealed record CreateOrderRequestDto(
+		string EncounterId,
+		string PatientId,
+		string OrderIpdDeptId,
+		string PatientWardId,
+		string ExecTargetDeptId,
+		int OrderTermType,
+		int GroupNo,
+		string OrderCategory,
+		string ItemCode,
+		string ItemName,
+		decimal Dosage,
+		string FrequencyCode,
+		string RouteCode,
+		string OrderDoctorId,
+		string? OrderSubType = null,
+		string? ParentOrderId = null,
+		bool IsUrgent = false,
+		bool AllowArrearsOverride = false);
+
+	public sealed record AssignGroupRequestDto(IReadOnlyList<string> OrderIds, int? GroupNo = null, string? ParentOrderId = null);
 
 	public sealed record VerifyOrderRequestDto(string VerifyNurseId, string WardId);
 
@@ -111,18 +131,37 @@ public class OrderingController : ControllerBase
 			return ApiResponse<OrdMedicalOrder>.Fail(400, "住院就诊ID不能为空");
 		if (req.OrderTermType is not (1 or 2))
 			return ApiResponse<OrdMedicalOrder>.Fail(400, "医嘱性质必须为长期(1)或临时(2)");
-		if (req.Dosage <= 0m)
+		var subType = string.IsNullOrWhiteSpace(req.OrderSubType) ? "NORMAL" : req.OrderSubType.Trim().ToUpperInvariant();
+		if (subType == "DISCHARGE_MED" && req.OrderTermType != 2)
+			return ApiResponse<OrdMedicalOrder>.Fail(400, "出院带药医嘱性质必须为临时医嘱(2)");
+		if (subType != "INSTRUCTION" && req.Dosage <= 0m)
 			return ApiResponse<OrdMedicalOrder>.Fail(400, "医嘱剂量必须大于零");
 
 		await using var conn = _connFactory.CreateConnection();
 		await conn.OpenAsync();
 		var encounter = await conn.QuerySingleOrDefaultAsync<OrderEncounterRow>(new CommandDefinition(
-			"SELECT id, patient_id, admit_dept_id, admit_ward_id, status, triage_status FROM ipd_encounters WHERE id = @Id",
+			"SELECT id, patient_id, admit_dept_id, admit_ward_id, prepayment_balance, status, triage_status FROM ipd_encounters WHERE id = @Id",
 			new { Id = req.EncounterId.Trim() }));
 		if (encounter == null)
 			return ApiResponse<OrdMedicalOrder>.Fail(404, "住院就诊记录不存在");
 		if (encounter.Status != 1 || encounter.TriageStatus != 1)
 			return ApiResponse<OrdMedicalOrder>.Fail(409, "患者尚未完成病区接诊或已不在院，禁止开立医嘱");
+
+		if (!req.IsUrgent && !req.AllowArrearsOverride && subType is not ("INSTRUCTION" or "DISCHARGE_MED"))
+		{
+			decimal feeItemsTotal = await conn.ExecuteScalarAsync<decimal>(new CommandDefinition(
+				"SELECT COALESCE(SUM(total_amount), 0) FROM fin_inpatient_fee_items WHERE encounter_id = @EncId AND is_refunded = 0 AND is_settled = 0",
+				new { EncId = encounter.Id }));
+			decimal ledgersTotal = await conn.ExecuteScalarAsync<decimal>(new CommandDefinition(
+				"SELECT COALESCE(SUM(total_amount), 0) FROM fin_charge_ledgers WHERE visit_or_encounter_id = @EncId AND status = 1",
+				new { EncId = encounter.Id }));
+			decimal availableBalance = encounter.PrepaymentBalance - (feeItemsTotal + ledgersTotal);
+			if (availableBalance < 0m)
+			{
+				return ApiResponse<OrdMedicalOrder>.Fail(409,
+					$"患者住院预交金已欠费 ¥{Math.Abs(availableBalance):0.00}（ARREARS_LOCKOUT），非紧急医嘱开立受限！请尽快补缴押金或由主治勾选加急抢救绿色通道开立。");
+			}
+		}
 
 		var patient = await _patientContract?.GetPatientSummaryAsync(encounter.PatientId)
 			?? await LoadPatientSummaryAsync(conn, encounter.PatientId);
@@ -143,6 +182,15 @@ public class OrderingController : ControllerBase
 
 		var frequencyCode = string.IsNullOrWhiteSpace(req.FrequencyCode) ? "QD" : req.FrequencyCode.Trim().ToUpperInvariant();
 		var category = string.IsNullOrWhiteSpace(req.OrderCategory) ? "DRUG" : req.OrderCategory.Trim().ToUpperInvariant();
+		if (subType == "INSTRUCTION") category = "INSTRUCTION";
+		if (!string.IsNullOrWhiteSpace(req.ItemCode))
+		{
+			int? orderItemActive = await conn.QueryFirstOrDefaultAsync<int?>(new CommandDefinition(
+				"SELECT is_active FROM cfg_order_items WHERE order_item_code = @Code LIMIT 1",
+				new { Code = req.ItemCode.Trim() }));
+			if (orderItemActive == 0)
+				return ApiResponse<OrdMedicalOrder>.Fail(409, $"诊疗服务项目主数据 [{req.ItemCode}] 已停用，禁止开立医嘱");
+		}
 		var itemCode = req.ItemCode?.Trim() ?? string.Empty;
 		var itemName = req.ItemName?.Trim() ?? string.Empty;
 		DrugCatalogSnapshotDto? drug = null;
@@ -167,6 +215,28 @@ public class OrderingController : ControllerBase
 
 			if ((drug.AntibioticLevel >= 2 || drug.IsNarcotic || drug.IsSkinTestRequired) && _session!.PrescribeLevel < 2)
 				return ApiResponse<OrdMedicalOrder>.Fail(403, "当前医师处方权限不足，不能开立限制级抗菌药、麻精药或需皮试药品");
+
+			if (drug.AntibioticLevel >= 2 && !req.IsUrgent)
+			{
+				int microCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+					"""
+					SELECT (
+					    SELECT count(*) FROM mtc_service_requests
+					    WHERE (patient_id = @PatId OR source_visit_id = @EncId)
+					      AND status <> 4
+					      AND (med_tech_sub_type IN ('LAB', 'MICROBIOLOGY') OR service_item_code LIKE '%MICRO%' OR service_item_code LIKE '%CULTURE%')
+					) + (
+					    SELECT count(*) FROM ord_medical_orders
+					    WHERE encounter_id = @EncId AND order_category IN ('LAB', 'EXAM') AND status IN (0, 1, 2)
+					)
+					""",
+					new { PatId = encounter.PatientId, EncId = encounter.Id }));
+				if (microCount == 0)
+				{
+					return ApiResponse<OrdMedicalOrder>.Fail(409,
+						$"【抗菌药物管理规范拦截】开立限制使用级/特殊使用级抗菌药 [{itemName}] 前，须先为患者开立病原学/微生物送检申请（若属急诊抢救用药，请勾选加急）。");
+				}
+			}
 		}
 		else if (string.IsNullOrWhiteSpace(itemName))
 		{
@@ -211,6 +281,8 @@ public class OrderingController : ControllerBase
 			OrderTermType = req.OrderTermType,
 			GroupNo = req.GroupNo > 0 ? req.GroupNo : 1,
 			OrderCategory = category,
+			OrderSubType = subType,
+			ParentOrderId = string.IsNullOrWhiteSpace(req.ParentOrderId) ? null : req.ParentOrderId.Trim(),
 			ItemCode = itemCode,
 			ItemName = itemName,
 			Dosage = req.Dosage,
@@ -224,6 +296,10 @@ public class OrderingController : ControllerBase
 			UpdatedBy = doctorId
 		};
 		await _orderRepo.InsertAsync(order);
+		if (req.IsUrgent)
+		{
+			await conn.ExecuteAsync("UPDATE ord_medical_orders SET is_urgent = 1 WHERE id = @Id", new { Id = order.Id });
+		}
 		if (_workflowEngine != null && string.Equals(order.ApprovalStatus, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
 		{
 			var wfStart = await _workflowEngine.StartWorkflowAsync("ORD_SPECIAL_DRUG", order.Id, doctorId, encounter.AdmitDeptId, new Dictionary<string, object?>
@@ -232,7 +308,7 @@ public class OrderingController : ControllerBase
 				["itemCode"] = order.ItemCode,
 				["itemName"] = order.ItemName,
 				["dosage"] = order.Dosage,
-				["antibioticLevel"] = 3
+				["antibioticLevel"] = drug?.AntibioticLevel ?? 0
 			});
 			if (wfStart.IsWorkflowTriggered && !string.IsNullOrWhiteSpace(wfStart.InstanceId))
 			{
@@ -291,21 +367,151 @@ public class OrderingController : ControllerBase
 				throw new OrderConflictException("医嘱已被其他护士校对，禁止重复分解");
 			order.Status = 1;
 			order.VerifyNurseId = nurseId;
-			foreach (long plannedMs in plannedTimestampsMs)
+			if (order.OrderSubType != "DISCHARGE_MED")
 			{
-				OrdExecutionPlan plan = new OrdExecutionPlan
+				foreach (long plannedMs in plannedTimestampsMs)
 				{
-					OrderId = order.Id,
-					EncounterId = order.EncounterId,
-					WardId = wardId,
-					PlannedTimeMs = plannedMs,
-					ExecStatus = 0
-				};
-				await _planRepo.InsertAsync(plan, ct);
+					OrdExecutionPlan plan = new OrdExecutionPlan
+					{
+						OrderId = order.Id,
+						EncounterId = order.EncounterId,
+						WardId = wardId,
+						PlannedTimeMs = plannedMs,
+						ExecStatus = 0
+					};
+					await _planRepo.InsertAsync(plan, ct);
+				}
+			}
+
+			// Group cascading verify: verify sibling orders in the same group atomically
+			if (order.GroupNo > 0)
+			{
+				var siblings = (await _orderRepo.QueryAsync(
+					"SELECT * FROM ord_medical_orders WHERE encounter_id = @EncId AND group_no = @Grp AND order_term_type = @Term AND status = 0 AND id != @Id",
+					new { EncId = order.EncounterId, Grp = order.GroupNo, Term = order.OrderTermType, Id = order.Id }, ct)).ToList();
+
+				foreach (var sib in siblings)
+				{
+					await txConn.ExecuteAsync(new CommandDefinition(
+						"UPDATE ord_medical_orders SET status = 1, verify_nurse_id = @NurseId, updated_at_ms = @Now, updated_by = @NurseId, version_no = version_no + 1 WHERE id = @Id AND status = 0",
+						new { Id = sib.Id, NurseId = nurseId, Now = SystemTime.UtcNowMs }));
+					if (sib.OrderSubType != "DISCHARGE_MED")
+					{
+						var sibPlans = await ResolvePlannedTimestampsMsAsync(sib.FrequencyCode, sib.OrderTermType);
+						foreach (long plannedMs in sibPlans)
+						{
+							OrdExecutionPlan plan = new OrdExecutionPlan
+							{
+								OrderId = sib.Id,
+								EncounterId = sib.EncounterId,
+								WardId = wardId,
+								PlannedTimeMs = plannedMs,
+								ExecStatus = 0
+							};
+							await _planRepo.InsertAsync(plan, ct);
+						}
+					}
+					else
+					{
+						await EnsureDischargeMedicationSyncedAsync(txConn, sib, nurseId);
+					}
+				}
+			}
+			if (order.OrderSubType == "DISCHARGE_MED")
+			{
+				await EnsureDischargeMedicationSyncedAsync(txConn, order, nurseId);
 			}
 		});
-		await RecordAuditAsync("ORD_VERIFY", order, $"病区护士校对并分解 {plannedTimestampsMs.Count} 条执行计划");
-		return ApiResponse<OrdMedicalOrder>.Success(order, $"病区护士校对成功，已按频次 [{order.FrequencyCode}] 自动分解 {plannedTimestampsMs.Count} 条执行计划");
+		await RecordAuditAsync("ORD_VERIFY", order, $"病区护士校对并分解 {(order.OrderSubType == "DISCHARGE_MED" ? 0 : plannedTimestampsMs.Count)} 条执行计划");
+		return ApiResponse<OrdMedicalOrder>.Success(order, $"病区护士校对成功，已按频次 [{order.FrequencyCode}] 自动联动处理成组医嘱执行计划");
+	}
+
+	private static async Task EnsureDischargeMedicationSyncedAsync(System.Data.Common.DbConnection conn, OrdMedicalOrder order, string actorId)
+	{
+		long now = SystemTime.UtcNowMs;
+		string patName = await conn.QuerySingleOrDefaultAsync<string>(
+			"SELECT COALESCE(full_name, @PatId) FROM pat_patients WHERE id = @PatId", new { PatId = order.PatientId }) ?? order.PatientId;
+		decimal unitPrice = await conn.QuerySingleOrDefaultAsync<decimal>(
+			"SELECT COALESCE(price, 0) FROM inv_drugs WHERE id = @Code OR drug_code = @Code LIMIT 1", new { Code = order.ItemCode });
+		string docName = await conn.QuerySingleOrDefaultAsync<string>(
+			"SELECT COALESCE(display_name, @DocId) FROM sys_users WHERE id = @DocId", new { DocId = order.OrderDoctorId }) ?? order.OrderDoctorId;
+
+		await conn.ExecuteAsync("""
+			INSERT OR IGNORE INTO ipd_discharge_medications
+			    (id, rx_no, encounter_id, patient_name, medications_summary, total_amount, prescribed_by,
+			     status, schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no)
+			VALUES
+			    (@Id, @RxNo, @EncId, @PatName, @Summary, @Amt, @DocName,
+			     'PRESCRIBED', 1, @Now, @Actor, @Now, @Actor, 1)
+			""", new
+		{
+			Id = order.Id,
+			RxNo = order.OrderNo,
+			EncId = order.EncounterId,
+			PatName = patName,
+			Summary = $"{order.ItemName} × {order.Dosage} ({order.FrequencyCode}/{order.RouteCode})",
+			Amt = Math.Round(unitPrice * Math.Max(1m, order.Dosage), 2),
+			DocName = docName,
+			Now = now,
+			Actor = actorId
+		});
+	}
+
+	[HttpPost("group")]
+	public async Task<ApiResponse<object>> AssignOrderGroup([FromBody] AssignGroupRequestDto req)
+	{
+		var authError = RequireRoles("ROLE-IPD-RESIDENT", "ROLE-IPD-ATTENDING", "IPD_RESIDENT", "IPD_ATTENDING");
+		if (authError != null)
+			return ApiResponse<object>.Fail(authError.Value.Status, authError.Value.Message);
+		if (req?.OrderIds == null || req.OrderIds.Count < 2)
+			return ApiResponse<object>.Fail(400, "成组医嘱至少需要勾选 2 条医嘱");
+
+		await using var conn = _connFactory.CreateConnection();
+		await conn.OpenAsync();
+		var ids = req.OrderIds.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList();
+		var orders = (await conn.QueryAsync<OrdMedicalOrder>(
+			"SELECT * FROM ord_medical_orders WHERE id IN @Ids", new { Ids = ids })).ToList();
+		if (orders.Count != ids.Count)
+			return ApiResponse<object>.Fail(404, "部分选中医嘱不存在于数据库");
+		var encId = orders[0].EncounterId;
+		if (orders.Any(o => o.EncounterId != encId))
+			return ApiResponse<object>.Fail(400, "仅同一次住院的医嘱允许成组");
+		int groupNo = req.GroupNo is > 0 ? req.GroupNo.Value : (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() % 100000);
+		string parentId = string.IsNullOrWhiteSpace(req.ParentOrderId) ? orders[0].Id : req.ParentOrderId.Trim();
+		long now = SystemTime.UtcNowMs;
+		string actor = _session?.UserId ?? "SYSTEM";
+		await conn.ExecuteAsync(
+			"UPDATE ord_medical_orders SET group_no = @Grp, parent_order_id = @ParentId, updated_at_ms = @Now, updated_by = @Actor, version_no = version_no + 1 WHERE id IN @Ids",
+			new { Grp = groupNo, ParentId = parentId, Now = now, Actor = actor, Ids = ids });
+		return ApiResponse<object>.Success(new { GroupNo = groupNo, ParentOrderId = parentId, Count = ids.Count }, $"已完成 {ids.Count} 条医嘱服务端持久化成组 (组号 {groupNo})");
+	}
+
+	[HttpPost("ungroup")]
+	public async Task<ApiResponse<object>> UngroupOrders([FromBody] AssignGroupRequestDto req)
+	{
+		var authError = RequireRoles("ROLE-IPD-RESIDENT", "ROLE-IPD-ATTENDING", "IPD_RESIDENT", "IPD_ATTENDING");
+		if (authError != null)
+			return ApiResponse<object>.Fail(authError.Value.Status, authError.Value.Message);
+		if (req?.OrderIds == null || req.OrderIds.Count == 0)
+			return ApiResponse<object>.Fail(400, "请选择要解组的医嘱");
+		await using var conn = _connFactory.CreateConnection();
+		await conn.OpenAsync();
+		var ids = req.OrderIds.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList();
+		var orders = (await conn.QueryAsync<OrdMedicalOrder>(
+			"SELECT * FROM ord_medical_orders WHERE id IN @Ids", new { Ids = ids })).ToList();
+		if (orders.Count != ids.Count)
+			return ApiResponse<object>.Fail(404, "部分选中医嘱不存在于数据库");
+		var encId = orders[0].EncounterId;
+		if (orders.Any(o => !string.Equals(o.EncounterId, encId, StringComparison.OrdinalIgnoreCase)))
+			return ApiResponse<object>.Fail(400, "仅同一次住院的医嘱允许解组");
+		if (orders.Any(o => o.Status != 0))
+			return ApiResponse<object>.Fail(409, "仅待校对状态医嘱允许解除成组，已校对或执行中的医嘱禁止解组");
+		long now = SystemTime.UtcNowMs;
+		string actor = _session?.UserId ?? "SYSTEM";
+		await conn.ExecuteAsync(
+			"UPDATE ord_medical_orders SET group_no = 0, parent_order_id = NULL, updated_at_ms = @Now, updated_by = @Actor, version_no = version_no + 1 WHERE id IN @Ids AND status = 0",
+			new { Now = now, Actor = actor, Ids = ids });
+		return ApiResponse<object>.Success(new { Count = ids.Count }, $"已解除 {ids.Count} 条医嘱的成组关联");
 	}
 
 	[HttpPost("{orderId}/stop")]
@@ -333,12 +539,28 @@ public class OrderingController : ControllerBase
 			return ApiResponse<OrdMedicalOrder>.Fail(403, "只能由本医嘱开立医师、同科室值班医师或同病区医师执行停止操作");
 		}
 		long nowMs = SystemTime.UtcNowMs;
+		bool cascadeGroup = order.GroupNo > 0;
 		await _connFactory.ExecuteInTransactionAsync(async (CancellationToken ct) =>
 		{
 			await using var conn = _connFactory.CreateConnection();
-			var affected = await conn.ExecuteAsync(new CommandDefinition(
-				"UPDATE ord_medical_orders SET status = 3, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId, updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1 WHERE id = @Id AND status IN (0, 1, 2)",
-				new { Id = order.Id, Now = nowMs, DoctorId = doctorId }));
+			// Cascade stop all orders in the group ONLY when group_no > 0; ungrouped (group_no == 0) stops only this order
+			int affected = cascadeGroup
+				? await conn.ExecuteAsync(new CommandDefinition(
+					"""
+					UPDATE ord_medical_orders
+					SET status = 3, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId,
+					    updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1
+					WHERE encounter_id = @EncId AND group_no = @Grp AND order_term_type = @Term AND status IN (0, 1, 2)
+					""",
+					new { EncId = order.EncounterId, Grp = order.GroupNo, Term = order.OrderTermType, Now = nowMs, DoctorId = doctorId }, cancellationToken: ct))
+				: await conn.ExecuteAsync(new CommandDefinition(
+					"""
+					UPDATE ord_medical_orders
+					SET status = 3, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId,
+					    updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1
+					WHERE id = @OrderId AND status IN (0, 1, 2)
+					""",
+					new { OrderId = order.Id, Now = nowMs, DoctorId = doctorId }, cancellationToken: ct));
 			if (affected == 0)
 				throw new OrderConflictException("医嘱状态已变更，停止失败");
 			order.Status = 3;
@@ -346,15 +568,32 @@ public class OrderingController : ControllerBase
 			order.ActualStopAtMs = nowMs;
 			order.StopDoctorId = doctorId;
 			order.UpdatedBy = doctorId;
-			await conn.ExecuteAsync(new CommandDefinition(
-				"UPDATE ord_execution_plans SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1 WHERE order_id = @OrderId AND exec_status = 0",
-				new { Now = nowMs, OrderId = order.Id }));
+			if (cascadeGroup)
+			{
+				await conn.ExecuteAsync(new CommandDefinition(
+					"""
+					UPDATE ord_execution_plans
+					SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1
+					WHERE order_id IN (
+					    SELECT id FROM ord_medical_orders
+					    WHERE encounter_id = @EncId AND group_no = @Grp AND order_term_type = @Term
+					) AND exec_status = 0
+					""",
+					new { EncId = order.EncounterId, Grp = order.GroupNo, Term = order.OrderTermType, Now = nowMs }, cancellationToken: ct));
+			}
+			else
+			{
+				await conn.ExecuteAsync(new CommandDefinition(
+					"UPDATE ord_execution_plans SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1 WHERE order_id = @OrderId AND exec_status = 0",
+					new { OrderId = order.Id, Now = nowMs }, cancellationToken: ct));
+			}
 		});
-		await RecordAuditAsync("ORD_STOP", order, "医师下达停嘱指令，未执行的护理分解计划已撤销");
+		await RecordAuditAsync("ORD_STOP", order, $"医师下达停嘱指令，{(cascadeGroup ? "同组医嘱及" : "本条医嘱")}未执行护理分解计划已撤销");
 		return ApiResponse<OrdMedicalOrder>.Success(order, "医嘱已下达停止指令，后续未执行的护理分解计划已自动撤销");
 	}
 
 	[HttpPost("{orderId}/discontinue")]
+	[HttpPost("{orderId}/void")]
 	public async Task<ApiResponse<OrdMedicalOrder>> DiscontinueOrder(string orderId, [FromQuery] string doctorId, [FromQuery] string? reason = null)
 	{
 		var authError = RequireRoles("ROLE-IPD-RESIDENT", "ROLE-IPD-ATTENDING", "IPD_RESIDENT", "IPD_ATTENDING");
@@ -374,32 +613,87 @@ public class OrderingController : ControllerBase
 		{
 			return ApiResponse<OrdMedicalOrder>.Fail(403, "只能由本医嘱开立医师、同科室值班医师或同病区医师作废医嘱");
 		}
-		if ((await _planRepo.QueryAsync("SELECT * FROM ord_execution_plans WHERE order_id = @OrderId AND exec_status = 1", new
-		{
-			OrderId = order.Id
-		})).Count > 0)
-		{
-			return ApiResponse<OrdMedicalOrder>.Fail(400, "该医嘱已有床旁执行记录，严禁作废！请走“停止医嘱”流程。");
-		}
+
 		long nowMs = SystemTime.UtcNowMs;
+		var voidReason = string.IsNullOrWhiteSpace(reason) ? "医生作废医嘱" : reason.Trim();
+		bool cascadeGroup = order.GroupNo > 0;
+		string? preCheckError = null;
 		await _connFactory.ExecuteInTransactionAsync(async (CancellationToken ct) =>
 		{
 			await using var conn = _connFactory.CreateConnection();
-			var affected = await conn.ExecuteAsync(new CommandDefinition(
-				"UPDATE ord_medical_orders SET status = 4, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId, updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1 WHERE id = @Id AND status IN (0, 1, 2)",
-				new { Id = order.Id, Now = nowMs, DoctorId = doctorId }));
+			int executedCount = cascadeGroup
+				? await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+					"""
+					SELECT count(*) FROM ord_execution_plans
+					WHERE order_id IN (
+					    SELECT id FROM ord_medical_orders
+					    WHERE encounter_id = @EncId AND group_no = @Grp AND order_term_type = @Term
+					) AND exec_status = 1
+					""",
+					new { EncId = order.EncounterId, Grp = order.GroupNo, Term = order.OrderTermType }, cancellationToken: ct))
+				: await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+					"SELECT count(*) FROM ord_execution_plans WHERE order_id = @OrderId AND exec_status = 1",
+					new { OrderId = order.Id }, cancellationToken: ct));
+			if (executedCount > 0)
+			{
+				preCheckError = "该组医嘱已有床旁执行记录，严禁作废！请走“停止医嘱”流程。";
+				return;
+			}
+
+			int affected = cascadeGroup
+				? await conn.ExecuteAsync(new CommandDefinition(
+					"""
+					UPDATE ord_medical_orders
+					SET status = 4, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId,
+					    void_doctor_id = @DoctorId, void_reason = @Reason, void_at_ms = @Now,
+					    updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1
+					WHERE encounter_id = @EncId AND group_no = @Grp AND order_term_type = @Term AND status IN (0, 1, 2)
+					""",
+					new { EncId = order.EncounterId, Grp = order.GroupNo, Term = order.OrderTermType, Now = nowMs, DoctorId = doctorId, Reason = voidReason }, cancellationToken: ct))
+				: await conn.ExecuteAsync(new CommandDefinition(
+					"""
+					UPDATE ord_medical_orders
+					SET status = 4, plan_stop_at_ms = @Now, actual_stop_at_ms = @Now, stop_doctor_id = @DoctorId,
+					    void_doctor_id = @DoctorId, void_reason = @Reason, void_at_ms = @Now,
+					    updated_at_ms = @Now, updated_by = @DoctorId, version_no = version_no + 1
+					WHERE id = @OrderId AND status IN (0, 1, 2)
+					""",
+					new { OrderId = order.Id, Now = nowMs, DoctorId = doctorId, Reason = voidReason }, cancellationToken: ct));
 			if (affected == 0)
 				throw new OrderConflictException("医嘱已执行、停止或作废，无法作废");
 			order.Status = 4;
 			order.PlanStopAtMs = nowMs;
 			order.ActualStopAtMs = nowMs;
 			order.StopDoctorId = doctorId;
+			order.VoidDoctorId = doctorId;
+			order.VoidReason = voidReason;
+			order.VoidAtMs = nowMs;
 			order.UpdatedBy = doctorId;
-			await conn.ExecuteAsync(new CommandDefinition(
-				"UPDATE ord_execution_plans SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1 WHERE order_id = @OrderId AND exec_status = 0",
-				new { Now = nowMs, OrderId = order.Id }));
+			if (cascadeGroup)
+			{
+				await conn.ExecuteAsync(new CommandDefinition(
+					"""
+					UPDATE ord_execution_plans
+					SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1
+					WHERE order_id IN (
+					    SELECT id FROM ord_medical_orders
+					    WHERE encounter_id = @EncId AND group_no = @Grp AND order_term_type = @Term
+					) AND exec_status = 0
+					""",
+					new { EncId = order.EncounterId, Grp = order.GroupNo, Term = order.OrderTermType, Now = nowMs }, cancellationToken: ct));
+			}
+			else
+			{
+				await conn.ExecuteAsync(new CommandDefinition(
+					"UPDATE ord_execution_plans SET exec_status = 2, updated_at_ms = @Now, version_no = version_no + 1 WHERE order_id = @OrderId AND exec_status = 0",
+					new { OrderId = order.Id, Now = nowMs }, cancellationToken: ct));
+			}
 		});
-		await RecordAuditAsync("ORD_DISCONTINUE", order, "未经床旁执行的医嘱已作废" + (string.IsNullOrWhiteSpace(reason) ? "" : $"：{reason}"));
+		if (preCheckError != null)
+		{
+			return ApiResponse<OrdMedicalOrder>.Fail(400, preCheckError);
+		}
+		await RecordAuditAsync("ORD_DISCONTINUE", order, $"未经床旁执行的{(cascadeGroup ? "成组" : "")}医嘱已作废：{voidReason}");
 		return ApiResponse<OrdMedicalOrder>.Success(order, "医嘱已作废，关联待执行计划已全部撤销");
 	}
 
@@ -665,6 +959,7 @@ public class OrderingController : ControllerBase
 		public string PatientId { get; set; } = "";
 		public string AdmitDeptId { get; set; } = "";
 		public string AdmitWardId { get; set; } = "";
+		public decimal PrepaymentBalance { get; set; }
 		public int Status { get; set; }
 		public int TriageStatus { get; set; }
 	}
@@ -716,6 +1011,23 @@ public class OrderingController : ControllerBase
 				{
 					return parsedMs;
 				}
+			}
+		}
+		if (!string.IsNullOrWhiteSpace(frequencyCode))
+		{
+			await using var ruleConn = _connFactory.CreateConnection();
+			string? ruleExecTimes = await ruleConn.QuerySingleOrDefaultAsync<string?>(
+				"SELECT default_exec_times FROM mdm_medication_rules WHERE UPPER(frequency_code) = UPPER(@Freq) AND is_active = 1 AND default_exec_times IS NOT NULL LIMIT 1",
+				new { Freq = frequencyCode.Trim() });
+			if (!string.IsNullOrWhiteSpace(ruleExecTimes))
+			{
+				var ruleMs = ruleExecTimes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+					.Select(tp => TimeOnly.TryParseExact(tp, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : (TimeOnly?)null)
+					.Where(t => t.HasValue)
+					.Select(t => new DateTimeOffset(baseShanghaiDate.Date.Add(t!.Value.ToTimeSpan()), SystemTime.ShanghaiOffset).ToUnixTimeMilliseconds())
+					.ToList();
+				if (ruleMs.Count > 0)
+					return ruleMs;
 			}
 		}
 		IReadOnlyList<int> offsets = ResolvePlanHourOffsets(frequencyCode, orderTermType);

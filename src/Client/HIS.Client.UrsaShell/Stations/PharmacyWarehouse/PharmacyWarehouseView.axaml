@@ -146,7 +146,7 @@
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Spacing="3">
                                         <TextBlock Text="有效期 (yyyy-MM-dd)" Classes="caption"/>
-                                        <TextBox Text="{Binding Pharmacy.ExpiryDate, Mode=TwoWay}" Height="30"/>
+                                        <u:DatePicker SelectedDate="{Binding Pharmacy.ExpiryDateDateTime, Mode=TwoWay}" DisplayFormat="yyyy-MM-dd" Height="30"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="3" Spacing="3">
                                         <TextBlock Text="入库数量" Classes="caption"/>
@@ -502,6 +502,167 @@
                                 </WrapPanel>
                                 <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="5" Padding="10,8">
                                     <TextBlock Text="{Binding Pharmacy.SelectedDrugText}" FontSize="11" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap"/>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 智能补货预测 -->
+            <TabItem Header="智能补货预测">
+                <Grid RowDefinitions="Auto,*" RowSpacing="10" Margin="0,8,0,0">
+                    <Border Grid.Row="0" Classes="panel">
+                        <Grid ColumnDefinitions="Auto,90,Auto,*,Auto,Auto" ColumnSpacing="10">
+                            <TextBlock Text="安全库存天数:" Classes="strongCell" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding ForecastSafetyDays, Mode=TwoWay}" Height="30"/>
+                            <TextBlock Grid.Column="2" Text="{Binding GspStatusMessage}" Classes="caption" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                            <Button Grid.Column="4" Content="刷新预测模型" Classes="Primary" Height="30" Padding="14,0"
+                                    Command="{Binding LoadForecastCommand}"/>
+                            <Button Grid.Column="5" Content="按30天预测生成调拨单" Classes="Warning" Height="30" Padding="14,0"
+                                    Command="{Binding GenerateReplenishTransferCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Classes="panel">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="105,1.2*,90,150,180,1.4*" Margin="8,0">
+                                <TextBlock Grid.Column="0" Text="编码" Classes="tableHead"/>
+                                <TextBlock Grid.Column="1" Text="药品/规格" Classes="tableHead"/>
+                                <TextBlock Grid.Column="2" Text="风险等级" Classes="tableHead"/>
+                                <TextBlock Grid.Column="3" Text="当前可用" Classes="tableHead"/>
+                                <TextBlock Grid.Column="4" Text="历史消耗" Classes="tableHead"/>
+                                <TextBlock Grid.Column="5" Text="30/60/90天补货建议" Classes="tableHead"/>
+                            </Grid>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding ForecastRows}" SelectedItem="{Binding SelectedForecastRow, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:ForecastDrugItemVm">
+                                        <Border Padding="8,7" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                                            <Grid ColumnDefinitions="105,1.2*,90,150,180,1.4*">
+                                                <TextBlock Grid.Column="0" Text="{Binding DrugCode}" Classes="caption" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <TextBlock Text="{Binding DrugName}" Classes="strongCell"/>
+                                                    <TextBlock Text="{Binding Spec}" Classes="caption"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="{Binding RiskDisplay}" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding StockAndDaysText}" Classes="tableCell"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding DailyUsageText}" Classes="caption" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding SuggestionText}" Classes="strongCell" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: 采购订单与GSP双人验收 / 效期冻结 -->
+            <TabItem Header="采购与GSP验收">
+                <Grid ColumnDefinitions="1.1*,1*" ColumnSpacing="10" Margin="0,8,0,0">
+                    <!-- 左侧：采购订单与GSP台账 -->
+                    <Border Grid.Column="0" Classes="panel">
+                        <Grid RowDefinitions="Auto,*,Auto,*" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <TextBlock Text="药品采购计划订单 (PO)" Classes="sectionTitle" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="审批选中PO" Classes="Success" Height="28" Padding="12,0"
+                                        Command="{Binding ApproveSelectedPoCommand}"/>
+                                <Button Grid.Column="2" Content="刷新台账" Height="28" Padding="12,0"
+                                        Command="{Binding LoadGspWorkspaceCommand}"/>
+                            </Grid>
+
+                            <ListBox Grid.Row="1" ItemsSource="{Binding PurchaseOrders}" SelectedItem="{Binding SelectedPurchaseOrder, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:PurchaseOrderItemVm">
+                                        <Border Padding="8,7" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding SummaryLine}" Classes="strongCell"/>
+                                                <TextBlock Text="{Binding CreatedAtText, StringFormat='制单时间: {0}'}" Classes="caption"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <TextBlock Grid.Row="2" Text="GSP 到货验收双人签名台账" Classes="sectionTitle"/>
+                            <ListBox Grid.Row="3" ItemsSource="{Binding GspAcceptances}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:GspAcceptanceItemVm">
+                                        <Border Padding="8,6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
+                                            <TextBlock Text="{Binding SummaryLine}" Classes="tableCell" TextWrapping="Wrap"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧：新建采购单 + GSP到货验收 + 近效期冻结巡检 -->
+                    <Border Grid.Column="1" Classes="panel">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="12">
+                                <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="新建采购订单" Classes="sectionTitle" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        <Grid ColumnDefinitions="*,100" ColumnSpacing="8">
+                                            <ComboBox ItemsSource="{Binding Suppliers}" SelectedItem="{Binding SelectedSupplier, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="local:SupplierItemVm">
+                                                        <TextBlock Text="{Binding DisplayName}"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <TextBox Grid.Column="1" Text="{Binding PoQuantity, Mode=TwoWay}" PlaceholderText="采购量"/>
+                                        </Grid>
+                                        <ComboBox ItemsSource="{Binding Pharmacy.Drugs}" SelectedItem="{Binding SelectedGspDrug, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:DrugRow">
+                                                    <TextBlock Text="{Binding DisplayName}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <CheckBox Content="制单即自动审批" IsChecked="{Binding PoAutoApprove, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1" Content="提交采购单" Classes="Primary" Height="32" Padding="14,0"
+                                                    Command="{Binding CreatePurchaseOrderCommand}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="GSP 到货验收双人复核" Classes="sectionTitle" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                        <Grid ColumnDefinitions="*,120,90" ColumnSpacing="8">
+                                            <TextBox Text="{Binding GspBatchNo, Mode=TwoWay}" PlaceholderText="厂方批号"/>
+                                            <TextBox Grid.Column="1" Text="{Binding GspExpiryDate, Mode=TwoWay}" PlaceholderText="YYYY-MM-DD"/>
+                                            <TextBox Grid.Column="2" Text="{Binding GspQuantity, Mode=TwoWay}" PlaceholderText="实收数"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                            <TextBox Text="{Binding GspReceiverId, Mode=TwoWay}" PlaceholderText="验收员工号 (必填)"/>
+                                            <TextBox Grid.Column="1" Text="{Binding GspCheckerId, Mode=TwoWay}" PlaceholderText="复核员工号 (必须异人)"/>
+                                        </Grid>
+                                        <WrapPanel>
+                                            <CheckBox Content="外观正常" IsChecked="{Binding GspAppearanceOk, Mode=TwoWay}" Margin="0,0,12,0"/>
+                                            <CheckBox Content="包装完好" IsChecked="{Binding GspPackageIntact, Mode=TwoWay}" Margin="0,0,12,0"/>
+                                            <CheckBox Content="标签一致" IsChecked="{Binding GspLabelConsistent, Mode=TwoWay}"/>
+                                        </WrapPanel>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                            <TextBox Text="{Binding GspColdChainTemp, Mode=TwoWay}" PlaceholderText="冷链温度℃ (选填)"/>
+                                            <TextBox Grid.Column="1" Text="{Binding GspMaxColdChainTemp, Mode=TwoWay}" PlaceholderText="上限℃ (默认8)"/>
+                                        </Grid>
+                                        <Button Content="提交 GSP 双人验收入库 (异常自动冻结隔离)" Classes="Success" Height="34" HorizontalAlignment="Stretch"
+                                                Command="{Binding SubmitGspAcceptanceCommand}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                    <Grid ColumnDefinitions="*,110,Auto" ColumnSpacing="8">
+                                        <TextBlock Text="效期巡检自动冻结阈值 (天，0=仅已过期):" Classes="tableCell" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Column="1" Text="{Binding GspNearExpiryDays, Mode=TwoWay}"/>
+                                        <Button Grid.Column="2" Content="执行效期冻结巡检" Classes="Warning" Height="32" Padding="12,0"
+                                                Command="{Binding AutoFreezeExpiredCommand}"/>
+                                    </Grid>
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>

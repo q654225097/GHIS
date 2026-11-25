@@ -24,4 +24,16 @@ public class IpdTransferLog : BaseEntity
 	public long HandoverOutAtMs { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
 	public long? HandoverInAtMs { get; set; }
+
+	public string? SbarSituation { get; set; }
+
+	public string? SbarBackground { get; set; }
+
+	public string? SbarAssessment { get; set; }
+
+	public string? SbarRecommendation { get; set; }
+
+	public short OrdersReorganized { get; set; } = 0;
+
+	public int ReorganizedCount { get; set; } = 0;
 }

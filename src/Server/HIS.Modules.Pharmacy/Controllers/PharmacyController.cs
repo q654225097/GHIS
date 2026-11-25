@@ -724,8 +724,18 @@ public partial class PharmacyController : ControllerBase
 				if (!string.IsNullOrWhiteSpace(loaded.WardSummaryId))
 				{
 					await conn.ExecuteAsync(new CommandDefinition(
-						"UPDATE fin_inpatient_fee_items SET is_refunded = 1, updated_at_ms = @Now, updated_by = @PharmacistId WHERE encounter_id = @EncounterId AND is_settled = 0 AND is_refunded = 0",
-						new { EncounterId = loaded.WardSummaryId, Now = nowMs, PharmacistId = pharmacistId },
+						"""
+						UPDATE fin_inpatient_fee_items
+						SET is_refunded = 1, updated_at_ms = @Now, updated_by = @PharmacistId
+						WHERE encounter_id = @EncounterId
+						  AND is_settled = 0
+						  AND is_refunded = 0
+						  AND order_id IN (
+						      SELECT medical_order_id FROM phm_dispense_order_lines
+						      WHERE dispense_order_id = @DispenseOrderId AND medical_order_id IS NOT NULL
+						  )
+						""",
+						new { EncounterId = loaded.WardSummaryId, DispenseOrderId = loaded.Id, Now = nowMs, PharmacistId = pharmacistId },
 						tx, cancellationToken: ct));
 				}
 				if (!string.IsNullOrWhiteSpace(loaded.PrescriptionId))
@@ -825,7 +835,7 @@ public partial class PharmacyController : ControllerBase
 			       o.route_code AS RouteCode, o.plan_start_at_ms AS PlanStartAtMs,
 			       e.admission_no AS AdmissionNo, p.medical_record_no AS Mrn, p.full_name AS PatientName,
 			       e.admit_ward_id AS WardId, COALESCE(w.dept_name, e.admit_ward_id) AS WardName,
-			       COALESCE(d.price, 0) AS UnitDosage, COALESCE(d.unit_name, '') AS UnitName,
+			       o.dosage AS UnitDosage, COALESCE(d.unit_name, '') AS UnitName,
 			       COALESCE((SELECT SUM(l.quantity) FROM phm_dispense_order_lines l
 			                 WHERE l.medical_order_id = o.id), 0) AS ClaimedQuantity
 			FROM ord_medical_orders o
@@ -940,7 +950,7 @@ public partial class PharmacyController : ControllerBase
 					       o.route_code AS RouteCode, o.plan_start_at_ms AS PlanStartAtMs,
 					       e.admission_no AS AdmissionNo, p.medical_record_no AS Mrn, p.full_name AS PatientName,
 					       e.admit_ward_id AS WardId, COALESCE(w.dept_name, e.admit_ward_id) AS WardName,
-					       COALESCE(d.price, 0) AS UnitDosage, COALESCE(d.unit_name, '') AS UnitName,
+					       o.dosage AS UnitDosage, COALESCE(d.unit_name, '') AS UnitName,
 					       0 AS ClaimedQuantity
 					FROM ord_medical_orders o
 					INNER JOIN ipd_encounters e ON e.id = o.encounter_id
@@ -1104,7 +1114,7 @@ public partial class PharmacyController : ControllerBase
 							Id = Guid.NewGuid().ToString("D"),
 							EncounterId = encounter.Id,
 							PatientId = encounter.PatientId,
-							FeeDateInt = int.Parse(DateTimeOffset.UtcNow.ToString("yyyyMMdd")),
+							FeeDateInt = SystemTime.TodayInt,
 							ItemCode = drug.DrugCode,
 							ItemName = drug.DrugName,
 							UnitPrice = drug.Price,
@@ -1116,6 +1126,10 @@ public partial class PharmacyController : ControllerBase
 							Now = nowMs,
 							OperatorId = pharmacistId
 						}, tx, cancellationToken: ct));
+
+					await conn.ExecuteAsync(new CommandDefinition(
+						"UPDATE ipd_discharge_medications SET status = 'DISPENSED', total_amount = @ActualAmount, dispensed_at_ms = @Now, updated_at_ms = @Now, updated_by = @Actor WHERE id = @OrderId AND status = 'PRESCRIBED'",
+						new { ActualAmount = Math.Round(drug.Price * line.Quantity, 2), Now = nowMs, Actor = pharmacistId, OrderId = line.MedicalOrderId }, tx, cancellationToken: ct));
 				}
 				return (dispenseOrder, (string?)null);
 			});

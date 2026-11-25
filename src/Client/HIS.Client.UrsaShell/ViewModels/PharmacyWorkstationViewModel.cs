@@ -343,7 +343,30 @@ public sealed class PharmacyWorkstationViewModel : ClientModelBase
     }
 
     public string BatchNo { get => _batchNo; set => SetField(ref _batchNo, value ?? string.Empty); }
-    public string ExpiryDate { get => _expiryDate; set => SetField(ref _expiryDate, value ?? string.Empty); }
+    public string ExpiryDate
+    {
+        get => _expiryDate;
+        set
+        {
+            if (SetField(ref _expiryDate, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(ExpiryDateDateTime));
+            }
+        }
+    }
+
+    public DateTime? ExpiryDateDateTime
+    {
+        get => DateTime.TryParse(ExpiryDate, out var date) ? date.Date : DateTime.Today.AddYears(2);
+        set
+        {
+            var next = (value ?? DateTime.Today.AddYears(2)).ToString("yyyy-MM-dd");
+            if (ExpiryDate != next)
+            {
+                ExpiryDate = next;
+            }
+        }
+    }
     public string StockInQuantity { get => _stockInQuantity; set => SetField(ref _stockInQuantity, value ?? string.Empty); }
     public string InvoiceNo { get => _invoiceNo; set => SetField(ref _invoiceNo, value ?? string.Empty); }
     public string ColdChainTemperature { get => _coldChainTemperature; set => SetField(ref _coldChainTemperature, value ?? string.Empty); }
@@ -1570,7 +1593,7 @@ public abstract class PharmacyRowModel : ClientModelBase
         {
             return "-";
         }
-        return DateTimeOffset.FromUnixTimeMilliseconds(value).LocalDateTime.ToString("MM-dd HH:mm");
+        return DateTimeOffset.FromUnixTimeMilliseconds(value).LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
     }
 }
 

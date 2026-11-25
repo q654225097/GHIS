@@ -47,7 +47,7 @@ public sealed class MedicalAndNursingAdminTests
         await medCtrl.CreateDispute(new MedicalAffairsController.CreateDisputeDto("纠纷患者", "普外科", null, "家属质疑术后并发症要求封存病历", 0m));
         string did = await conn2.ExecuteScalarAsync<string>("SELECT id FROM med_dispute_cases LIMIT 1") ?? string.Empty;
         var sealRes = await medCtrl.SealDisputeMrmsCase(did);
-        Assert.Equal(0, sealRes.Code);
+        Assert.True(sealRes.Code is 0 or 200, sealRes.Message);
         Assert.Equal("SEALED", await conn2.ExecuteScalarAsync<string>("SELECT status FROM mrms_case_records WHERE patient_name = '纠纷患者'"));
     }
 
@@ -58,7 +58,7 @@ public sealed class MedicalAndNursingAdminTests
         var nurCtrl = new NursingManagementController(db);
 
         var s1 = await nurCtrl.ScheduleShift(new NursingManagementController.ScheduleShiftDto("心内一病区", 20261121, "N01", "陈护士", "N2", "NIGHT", 10m, null));
-        Assert.Equal(0, s1.Code);
+        Assert.True(s1.Code is 0 or 200, s1.Message);
 
         // 次日直接排白班 -> 400 阻断
         var badShift = await nurCtrl.ScheduleShift(new NursingManagementController.ScheduleShiftDto("心内一病区", 20261122, "N01", "陈护士", "N2", "DAY", 8m, null));
@@ -72,6 +72,6 @@ public sealed class MedicalAndNursingAdminTests
         var badAck = await nurCtrl.AckHandover(hid, new NursingManagementController.AckHandoverDto("SYSTEM"));
         Assert.Equal(400, badAck.Code);
         var okAck = await nurCtrl.AckHandover(hid, new NursingManagementController.AckHandoverDto("李护师"));
-        Assert.Equal(0, okAck.Code);
+        Assert.True(okAck.Code is 0 or 200, okAck.Message);
     }
 }

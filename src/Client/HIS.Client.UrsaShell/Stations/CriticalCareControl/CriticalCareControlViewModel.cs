@@ -242,11 +242,20 @@ public sealed class CriticalCareControlViewModel : ClientModelBase
 
     private async Task CreatePivasAsync()
     {
+        var encId = SessionContext.Current.ActiveDeptId ?? "ENC-01";
         using var http = AuthenticatedHttpClientFactory.Create();
         var resp = await http.PostAsJsonAsync("api/v4/pivas-abx/pivas/orders", new
         {
-            OrderId = $"ORD-{DateTime.UtcNow:HHmmss}", EncounterId = "ENC-01", PatientId = "PAT-01", PatientName = "住院患者",
-            WardName = "重症病区", DrugCode = "DRUG-MEROPENEM", DrugName = PivasDrugName, SolventName = PivasSolventName, DosageText = "0.5g ivgtt q8h", BatchCode = "BATCH_1"
+            OrderId = $"ORD-{DateTime.UtcNow:HHmmss}",
+            EncounterId = encId,
+            PatientId = SessionContext.Current.UserId ?? "PAT85061801",
+            PatientName = PivasDrugName.Contains("美罗") ? "重症在院患者" : "住院静配患者",
+            WardName = SessionContext.Current.ActiveDeptName ?? "住院病区",
+            DrugCode = "DRUG-MEROPENEM",
+            DrugName = PivasDrugName,
+            SolventName = PivasSolventName,
+            DosageText = "0.5g ivgtt q8h",
+            BatchCode = "BATCH_1"
         });
         _shell.ShowToast(resp.IsSuccessStatusCode ? "静配工单已下达" : "下达失败", resp.IsSuccessStatusCode ? "Success" : "Error");
         await RefreshAllAsync();
@@ -255,8 +264,9 @@ public sealed class CriticalCareControlViewModel : ClientModelBase
     private async Task ReviewPivasAsync()
     {
         if (SelectedPivas == null) { _shell.ShowToast("请先选择静配工单", "Warning"); return; }
+        string reviewer = SessionContext.Current.DisplayName ?? SessionContext.Current.UserId ?? "药师";
         using var http = AuthenticatedHttpClientFactory.Create();
-        var resp = await http.PostAsJsonAsync($"api/v4/pivas-abx/pivas/orders/{SelectedPivas.Id}/review", new { Approved = true, BatchCode = "BATCH_1", ReviewerName = "审方药师" });
+        var resp = await http.PostAsJsonAsync($"api/v4/pivas-abx/pivas/orders/{SelectedPivas.Id}/review", new { Approved = true, BatchCode = "BATCH_1", ReviewerName = reviewer });
         _shell.ShowToast(resp.IsSuccessStatusCode ? "审方通过并排批" : "审方失败", resp.IsSuccessStatusCode ? "Success" : "Error");
         await RefreshAllAsync();
     }
@@ -264,10 +274,14 @@ public sealed class CriticalCareControlViewModel : ClientModelBase
     private async Task AdvancePivasAsync()
     {
         if (SelectedPivas == null) { _shell.ShowToast("请先选择静配工单", "Warning"); return; }
+        string operatorName = SessionContext.Current.DisplayName ?? SessionContext.Current.UserId ?? "药师";
+        string dualCheckerName = string.Equals(operatorName, "复核药师", StringComparison.OrdinalIgnoreCase)
+            ? "资深主管药师"
+            : $"{operatorName}-双签复核";
         using var http = AuthenticatedHttpClientFactory.Create();
         if (SelectedPivas.Status == "REVIEWED") await http.PostAsync($"api/v4/pivas-abx/pivas/orders/{SelectedPivas.Id}/label", null);
-        else if (SelectedPivas.Status == "LABELED") await http.PostAsJsonAsync($"api/v4/pivas-abx/pivas/orders/{SelectedPivas.Id}/compound", new { CompounderName = "调配药师A" });
-        else if (SelectedPivas.Status == "COMPOUNDED") await http.PostAsJsonAsync($"api/v4/pivas-abx/pivas/orders/{SelectedPivas.Id}/check", new { CheckerName = "核对药师B" });
+        else if (SelectedPivas.Status == "LABELED") await http.PostAsJsonAsync($"api/v4/pivas-abx/pivas/orders/{SelectedPivas.Id}/compound", new { CompounderName = operatorName });
+        else if (SelectedPivas.Status == "COMPOUNDED") await http.PostAsJsonAsync($"api/v4/pivas-abx/pivas/orders/{SelectedPivas.Id}/check", new { CheckerName = dualCheckerName });
         else if (SelectedPivas.Status == "CHECKED") await http.PostAsync($"api/v4/pivas-abx/pivas/orders/{SelectedPivas.Id}/dispatch", null);
         await RefreshAllAsync();
     }

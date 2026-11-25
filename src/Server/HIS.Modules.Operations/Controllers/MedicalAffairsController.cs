@@ -105,10 +105,13 @@ public sealed class MedicalAffairsController : ControllerBase
              @Until, 'ACTIVE', @ActorName, 1, @Now, @Actor, @Now, @Actor, 1)",
             new { Id = id, No = no, Uid = req.UserId.Trim(), Doc = req.DoctorName.Trim(), Dept = req.DeptName.Trim(), Rx = rxLvl, Surg = surgLvl, Narc = req.NarcoticAuth ? 1 : 0, Until = req.ValidUntilInt > 20000101 ? req.ValidUntilInt : 20271231, ActorName, Now = now, Actor = ActorId }, tx);
 
-        // 实时同步回写 sys_users 的真实临床权限等级，直接驱动处方与手术分级拦截
+        // 实时同步回写 sys_users 与 hr_employees 的真实临床权限等级，直接驱动处方与手术分级拦截
         await conn.ExecuteAsync(
             "UPDATE sys_users SET prescribe_level = @Rx, surgery_level = @Surg, updated_at_ms = @Now, updated_by = @Actor WHERE id = @Uid OR user_name = @Uid",
             new { Rx = rxLvl, Surg = surgLvl, Now = now, Actor = ActorId, Uid = req.UserId.Trim() }, tx);
+        await conn.ExecuteAsync(
+            "UPDATE hr_employees SET prescribe_level = @Rx, narcotic_level = CASE WHEN @Narc = 1 THEN 1 ELSE narcotic_level END, updated_at_ms = @Now, updated_by = @Actor WHERE user_id = @Uid OR id = @Uid OR employee_no = @Uid",
+            new { Rx = rxLvl, Narc = req.NarcoticAuth ? 1 : 0, Now = now, Actor = ActorId, Uid = req.UserId.Trim() }, tx);
         tx.Commit();
 
         if (_auditTrail != null)
@@ -132,9 +135,12 @@ public sealed class MedicalAffairsController : ControllerBase
         await conn.ExecuteAsync(
             "UPDATE med_privilege_grants SET status = 'SUSPENDED', suspend_reason = @Reason, updated_at_ms = @Now, updated_by = @Actor WHERE id = @Id",
             new { Reason = req.Reason.Trim(), Now = now, Actor = ActorId, Id = id }, tx);
-        // 停权实时将 sys_users 处方权与手术权清零阻断
+        // 停权实时将 sys_users 与 hr_employees 处方权与手术权清零阻断
         await conn.ExecuteAsync(
             "UPDATE sys_users SET prescribe_level = 0, surgery_level = 0, updated_at_ms = @Now, updated_by = @Actor WHERE id = @Uid OR user_name = @Uid",
+            new { Now = now, Actor = ActorId, Uid = (string)grant.user_id }, tx);
+        await conn.ExecuteAsync(
+            "UPDATE hr_employees SET prescribe_level = 0, updated_at_ms = @Now, updated_by = @Actor WHERE user_id = @Uid OR id = @Uid OR employee_no = @Uid",
             new { Now = now, Actor = ActorId, Uid = (string)grant.user_id }, tx);
         tx.Commit();
 

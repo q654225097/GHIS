@@ -348,7 +348,7 @@ public class TemperatureChartControl : Control
         context.DrawText(lDay, new Point(padLeft - 56, y1 + 2));
         context.DrawText(lTime, new Point(padLeft - 48, y2 + 2));
 
-        string[] timeSlotLabels = { "4", "8", "12", "16", "20", "24" };
+        string[] timeSlotLabels = { "2", "6", "10", "14", "18", "22" };
 
         for (int d = 0; d < 7; d++)
         {
@@ -403,15 +403,15 @@ public class TemperatureChartControl : Control
             int dayDiff = (dt.Date - baseDate.Date).Days;
             if (dayDiff < 0 || dayDiff >= 7) continue;
 
-            // Map hour into 6 slots: 4, 8, 12, 16, 20, 24
-            // Hour: 0..3 -> slot 0 (4), 4..7 -> slot 1 (8), 8..11 -> slot 2 (12), 12..15 -> slot 3 (16), 16..19 -> slot 4 (20), 20..23 -> slot 5 (24)
+            // Map hour into 6 standard national timepoints: 2, 6, 10, 14, 18, 22
+            // Hour: 0..3 -> slot 0 (2:00), 4..7 -> slot 1 (6:00), 8..11 -> slot 2 (10:00), 12..15 -> slot 3 (14:00), 16..19 -> slot 4 (18:00), 20..23 -> slot 5 (22:00)
             int slotIndex = dt.Hour switch
             {
-                >= 0 and < 6 => 0,
-                >= 6 and < 10 => 1,
-                >= 10 and < 14 => 2,
-                >= 14 and < 18 => 3,
-                >= 18 and < 22 => 4,
+                >= 0 and < 4 => 0,
+                >= 4 and < 8 => 1,
+                >= 8 and < 12 => 2,
+                >= 12 and < 16 => 3,
+                >= 16 and < 20 => 4,
                 _ => 5
             };
 
@@ -553,6 +553,20 @@ public class TemperatureChartControl : Control
                 {
                     // Normal Pulse: Red solid dot
                     context.DrawEllipse(redBrush, null, currentPulsePt, 3.5, 3.5);
+                }
+
+                // Heart Rate and Pulse Deficit (绌脉)
+                double hrVal = item.HeartRateValue;
+                if (hrVal >= 40.0 && hrVal <= 180.0 && Math.Abs(hrVal - pVal) > 1.0)
+                {
+                    double yHr = chartTop + (180.0 - hrVal) / 140.0 * chartH;
+                    var hrPt = new Point(x, yHr);
+                    // Heart Rate: Red hollow circle
+                    context.DrawEllipse(null, pulsePen, hrPt, 3.5, 3.5);
+
+                    // Pulse Deficit (绌脉): Draw red hatch line between pulse and heart rate
+                    var deficitPen = new Pen(redBrush, 1.0);
+                    context.DrawLine(deficitPen, currentPulsePt, hrPt);
                 }
 
                 lastPulsePt = currentPulsePt;

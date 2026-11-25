@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -28,9 +29,11 @@ using HIS.Modules.Outpatient.Models;
 using HIS.Modules.Patient.Controllers;
 using HIS.Modules.Patient.Models;
 using HIS.Modules.Platform.Controllers;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static HIS.Modules.MedTech.Controllers.MedTechController;
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
@@ -908,62 +911,102 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
     [Fact]
     public async Task P1C_SurgeryAndAnesthesia_FullLifecycle()
     {
-        var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+        using var server = _factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development")
+            .UseSetting("HIS_DB_PROVIDER", "Sqlite")
+            .UseSetting("HIS_DB_CONNECTION_STRING", "Data Source=:memory:;Mode=Memory;Cache=Shared"));
+        using var scope = server.Services.CreateScope();
+        using var conn = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>().CreateConnection();
+        using var admin = server.CreateClient();
+        SetAdminAuth(server, admin);
+        const string surgeonId = "USER-DOC-ATTENDING";
+        const string anesthetistId = "USER-DOC-OPD";
+        const string circulatingId = "USER-NURSE-W1";
+        const string scrubId = "USER-NURSE-W2";
+        using var surgeon = Operator(surgeonId, RoleCode.IpdAttending, "DEPT-IPD-01");
+        using var anesthetist = Operator(anesthetistId, RoleCode.IpdAttending, "DEPT-IPD-01");
+        using var circulation = Operator(circulatingId, RoleCode.WardNurse, "DEPT-WARD-01");
+        using var scrub = Operator(scrubId, RoleCode.WardNurse, "DEPT-WARD-02");
+        using var receptionist = Operator("USER-CASHIER-01", RoleCode.Cashier, "DEPT-FIN-01");
 
         // 1. Schedule a surgery
         var schedReq = new ScheduleSurgeryRequest(
-            EncounterId: "ADM20261105001",
-            PatientId: "PAT85061801",
-            PatientName: "测试患者-" + uniqueSuffix,
+            EncounterId: "ADM-PHM-DEMO-01",
+            PatientId: "PAT-PHM-DEMO-01",
+            PatientName: "Synthetic name must not override patient chart",
             SurgeryCode: "SURG-P1C-01",
             SurgeryName: "全胸腔镜下肺叶切除与淋巴结清扫术",
             SurgeryLevel: 4,
             OrRoomId: "OR-ROOM-01",
             TableSeq: 1,
-            SurgeonId: "DOC-CHIEF-01",
+            SurgeonId: surgeonId,
             SurgeonName: "张主任",
             AssistantIds: new List<string> { "DOC-RES-01" },
-            AnesthesiologistId: "DOC-ANES-01",
+            AnesthesiologistId: anesthetistId,
             AnesthesiologistName: "王麻醉",
-            CirculatingNurseId: "NUR-OR-01",
-            ScrubNurseId: "NUR-OR-02",
+            CirculatingNurseId: circulatingId,
+            ScrubNurseId: scrubId,
             ScheduledStartMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             EstimatedDurationMin: 180
         );
 
-        var schedRes = await _client.PostAsJsonAsync("/api/v4/medtech/surgeries/schedule", schedReq);
+        const string baseRoute = "/api/v4/medtech/surgeries";
+        var schedRes = await admin.PostAsJsonAsync(baseRoute + "/schedule", schedReq);
         Assert.Equal(HttpStatusCode.OK, schedRes.StatusCode);
         var schedData = await schedRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
         Assert.NotNull(schedData?.Data);
         var scheduleId = schedData.Data.Id;
         Assert.Equal(0, schedData.Data.Status);
+        Assert.NotEqual(schedReq.PatientName, schedData.Data.PatientName);
+        string route = $"{baseRoute}/{scheduleId}";
+        Assert.Equal(409, (await Change(surgeon, "start")).Code);
+        Assert.Equal(404, (await receptionist.GetFromJsonAsync<ApiResponse<SurgerySafetyState>>(route + "/safety"))!.Code);
+        Assert.Empty((await receptionist.GetFromJsonAsync<ApiResponse<List<MteSurgerySchedule>>>(baseRoute + "/schedules"))!.Data!);
 
-        // 2. Start surgery
-        var startRes = await _client.PostAsync($"/api/v4/medtech/surgeries/{scheduleId}/start", null);
+        var approval = scope.ServiceProvider.GetRequiredService<IWorkflowBusinessCallback>();
+        await approval.OnWorkflowCompletedAsync("SURGERY_SCHEDULE", scheduleId, "APPROVED", "USER-ADMIN", SystemTime.UtcNowMs);
+        using var oldSummary = await surgeon.PostAsJsonAsync(route + "/who-checklist", new WhoThreeCheckRequest(true, true, true, true));
+        Assert.Equal(409, (await oldSummary.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>())!.Code);
+        using var fakeCount = await circulation.PostAsJsonAsync(route + "/item-counts", new ItemCountsDto("PRE_INCISION", 8, 2, 10, scrubId, circulatingId));
+        Assert.Equal(409, (await fakeCount.Content.ReadFromJsonAsync<ApiResponse<object>>())!.Code);
+
+        var empty = await Read(surgeon);
+        Assert.Empty(empty.History);
+        var checkIn = Checks(empty.Steps[0]);
+        Assert.Equal(403, (await Sign(admin, "SIGN_IN", new(empty.Version, checkIn, null, null))).Code);
+        Assert.Equal(403, (await Sign(scrub, "SIGN_IN", new(empty.Version, checkIn, null, null))).Code);
+        Assert.Equal(409, (await Sign(surgeon, "TIME_OUT", new(empty.Version, checkIn, null, null))).Code);
+        Assert.Equal(200, (await Sign(surgeon, "SIGN_IN", new(empty.Version, checkIn, null, null))).Code);
+        Assert.Equal(409, (await Sign(anesthetist, "SIGN_IN", new(empty.Version, checkIn, null, null))).Code);
+        Assert.Equal(409, (await Change(surgeon, "start")).Code);
+        await SignCurrent(anesthetist);
+        await SignCurrent(circulation);
+
+        // Complete the two remaining prerequisites for the incision.
+        var baseline = new SafetyCountInput(8, 2, 10, null, null, null);
+        await SignCurrent(circulation, baseline);
+        var disagreed = await SignCurrent(scrub, baseline with { Gauze = 7 });
+        Assert.True(disagreed.Steps[1].HasCountConflict);
+        Assert.Equal(409, (await Change(surgeon, "start")).Code);
+        await SignCurrent(scrub, baseline);
+        foreach (var signer in new[] { surgeon, anesthetist, circulation }) await SignCurrent(signer);
+        Assert.True((await Read(surgeon)).CanStart);
+        var startRes = await surgeon.PostAsync(route + "/start", null);
         Assert.Equal(HttpStatusCode.OK, startRes.StatusCode);
         var startedData = await startRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
         Assert.Equal(1, startedData?.Data?.Status);
 
-        // 3. Attempt to finish surgery before WHO check -> Expect failure (code 400)
-        var earlyFinishRes = await _client.PostAsync($"/api/v4/medtech/surgeries/{scheduleId}/finish-surgery", null);
-        Assert.Equal(HttpStatusCode.OK, earlyFinishRes.StatusCode);
-        var earlyFinishData = await earlyFinishRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
-        Assert.Equal(400, earlyFinishData?.Code);
-
-        // 4. Record WHO Checklist
-        var whoRes = await _client.PostAsJsonAsync($"/api/v4/medtech/surgeries/{scheduleId}/who-checklist", new WhoThreeCheckRequest(
-            SignInOk: true,
-            TimeOutOk: true,
-            SignOutOk: true,
-            InstrumentCountBalanced: true
-        ));
-        Assert.Equal(HttpStatusCode.OK, whoRes.StatusCode);
-
-        // 5. Attempt to finish surgery before Anesthesia Record -> Expect failure (code 409)
-        var preAnesFinishRes = await _client.PostAsync($"/api/v4/medtech/surgeries/{scheduleId}/finish-surgery", null);
-        Assert.Equal(HttpStatusCode.OK, preAnesFinishRes.StatusCode);
-        var preAnesFinishData = await preAnesFinishRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
-        Assert.Equal(409, preAnesFinishData?.Code);
+        Assert.Equal(409, (await Change(surgeon, "finish-surgery")).Code);
+        var closure = new SafetyCountInput(9, 2, 10, 1, 0, 0);
+        var imbalance = await SignCurrent(circulation, closure with { Gauze = 8 }, "Recount pending");
+        Assert.False(imbalance.History[0].Passed);
+        Assert.Equal("PRE_CLOSURE_COUNT", imbalance.CurrentStepCode);
+        await SignCurrent(circulation, closure);
+        await SignCurrent(scrub, closure);
+        await SignCurrent(circulation, closure);
+        await SignCurrent(scrub, closure);
+        foreach (var signer in new[] { surgeon, anesthetist, circulation }) await SignCurrent(signer);
+        Assert.False((await Read(surgeon)).CanFinish);
+        Assert.Contains("麻醉记录", (await Change(surgeon, "finish-surgery")).Message);
 
         // 6. Create Anesthesia Record
         var anesReq = new CreateAnesthesiaRecordRequest(
@@ -975,15 +1018,18 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
             AnesthesiologistId: "DOC-ANES-01",
             AnesthesiologistName: "王麻醉"
         );
-        var anesRes = await _client.PostAsJsonAsync("/api/v4/medtech/anesthesia/records", anesReq);
+        var deniedAnes = await surgeon.PostAsJsonAsync("/api/v4/medtech/anesthesia/records", anesReq);
+        Assert.Equal(403, (await deniedAnes.Content.ReadFromJsonAsync<ApiResponse<MteAnesthesiaRecord>>())!.Code);
+        var anesRes = await anesthetist.PostAsJsonAsync("/api/v4/medtech/anesthesia/records", anesReq);
         Assert.Equal(HttpStatusCode.OK, anesRes.StatusCode);
         var anesData = await anesRes.Content.ReadFromJsonAsync<ApiResponse<MteAnesthesiaRecord>>();
         Assert.NotNull(anesData?.Data);
         var anesId = anesData.Data.Id;
         Assert.Equal(0, anesData.Data.Status);
+        Assert.Equal(anesthetistId, anesData.Data.AnesthesiologistId);
 
         // 7. Add Anesthesia Medication
-        var medRes = await _client.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/medications", new AddAnesthesiaMedicationRequest(
+        var medRes = await anesthetist.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/medications", new AddAnesthesiaMedicationRequest(
             DrugId: "MED-PROPOFOL-01",
             DrugName: "丙泊酚乳状注射液",
             Dose: 150.0m,
@@ -994,13 +1040,13 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
         Assert.Equal(HttpStatusCode.OK, medRes.StatusCode);
 
         // Query medications
-        var medsRes = await _client.GetFromJsonAsync<ApiResponse<List<MteAnesthesiaMedication>>>($"/api/v4/medtech/anesthesia/records/{anesId}/medications");
+        var medsRes = await anesthetist.GetFromJsonAsync<ApiResponse<List<MteAnesthesiaMedication>>>($"/api/v4/medtech/anesthesia/records/{anesId}/medications");
         Assert.NotNull(medsRes?.Data);
         Assert.Single(medsRes.Data);
         Assert.Equal("丙泊酚乳状注射液", medsRes.Data[0].DrugName);
 
         // 8. Complete & archive anesthesia record
-        var updateAnesRes = await _client.PutAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}", new UpdateAnesthesiaRecordRequest(
+        var updateAnesRes = await anesthetist.PutAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}", new UpdateAnesthesiaRecordRequest(
             AsaGrade: "II",
             AnesthesiaType: "GENERAL",
             BloodLossMl: 100,
@@ -1010,16 +1056,23 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
             MarkCompleted: true
         ));
         Assert.Equal(HttpStatusCode.OK, updateAnesRes.StatusCode);
+        Assert.Equal(1, (await updateAnesRes.Content.ReadFromJsonAsync<ApiResponse<MteAnesthesiaRecord>>())!.Data!.Status);
 
         // 9. Now Finish Surgery -> Must succeed
-        var finishRes = await _client.PostAsync($"/api/v4/medtech/surgeries/{scheduleId}/finish-surgery", null);
+        var finishRes = await surgeon.PostAsync(route + "/finish-surgery", null);
         Assert.Equal(HttpStatusCode.OK, finishRes.StatusCode);
         var finishedData = await finishRes.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>();
         Assert.Equal(200, finishedData?.Code);
         Assert.Equal(2, finishedData?.Data?.Status);
+        var finishedSafety = await Read(surgeon);
+        Assert.All(finishedSafety.Steps, step => Assert.True(step.Completed));
+        Assert.Equal(17, finishedSafety.History.Count);
+        Assert.Contains(finishedSafety.History, x => !x.Passed && x.OperatorId == circulatingId);
+        Assert.Equal(17, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ops_audit_events WHERE target_id = @Id AND event_type = 'MTE_SURGERY_SAFETY_SIGN'", new { Id = scheduleId }));
+        Assert.Equal(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM mtc_surgery_schedules WHERE id = @Id AND status = 2 AND instrument_count_balanced = 1", new { Id = scheduleId }));
 
         // 10. PACU Recovery evaluation
-        var pacuRes = await _client.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/recovery", new PacuRecoveryRequest(
+        var pacuRes = await anesthetist.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/recovery", new PacuRecoveryRequest(
             PacuBedNo: "PACU-03",
             StewardScore: 6,
             AldreteScore: 9,
@@ -1032,13 +1085,13 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
         ));
         Assert.Equal(HttpStatusCode.OK, pacuRes.StatusCode);
 
-        var getPacu = await _client.GetFromJsonAsync<ApiResponse<MteRecoveryRecord>>($"/api/v4/medtech/anesthesia/records/{anesId}/recovery");
+        var getPacu = await anesthetist.GetFromJsonAsync<ApiResponse<MteRecoveryRecord>>($"/api/v4/medtech/anesthesia/records/{anesId}/recovery");
         Assert.NotNull(getPacu?.Data);
         Assert.Equal(1, getPacu.Data.DischargeCriteriaMet);
         Assert.Equal(9, getPacu.Data.AldreteScore);
 
         // 11. Postop Followup
-        var followupRes = await _client.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/followup", new PostopFollowupRequest(
+        var followupRes = await anesthetist.PostAsJsonAsync($"/api/v4/medtech/anesthesia/records/{anesId}/followup", new PostopFollowupRequest(
             FollowupDay: 1,
             PainScore: 2,
             NauseaVomiting: false,
@@ -1048,10 +1101,48 @@ public class ComplianceRemediationVerificationTests : IClassFixture<WebApplicati
         ));
         Assert.Equal(HttpStatusCode.OK, followupRes.StatusCode);
 
-        var getFollowup = await _client.GetFromJsonAsync<ApiResponse<List<MtePostopFollowup>>>($"/api/v4/medtech/anesthesia/records/{anesId}/followup");
+        var getFollowup = await anesthetist.GetFromJsonAsync<ApiResponse<List<MtePostopFollowup>>>($"/api/v4/medtech/anesthesia/records/{anesId}/followup");
         Assert.NotNull(getFollowup?.Data);
         Assert.Single(getFollowup.Data);
         Assert.Equal(1, getFollowup.Data[0].FollowupDay);
+
+        HttpClient Operator(string user, string role, string dept)
+        {
+            var jwt = scope.ServiceProvider.GetRequiredService<BuildingBlocks.Security.JwtTokenService>();
+            var version = conn.ExecuteScalar<int>("SELECT session_version FROM sys_users WHERE id = @User", new { User = user });
+            var client = server.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt.GenerateAccessToken(
+                user, user, user, "CAMPUS-01", DepartmentCategory.IPD, dept, null, null, [role], DataScope.ALL_CAMPUS, version, "ALL", roleCode: role));
+            return client;
+        }
+
+        async Task<SurgerySafetyState> Read(HttpClient actor) =>
+            (await actor.GetFromJsonAsync<ApiResponse<SurgerySafetyState>>(route + "/safety"))!.Data!;
+
+        async Task<ApiResponse<MteSurgerySchedule>> Change(HttpClient actor, string verb)
+        {
+            using var response = await actor.PostAsync(route + "/" + verb, null);
+            Assert.True(response.IsSuccessStatusCode, (await response.Content.ReadAsStringAsync()).Split('\n')[0]);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<MteSurgerySchedule>>())!;
+        }
+
+        async Task<ApiResponse<SurgerySafetyState>> Sign(HttpClient actor, string step, SurgerySafetyInput payload)
+        {
+            using var response = await actor.PostAsJsonAsync(route + "/safety/" + step, payload);
+            Assert.True(response.IsSuccessStatusCode, (await response.Content.ReadAsStringAsync()).Split('\n')[0]);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<SurgerySafetyState>>())!;
+        }
+
+        async Task<SurgerySafetyState> SignCurrent(HttpClient actor, SafetyCountInput? counts = null, string? note = null)
+        {
+            var state = await Read(actor);
+            var step = Assert.Single(state.Steps, x => x.Code == state.CurrentStepCode);
+            var signed = await Sign(actor, step.Code, new(state.Version, counts == null ? Checks(step) : null, counts, note));
+            Assert.True(signed.Code == 200, signed.Message);
+            return signed.Data!;
+        }
+
+        static Dictionary<string, bool> Checks(SurgerySafetyStepView step) => step.Checks.ToDictionary(x => x.Code, _ => true);
     }
 
     [Fact]

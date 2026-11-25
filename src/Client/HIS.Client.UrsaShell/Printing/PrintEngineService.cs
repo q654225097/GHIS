@@ -67,7 +67,7 @@ public static class PrintEngineService
 
     public static void EnrichSystemFields(Dictionary<string, string> ctx, string? operatorName = null)
     {
-        ctx.TryAdd("system.printTime", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+        ctx.TryAdd("system.printTime", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
         ctx.TryAdd("system.printDate", DateTime.Now.ToString("yyyy-MM-dd"));
         ctx.TryAdd("system.operatorName", string.IsNullOrWhiteSpace(operatorName) ? "当前用户" : operatorName);
         ctx.TryAdd("system.hospitalName", "GHIS 医院信息系统");

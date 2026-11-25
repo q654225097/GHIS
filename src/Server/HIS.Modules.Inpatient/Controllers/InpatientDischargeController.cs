@@ -257,6 +257,31 @@ ORDER BY CASE r.status WHEN 'PENDING' THEN 0 ELSE 1 END, r.requested_at_ms DESC"
         return ApiResponse<IpdSettlementPreviewView>.Success(preview);
     }
 
+    [HttpGet("discharge-requests/{requestId}/settlement-preview")]
+    public async Task<ApiResponse<IpdSettlementPreviewView>> GetRequestSettlementPreview(string requestId)
+    {
+        if (!HasAnyRole("CASHIER", "ADMIN"))
+        {
+            return ApiResponse<IpdSettlementPreviewView>.Fail(403, "无权查看出院结算预览");
+        }
+        IpdDischargeRequest? request = await _requestRepo.GetByIdAsync(requestId);
+        if (request == null)
+        {
+            return ApiResponse<IpdSettlementPreviewView>.Fail(404, "出院申请不存在");
+        }
+        IpdEncounter? encounter = await _encounterRepo.GetByIdAsync(request.EncounterId);
+        if (encounter == null || encounter.PatientId != request.PatientId)
+        {
+            return ApiResponse<IpdSettlementPreviewView>.Fail(409, "出院申请与住院患者不一致，不能加载费用");
+        }
+        IpdSettlementPreviewView preview = await BuildPreviewAsync(encounter, request.Id);
+        if (preview.RequestId != request.Id)
+        {
+            return ApiResponse<IpdSettlementPreviewView>.Fail(409, "出院申请已变化，请刷新队列");
+        }
+        return ApiResponse<IpdSettlementPreviewView>.Success(preview);
+    }
+
     [HttpPost("discharge-requests/{requestId}/settle")]
     public async Task<ApiResponse<IpdDischargeRequestView>> Settle(
         string requestId, [FromBody] SettleIpdDischargeRequest req)
@@ -306,6 +331,10 @@ ORDER BY CASE r.status WHEN 'PENDING' THEN 0 ELSE 1 END, r.requested_at_ms DESC"
         {
             return ApiResponse<IpdDischargeRequestView>.Fail(404, "住院记录不存在");
         }
+        if (encounter.PatientId != request.PatientId)
+        {
+            return ApiResponse<IpdDischargeRequestView>.Fail(409, "出院申请与住院患者不一致，禁止结算");
+        }
         if (encounter.Status != 2 || encounter.TriageStatus != 1)
         {
             return ApiResponse<IpdDischargeRequestView>.Fail(409, "仅已提交出院申请并完成核查的待结算住院患者可以办理出院结算");
@@ -337,7 +366,8 @@ ORDER BY CASE r.status WHEN 'PENDING' THEN 0 ELSE 1 END, r.requested_at_ms DESC"
                     throw new InpatientDischargeConflictException("该出院申请已被其他收费员处理，请刷新列表");
                 }
                 IpdEncounter? freshEncounter = await _encounterRepo.GetByIdAsync(encounter.Id, ct);
-                if (freshEncounter == null || freshEncounter.Status != 2)
+                if (freshEncounter == null || freshEncounter.Status != 2 || freshEncounter.TriageStatus != 1
+                    || fresh.EncounterId != freshEncounter.Id || fresh.PatientId != freshEncounter.PatientId)
                 {
                     throw new InpatientDischargeConflictException("住院状态已变化，仅出院待结算状态可以办理结算");
                 }
@@ -759,7 +789,7 @@ LEFT JOIN sys_departments d ON d.id = e.admit_dept_id
 LEFT JOIN sys_departments w ON w.id = e.admit_ward_id
 WHERE e.id = @EncounterId", new { EncounterId = encounter.Id, PatientId = encounter.PatientId }) ?? new();
 
-        return new IpdSettlementPreviewView
+        var preview = new IpdSettlementPreviewView
         {
             RequestId = request?.Id ?? string.Empty,
             EncounterId = encounter.Id,
@@ -776,10 +806,37 @@ WHERE e.id = @EncounterId", new { EncounterId = encounter.Id, PatientId = encoun
             ClinicalBlockers = check.FailedItems.ToList(),
             Status = request?.Status ?? "PENDING"
         };
+        if (request?.Status == "SETTLED")
+        {
+            preview.ChargeTotal = request.SettlementTotalAmount;
+        }
+        preview.PreviewVersion = GetPreviewVersion(preview);
+        return preview;
+    }
+
+    private static string GetPreviewVersion(IpdSettlementPreviewView preview)
+    {
+        var snapshot = new
+        {
+            preview.RequestId,
+            preview.EncounterId,
+            preview.PatientId,
+            preview.Status,
+            preview.PrepaymentBalance,
+            preview.ChargeTotal,
+            Charges = preview.ChargeItems.OrderBy(x => x.ItemCode, StringComparer.Ordinal)
+                .ThenBy(x => x.ItemName, StringComparer.Ordinal).ThenBy(x => x.Quantity)
+                .ThenBy(x => x.UnitPrice).ThenBy(x => x.TotalAmount)
+        };
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(snapshot)));
     }
 
     private string? ValidateAmounts(SettleIpdDischargeRequest req, IpdSettlementPreviewView preview)
     {
+        if (req.PreviewVersion != null && !string.Equals(req.PreviewVersion, preview.PreviewVersion, StringComparison.Ordinal))
+        {
+            return "出院结算费用或申请状态已变化，请重新预览并确认";
+        }
         if (req.InsuranceAmount < 0 || req.InsuranceAmount > preview.ChargeTotal)
         {
             return $"医保统筹金额必须在 0 ~ ¥{preview.ChargeTotal:0.00} 之间";

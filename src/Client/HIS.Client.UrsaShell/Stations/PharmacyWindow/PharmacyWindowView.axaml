@@ -560,6 +560,35 @@
                                         <TextBlock Text="{Binding PivasResult}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource SemiColorPrimary}"/>
                                     </StackPanel>
                                 </Border>
+
+                                <!-- PIVAS 实时闭环工单与异人双签核对 -->
+                                <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="PIVAS 静配实时工单队列 (双人异人核对)" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1" Content="刷新队列" Height="28" Padding="10,0" Command="{Binding LoadPivasOrdersCommand}"/>
+                                        </Grid>
+                                        <ListBox MaxHeight="170" ItemsSource="{Binding PivasOrders}" SelectedItem="{Binding SelectedPivasOrder, Mode=TwoWay}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate x:DataType="local:WindowPivasOrderVm">
+                                                    <StackPanel Spacing="2" Margin="0,3">
+                                                        <TextBlock Text="{Binding SummaryLine}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding ActorLine}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        <TextBox Text="{Binding PivasDoubleCheckerName, Mode=TwoWay}" PlaceholderText="出仓核对药师姓名 (不可与调配人相同)"/>
+                                        <TextBox Text="{Binding PivasRejectReason, Mode=TwoWay}" PlaceholderText="打回原因 (审方不通过时必填)"/>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <Button Content="{Binding SelectedPivasNextActionText}" Classes="Primary" Height="32" HorizontalAlignment="Stretch"
+                                                    Command="{Binding AdvancePivasOrderCommand}"/>
+                                            <Button Grid.Column="1" Content="审方打回" Classes="Danger" Height="32" Padding="12,0"
+                                                    Command="{Binding RejectPivasOrderCommand}"/>
+                                        </Grid>
+                                        <TextBlock Text="{Binding PivasOrdersStatusText}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>

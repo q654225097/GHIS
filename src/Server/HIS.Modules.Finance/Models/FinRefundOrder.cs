@@ -21,4 +21,5 @@ public class FinRefundOrder : BaseEntity
 	public int Status { get; set; } = 1;
 
 	public string? ReissuedInvoiceOfdId { get; set; }
+	public string CampusId { get; set; } = "CAMPUS-01";
 }

@@ -147,7 +147,7 @@ public sealed class InventoryForecastController : ControllerBase
             return ApiResponse<object>.Fail(400, "源药库与目标药房ID不能为空");
 
         var forecastRes = await GetReplenishmentForecast(req.TargetWarehouseId, req.SafetyDays);
-        if (forecastRes.Code != 0 || forecastRes.Data == null)
+        if (forecastRes.Code is not (0 or 200) || forecastRes.Data == null)
             return ApiResponse<object>.Fail(500, "无法计算补货预测");
 
         long now = SystemTime.UtcNowMs;

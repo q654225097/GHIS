@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
              xmlns:local="using:HIS.Client.UrsaShell.Stations.Registration"
              xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
              xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
@@ -26,10 +27,10 @@
                                TextWrapping="Wrap"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <TextBox Width="124"
-                             Height="32"
-                             Text="{Binding Registration.QueryDate, Mode=TwoWay}"
-                             PlaceholderText="yyyy-MM-dd"/>
+                    <u:DatePicker Width="140"
+                                  Height="32"
+                                  SelectedDate="{Binding Registration.QueryDateDateTime, Mode=TwoWay}"
+                                  DisplayFormat="yyyy-MM-dd"/>
                     <Button Content="查询号源 (F3)"
                             Height="32"
                             Padding="12,0"
@@ -590,12 +591,33 @@
                                        TextWrapping="Wrap"/>
                         </Border>
 
-                        <Button Content="确认收款并挂号  Ctrl+Enter"
-                                Classes="Primary"
-                                Height="36"
-                                HorizontalAlignment="Stretch"
-                                Command="{Binding SettleCommand}"
-                                ToolTip.Tip="{Binding SettleBlockedReason}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="确认收款并挂号"
+                                    Classes="Primary"
+                                    Height="36"
+                                    HorizontalAlignment="Stretch"
+                                    Command="{Binding SettleCommand}"
+                                    ToolTip.Tip="{Binding SettleBlockedReason}"/>
+                            <Button Content="预约锁号 (暂不缴费)"
+                                    Classes="Secondary"
+                                    Height="36"
+                                    Command="{Binding ReserveSlotCommand}"/>
+                        </StackPanel>
+
+                        <Border Background="{DynamicResource SemiColorBackground0}"
+                                BorderBrush="{DynamicResource SemiColorBorder}"
+                                BorderThickness="1"
+                                CornerRadius="5"
+                                Padding="8">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="门诊就诊卡钱包充值" FontSize="12" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding Registration.SelectedPatientCardBalanceText}" FontSize="11" Foreground="{DynamicResource SemiColorSuccess}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" Text="{Binding Registration.RechargeAmountInput, Mode=TwoWay}" PlaceholderText="充值金额 (元)" Height="28"/>
+                                    <Button Grid.Column="1" Content="就诊卡充值" Classes="Success" Height="28" Padding="10,0" Command="{Binding RechargeAccountCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
 
                         <Border Background="{DynamicResource SemiColorSuccessLight}"
                                 CornerRadius="5"
@@ -794,6 +816,24 @@
                                         HorizontalAlignment="Stretch"
                                         Command="{Binding RefundCommand}"
                                         ToolTip.Tip="{Binding RefundBlockedReason}"/>
+
+                                <Border Background="{DynamicResource SemiColorBackground1}"
+                                        BorderBrush="{DynamicResource SemiColorBorder}"
+                                        BorderThickness="1"
+                                        CornerRadius="5"
+                                        Padding="8"
+                                        Margin="0,6,0,0">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="预约到院取号签到" FontSize="12" FontWeight="Bold"/>
+                                        <ComboBox ItemsSource="{Binding Registration.ReservedAppointments}"
+                                                  SelectedItem="{Binding Registration.SelectedReservedAppointment, Mode=TwoWay}"
+                                                  DisplayMemberBinding="{Binding AppointmentNo}"
+                                                  PlaceholderText="选择待签到预约号..."
+                                                  Height="28" HorizontalAlignment="Stretch"/>
+                                        <Button Content="到院取号缴费并入队" Classes="Primary" Height="30" HorizontalAlignment="Stretch"
+                                                Command="{Binding CheckinReservedCommand}"/>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
                     </Grid>

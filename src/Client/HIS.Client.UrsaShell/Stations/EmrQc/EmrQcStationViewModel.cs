@@ -49,7 +49,7 @@ public class QcDefectItem : ClientModelBase
     };
 
     public string DeadlineText => DeadlineMs > 0
-        ? DateTimeOffset.FromUnixTimeMilliseconds(DeadlineMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+        ? DateTimeOffset.FromUnixTimeMilliseconds(DeadlineMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
         : "-";
 }
 
@@ -113,7 +113,7 @@ public class QcCrossOrgTrackItem : ClientModelBase
     public long CreatedAtMs { get; set; }
 
     public string CreatedAtText => CreatedAtMs > 0
-        ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+        ? DateTimeOffset.FromUnixTimeMilliseconds(CreatedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
         : "-";
 }
 

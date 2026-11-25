@@ -283,4 +283,12 @@ public interface IFinanceSettlementContract
         CancellationToken ct = default);
 }
 
+public sealed record OpdServicePaymentProofRequest(string RequestId, string PatientId, string VisitId, string ItemCode, decimal Amount);
+public sealed record OpdServicePaymentProof(string RequestId, string PaymentOrderId, string PaymentNo, decimal Amount);
+
+public interface IOpdServicePaymentProofContract
+{
+    Task<OpdServicePaymentProof?> FindValidPaymentAsync(OpdServicePaymentProofRequest request, CancellationToken ct = default);
+}
+
 

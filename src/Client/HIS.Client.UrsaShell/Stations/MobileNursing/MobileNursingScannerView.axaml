@@ -1,0 +1,112 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.MobileNursing"
+             x:Class="HIS.Client.UrsaShell.Stations.MobileNursing.MobileNursingScannerView"
+             x:DataType="local:MobileNursingScannerViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <!-- Header Bar -->
+        <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                CornerRadius="8" Padding="14,10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="PDA 移动护理床旁执行终端" FontSize="17" FontWeight="Bold"/>
+                        <Border Background="{DynamicResource SemiColorWarningLight}" CornerRadius="4" Padding="7,2">
+                            <TextBlock Text="{Binding PendingPlanCount, StringFormat='{}待执行 {0}'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorWarning}"/>
+                        </Border>
+                        <Border Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4" Padding="7,2">
+                            <TextBlock Text="{Binding DonePlanCount, StringFormat='{}已闭环 {0}'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <ComboBox ItemsSource="{Binding Patients}" SelectedItem="{Binding SelectedPatient, Mode=TwoWay}"
+                              DisplayMemberBinding="{Binding DisplayLabel}" Width="240" Height="32"/>
+                    <Button Content="刷新任务" Classes="Primary" Height="32" Padding="12,0" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Workspace -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,360" ColumnSpacing="12">
+            <!-- Left Real OrdExecutionPlans List -->
+            <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}"
+                    BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="12">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding PatientHeader}" FontSize="14" FontWeight="Bold"/>
+                        <Border Grid.Column="1" Background="{DynamicResource SemiColorSuccessLight}" CornerRadius="4" Padding="8,2"
+                                IsVisible="{Binding IsWristbandVerified}">
+                            <TextBlock Text="✓ 患者腕带核验已通过" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorSuccess}"/>
+                        </Border>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Plans}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:PdaPlanItemVm">
+                                    <Button Classes="Tertiary" Padding="0" Margin="0,0,0,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                            Command="{Binding $parent[UserControl].((local:MobileNursingScannerViewModel)DataContext).PickPlanCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Border Background="{DynamicResource SemiColorBackground0}" BorderBrush="{DynamicResource SemiColorBorder}"
+                                                BorderThickness="1" CornerRadius="6" Padding="12,9">
+                                            <Grid ColumnDefinitions="135,*,Auto" ColumnSpacing="10">
+                                                <StackPanel Grid.Column="0" Spacing="2">
+                                                    <TextBlock Text="{Binding PlannedTimeText}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                    <TextBlock Text="{Binding OrderNo}" FontSize="10" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock Text="{Binding ItemName}" FontSize="13" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding DoseAndRoute}" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                                                </StackPanel>
+                                                <Border Grid.Column="2" Background="{DynamicResource SemiColorBackground2}" CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Right Scan & Specimen Console -->
+            <StackPanel Grid.Column="1" Spacing="12">
+                <Border Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14">
+                    <StackPanel Spacing="9">
+                        <TextBlock Text="1. PDA 双码核验执行" FontSize="14" FontWeight="Bold"/>
+                        <TextBlock Text="患者腕带条码 (住院号/PatientID)" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <TextBox Grid.Column="0" Text="{Binding PatientWristbandInput, Mode=TwoWay}" PlaceholderText="扫描患者腕带..." Height="32"/>
+                            <Button Grid.Column="1" Content="核对腕带" Classes="Secondary" Height="32" Command="{Binding VerifyWristbandCommand}"/>
+                        </Grid>
+                        <TextBlock Text="药品/执行计划条码" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBox Text="{Binding ItemBarcodeInput, Mode=TwoWay}" PlaceholderText="点左侧计划填入或扫码..." Height="32"/>
+                        <TextBlock Text="双人复核护士工号" FontSize="11" Foreground="{DynamicResource SemiColorText2}"/>
+                        <TextBox Text="{Binding DualCheckNurseId, Mode=TwoWay}" PlaceholderText="如 USER-NURSE-W1" Height="32"/>
+                        <Button Content="确认双码一致并执行闭环" Classes="Primary" Height="36" FontWeight="Bold"
+                                Command="{Binding ExecutePlanCommand}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{DynamicResource SemiColorBackground1}"
+                        BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14">
+                    <StackPanel Spacing="9">
+                        <TextBlock Text="2. 床旁标本采集条码绑定" FontSize="14" FontWeight="Bold"/>
+                        <TextBox Text="{Binding SpecimenRequestIdInput, Mode=TwoWay}" PlaceholderText="医技检验申请单号/ID" Height="32"/>
+                        <TextBox Text="{Binding SpecimenBarcodeInput, Mode=TwoWay}" PlaceholderText="采血管条码 (如 SPC-001)" Height="32"/>
+                        <Button Content="登记标本采集待物流转运" Classes="Success" Height="34" Command="{Binding DrawSpecimenCommand}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

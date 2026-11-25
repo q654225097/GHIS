@@ -71,7 +71,7 @@ public class EmrAccessGrantItemModel : ClientModelBase
     public string ApprovedBy { get; set; } = string.Empty;
     public int Status { get => _status; set { if (SetField(ref _status, value)) OnPropertyChanged(nameof(StatusText)); } }
     public string StatusText => Status == 1 ? "有效授权" : "已撤销";
-    public string ValidRangeText => $"{DateTimeOffset.FromUnixTimeMilliseconds(ValidFromMs).ToLocalTime():MM-dd HH:mm} ~ {DateTimeOffset.FromUnixTimeMilliseconds(ValidToMs).ToLocalTime():MM-dd HH:mm}";
+    public string ValidRangeText => $"{DateTimeOffset.FromUnixTimeMilliseconds(ValidFromMs).ToLocalTime():yyyy-MM-dd HH:mm:ss} ~ {DateTimeOffset.FromUnixTimeMilliseconds(ValidToMs).ToLocalTime():yyyy-MM-dd HH:mm:ss}";
 }
 
 public sealed class AuditLogStationViewModel : ClientModelBase, IShortcutTarget

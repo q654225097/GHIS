@@ -136,7 +136,7 @@ public class WorkflowNodeModel : ClientModelBase
         "START" => "#10B981",
         "APPROVAL" => "#2563EB",
         "EXCLUSIVE_GATEWAY" => "#D97706",
-        "CC" => "#9333EA",
+        "CC" => "#0284C7",
         "END" => "#475569",
         _ => "#0284C7"
     };
@@ -364,7 +364,7 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
 
         SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync);
         PublishCommand = new AsyncRelayCommand(PublishAsync);
-        RefreshDefinitionsCommand = new AsyncRelayCommand(LoadDefinitionsAsync);
+        RefreshDefinitionsCommand = new AsyncRelayCommand(() => LoadDefinitionsAsync());
         NewDefinitionCommand = new RelayCommand(ExecuteNewDefinition);
 
         _ = InitAsync();
@@ -800,8 +800,9 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
         }
     }
 
-    public async Task LoadDefinitionsAsync()
+    public async Task LoadDefinitionsAsync(string? targetId = null)
     {
+        string? keepId = targetId ?? SelectedDefinition?.Id ?? SelectedDefinition?.DefKey;
         try
         {
             using var http = AuthenticatedHttpClientFactory.Create();
@@ -822,10 +823,9 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
                         FallbackApproverId = d.FallbackApproverId
                     });
                 }
-                if (SelectedDefinition == null)
-                {
-                    SelectedDefinition = Definitions.FirstOrDefault(d => d.DefKey == "WF_DEF_CSM_REQUISITION") ?? Definitions[0];
-                }
+                SelectedDefinition = (keepId != null ? Definitions.FirstOrDefault(d => d.Id == keepId || d.DefKey == keepId) : null)
+                    ?? Definitions.FirstOrDefault(d => d.DefKey == "WF_DEF_CSM_REQUISITION")
+                    ?? Definitions.FirstOrDefault();
                 return;
             }
         }
@@ -1053,7 +1053,7 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
         return JsonSerializer.Serialize(graph, new JsonSerializerOptions { WriteIndented = true });
     }
 
-    public async Task SaveDraftAsync()
+    public async Task<bool> SaveDraftAsync()
     {
         IsBusy = true;
         StatusNotice = "正在保存流程图草稿到数据库...";
@@ -1076,18 +1076,21 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
             {
                 _shell?.ShowToast($"流程草稿 [{result.Data.DefName}] 保存成功！", "Success");
                 StatusNotice = $"流程草稿 [{result.Data.DefName}] 成功保存至 SQLite (版本 v{result.Data.VersionNum})";
-                await LoadDefinitionsAsync();
+                await LoadDefinitionsAsync(result.Data.Id);
+                return true;
             }
             else
             {
                 _shell?.ShowToast(result?.Message ?? "保存失败", "Danger");
                 StatusNotice = "保存失败: " + result?.Message;
+                return false;
             }
         }
         catch (Exception ex)
         {
             _shell?.ShowToast("保存异常: " + ex.Message, "Danger");
             StatusNotice = "保存异常: " + ex.Message;
+            return false;
         }
         finally
         {
@@ -1099,30 +1102,33 @@ public sealed class WorkflowDesignerViewModel : ClientModelBase, IShortcutTarget
     {
         if (SelectedDefinition == null)
         {
-            await SaveDraftAsync();
-        }
-
-        if (SelectedDefinition == null)
-        {
-            _shell?.ShowToast("请先选择或保存流程草稿后再发布", "Warning");
+            _shell?.ShowToast("请先在左侧选择需要发布的流程定义草稿", "Warning");
             return;
         }
 
+        string targetId = SelectedDefinition.Id;
+        string defName = SelectedDefinition.DefName;
+
         IsBusy = true;
-        StatusNotice = $"正在发布流程定义 [{SelectedDefinition.DefName}] 并执行强校验...";
+        StatusNotice = $"正在保存并发布流程定义 [{defName}]，执行强校验与版本审计...";
         try
         {
-            // First save latest graph changes
-            await SaveDraftAsync();
+            // First save latest graph changes and verify it succeeds
+            bool saved = await SaveDraftAsync();
+            if (!saved)
+            {
+                _shell?.ShowToast("保存草稿失败，已中止发布流程", "Danger");
+                return;
+            }
 
             using var http = AuthenticatedHttpClientFactory.Create();
-            var response = await http.PostAsync($"/api/v4/workflow/definitions/{SelectedDefinition.Id}/publish", null);
+            var response = await http.PostAsync($"/api/v4/workflow/definitions/{targetId}/publish", null);
             var result = await response.Content.ReadFromJsonAsync<ClientApiEnvelope<WorkflowDefinitionDetailDto>>();
             if (response.IsSuccessStatusCode && result?.Code == 200 && result.Data != null)
             {
                 _shell?.ShowToast($"流程发布成功！新版本 v{result.Data.VersionNum} 已生效", "Success");
-                StatusNotice = $"流程发布成功！版本递增至 v{result.Data.VersionNum}，已归档旧版本";
-                await LoadDefinitionsAsync();
+                StatusNotice = $"流程发布成功！版本递增至 v{result.Data.VersionNum}，旧在办实例继续原流程，新实例生效";
+                await LoadDefinitionsAsync(result.Data.Id);
             }
             else
             {

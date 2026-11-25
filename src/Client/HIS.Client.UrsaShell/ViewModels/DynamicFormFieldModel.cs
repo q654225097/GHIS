@@ -148,9 +148,10 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 		"u:TextArea" => "MULTI_TEXT",
 		"u:NumericIntUpDown" => "INT_INPUT",
 		"u:NumericDoubleUpDown" => "DECIMAL_INPUT",
-		"ComboBox" => "SELECT",
-		"DatePicker" => "DATE",
-		"CheckBox" => "CHECKBOX",
+		"ComboBox" or "u:ComboBox" => "SELECT",
+		"u:DatePicker" or "DatePicker" => "DATE",
+		"u:DateTimePicker" or "DateTimePicker" => "DATETIME",
+		"CheckBox" or "u:CheckBox" => "CHECKBOX",
 		_ => "SINGLE_TEXT"
 	};
 
@@ -160,7 +161,8 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 		"INT_INPUT" => "u:NumericIntUpDown",
 		"DECIMAL_INPUT" => "u:NumericDoubleUpDown",
 		"SELECT" => "ComboBox",
-		"DATE" => "DatePicker",
+		"DATE" => "u:DatePicker",
+		"DATETIME" => "u:DateTimePicker",
 		"CHECKBOX" => "CheckBox",
 		_ => "u:TextBox"
 	};
@@ -343,6 +345,7 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 				OnPropertyChanged("RuntimeDecimal");
 				OnPropertyChanged("RuntimeBoolean");
 				OnPropertyChanged("RuntimeDate");
+				OnPropertyChanged(nameof(RuntimeDateTime));
 			}
 		}
 	}
@@ -403,7 +406,25 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 			if (SetField(ref _runtimeDate, value, "RuntimeDate"))
 			{
 				RuntimeValue = value?.ToString("yyyy-MM-dd") ?? string.Empty;
+				OnPropertyChanged(nameof(RuntimeDateTime));
 			}
+		}
+	}
+
+	public DateTime? RuntimeDateTime
+	{
+		get => _runtimeDate?.DateTime;
+		set
+		{
+			if (value.HasValue)
+			{
+				RuntimeDate = new DateTimeOffset(value.Value);
+			}
+			else
+			{
+				RuntimeDate = null;
+			}
+			OnPropertyChanged(nameof(RuntimeDateTime));
 		}
 	}
 
@@ -562,7 +583,9 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 
 	public bool IsEnumControl => ControlType == "SELECT" || UrsaControlType == "ComboBox";
 
-	public bool IsDateControl => ControlType == "DATE" || UrsaControlType == "DatePicker";
+	public bool IsDateControl => ControlType == "DATE" || UrsaControlType == "DatePicker" || UrsaControlType == "u:DatePicker";
+
+	public bool IsDateTimeControl => ControlType == "DATETIME" || UrsaControlType == "DateTimePicker" || UrsaControlType == "u:DateTimePicker";
 
 	public bool IsBooleanControl => ControlType == "CHECKBOX" || UrsaControlType == "CheckBox";
 
@@ -708,6 +731,7 @@ public sealed class DynamicFormFieldModel : ClientModelBase
 		OnPropertyChanged("IsDecimalControl");
 		OnPropertyChanged("IsEnumControl");
 		OnPropertyChanged("IsDateControl");
+		OnPropertyChanged("IsDateTimeControl");
 		OnPropertyChanged("IsBooleanControl");
 		OnPropertyChanged("IsMultiLine");
 	}

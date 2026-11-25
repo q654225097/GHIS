@@ -50,9 +50,13 @@ public class BedCardModel : ClientModelBase
 		}
 	}
 
-	public string CardBorderBrush => IsSelected ? "#165DFF" : "#21262D";
+	public global::Avalonia.Media.IBrush CardBorderBrush => IsSelected
+		? global::HIS.Client.UrsaShell.Shell.ThemeBrushes.Primary
+		: global::HIS.Client.UrsaShell.Shell.ThemeBrushes.Border;
 
-	public string CardBackground => IsSelected ? "#1A253A" : "#161B22";
+	public global::Avalonia.Media.IBrush CardBackground => IsSelected
+		? global::HIS.Client.UrsaShell.Shell.ThemeBrushes.PrimaryLight
+		: global::HIS.Client.UrsaShell.Shell.ThemeBrushes.Surface;
 
 	public void NotifyUpdated()
 	{

@@ -111,12 +111,12 @@
                         </StackPanel>
                     </Button>
 
-                    <Button Content="⚠ 危急值待签收"
+                    <Button Content="{Binding CriticalQueueTitle}"
                             Classes="Danger"
                             Height="30"
                             Padding="10,0"
                             FontSize="12"
-                            IsVisible="{Binding Workbench.HasActiveCriticalValue}"
+                            IsVisible="{Binding CanOpenCriticalValueQueue}"
                             Command="{Binding OpenCriticalValueDrawerCommand}"/>
                     <Button Height="30"
                             Padding="10,0"

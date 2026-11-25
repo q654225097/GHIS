@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="https://irihi.tech/ursa"
              xmlns:local="using:HIS.Client.UrsaShell.Stations.Schedule"
              xmlns:vm="using:HIS.Client.UrsaShell.ViewModels"
              xmlns:controls="using:HIS.Client.UrsaShell.Shell.Controls"
@@ -31,9 +32,9 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
 
-                <TextBox x:Name="QueryDateBox" Grid.Column="2" Margin="0,0,8,0"
-                         Text="{Binding Schedule.QueryDate, Mode=TwoWay}"
-                         PlaceholderText="日期 YYYY-MM-DD"/>
+                <u:DatePicker x:Name="QueryDateBox" Grid.Column="2" Margin="0,0,8,0"
+                              SelectedDate="{Binding Schedule.QueryDateDateTime, Mode=TwoWay}"
+                              DisplayFormat="yyyy-MM-dd" Height="32"/>
 
                 <Button Grid.Column="3" Content="查询号源 (F3)" Classes="Primary" Height="32" Margin="0,0,6,0"
                         Command="{Binding FilterSlotsCommand}"/>
@@ -89,8 +90,8 @@
                             <TextBlock Text="按选中模板生成号源" FontSize="13" FontWeight="Bold"/>
                             <TextBlock Text="{Binding Schedule.GenerateTemplateHint}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" TextWrapping="Wrap"/>
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
-                                <TextBox Grid.Column="0" Text="{Binding Schedule.GenerateStartDate, Mode=TwoWay}" PlaceholderText="开始 YYYY-MM-DD"/>
-                                <TextBox Grid.Column="1" Text="{Binding Schedule.GenerateEndDate, Mode=TwoWay}" PlaceholderText="结束 YYYY-MM-DD"/>
+                                <u:DatePicker Grid.Column="0" SelectedDate="{Binding Schedule.GenerateStartDateDateTime, Mode=TwoWay}" DisplayFormat="yyyy-MM-dd" Height="32"/>
+                                <u:DatePicker Grid.Column="1" SelectedDate="{Binding Schedule.GenerateEndDateDateTime, Mode=TwoWay}" DisplayFormat="yyyy-MM-dd" Height="32"/>
                             </Grid>
                             <Button Content="确认批量发布号源" Classes="Warning" Height="32" HorizontalAlignment="Stretch"
                                     Command="{Binding GenerateSlotsCommand}"/>
@@ -142,7 +143,7 @@
                             <TextBox Grid.Column="3" Text="{Binding Schedule.RoomId, Mode=TwoWay}" PlaceholderText="诊室编号"/>
                         </Grid>
 
-                        <Grid ColumnDefinitions="Auto,120,90,90,120,90,90,Auto" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="Auto,105,76,76,105,76,72,130,Auto" ColumnSpacing="8">
                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                 <CheckBox Content="一" IsChecked="{Binding Schedule.IsMondaySelected, Mode=TwoWay}"/>
                                 <CheckBox Content="二" IsChecked="{Binding Schedule.IsTuesdaySelected, Mode=TwoWay}"/>
@@ -174,7 +175,11 @@
                             </ComboBox>
                             <TextBox Grid.Column="5" Text="{Binding Schedule.RegistrationFee, Mode=TwoWay}" PlaceholderText="挂号费"/>
                             <TextBox Grid.Column="6" Text="{Binding Schedule.Capacity, Mode=TwoWay}" PlaceholderText="总号容"/>
-                            <CheckBox Grid.Column="7" Content="启用" IsChecked="{Binding Schedule.IsTemplateActive, Mode=TwoWay}" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Column="7" HorizontalAlignment="Stretch"
+                                      ToolTip.Tip="分时段号源切分间隔 (15/30/60 分钟)"
+                                      ItemsSource="{Binding Schedule.SlotIntervalOptions}"
+                                      SelectedItem="{Binding Schedule.SelectedSlotInterval, Mode=TwoWay}"/>
+                            <CheckBox Grid.Column="8" Content="启用" IsChecked="{Binding Schedule.IsTemplateActive, Mode=TwoWay}" VerticalAlignment="Center"/>
                         </Grid>
 
                         <TextBlock Text="{Binding Schedule.ErrorMessage}" FontSize="12" Foreground="{DynamicResource SemiColorDanger}"

@@ -120,7 +120,7 @@ public sealed class MtcDiagnosticReportRow
     public bool CanApprove => Status == "PENDING_REVIEW";
 }
 
-public sealed class MedTechReportViewModel : ClientModelBase
+public sealed partial class MedTechReportViewModel : ClientModelBase
 {
     private readonly ShellViewModel? _shell;
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
@@ -410,6 +410,7 @@ public sealed class MedTechReportViewModel : ClientModelBase
         OnPropertyChanged(nameof(ActiveEditorTemplate));
         if (tpl != null)
             RebuildDynamicFieldsFromTemplate(tpl, rpt.ContentJson);
+        _ = LoadDicomStudiesForReportAsync(rpt);
     }
 
     private void RebuildDynamicFieldsFromTemplate(MtcReportTemplateRow tpl, string? contentJson)

@@ -117,7 +117,7 @@ public sealed class EmergencyAndOpdProController : ControllerBase
     }
 
     [HttpPost("er/triage")]
-    public async Task<ApiResponse<object>> CreateErTriage([FromBody] CreateErTriageDto req, CancellationToken ct)
+    public async Task<ApiResponse<object>> CreateErTriage([FromBody] CreateErTriageDto req, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(req.PatientName) || string.IsNullOrWhiteSpace(req.ChiefComplaint))
             return ApiResponse<object>.Fail(400, "患者姓名与急诊主诉不能为空");

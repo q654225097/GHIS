@@ -105,7 +105,7 @@ public class InpatientSelectItem : ClientModelBase
     public string DisplayText => $"[{BedCode}] {PatientName} ({AdmissionNo})";
 }
 
-public sealed class BloodBankStationViewModel : ClientModelBase, IStationLifecycle, IShortcutTarget
+public sealed partial class BloodBankStationViewModel : ClientModelBase, IStationLifecycle, IShortcutTarget
 {
     private readonly WorkbenchModel _workbench;
     private readonly ShellViewModel? _shell;
@@ -793,7 +793,11 @@ public sealed class BloodBankStationViewModel : ClientModelBase, IStationLifecyc
         _ => code ?? "血液制剂"
     };
 
-    public void Activate() => _ = LoadDataAsync();
+    public void Activate()
+    {
+        _ = LoadDataAsync();
+        _ = LoadExecutionsAsync();
+    }
     public void Deactivate() { }
     public void Dispose() => _http.Dispose();
     public bool OnShortcut(string gesture) => false;

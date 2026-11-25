@@ -781,7 +781,7 @@ public sealed class CheckupStationViewModel : ClientModelBase, IPrintContextProv
             string cls = it.IsAbnormal == 1 ? " class=\"abn\"" : "";
             sb.AppendLine($"<tr><td>{WebUtility.HtmlEncode(it.DeptName)}</td><td>{WebUtility.HtmlEncode(it.ItemName)}</td><td{cls}>{WebUtility.HtmlEncode(it.ResultValue ?? "-")}</td><td>{WebUtility.HtmlEncode(it.ReferenceRange ?? "-")}</td><td{cls}>{WebUtility.HtmlEncode(it.StatusText)}</td></tr>");
         }
-        sb.AppendLine($"</table><p style=\"margin-top:20px;font-size:9pt;color:#475569;\">主检医师：{WebUtility.HtmlEncode(o.SummaryDoctorName ?? "-")} · 打印日期：{DateTime.Now:yyyy-MM-dd HH:mm}</p><script>window.onload=function(){{setTimeout(function(){{window.print();}},200);}};</script></body></html>");
+        sb.AppendLine($"</table><p style=\"margin-top:20px;font-size:9pt;color:#475569;\">主检医师：{WebUtility.HtmlEncode(o.SummaryDoctorName ?? "-")} · 打印日期：{DateTime.Now:yyyy-MM-dd HH:mm:ss}</p><script>window.onload=function(){{setTimeout(function(){{window.print();}},200);}};</script></body></html>");
 
         string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GHIS_PrintSpool");
         Directory.CreateDirectory(dir);

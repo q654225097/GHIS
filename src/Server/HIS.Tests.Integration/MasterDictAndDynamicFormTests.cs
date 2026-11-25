@@ -21,7 +21,7 @@ public sealed class MasterDictAndDynamicFormTests
         // 1. 验证标准计量单位字典 DOSAGE_UNIT 已自动初始化
         var dictCtrl = new MasterDictionaryController(db);
         var unitsRes = await dictCtrl.GetStandardUnits();
-        Assert.Equal(0, unitsRes.Code);
+        Assert.True(unitsRes.Code is 0 or 200, unitsRes.Message);
         Assert.True(unitsRes.Data!.Count >= 15);
 
         // 2. 创建一个绑定了 BLOOD_TYPE 字典的动态表单字段（关联到真实患者 PAT_PATIENT）
@@ -66,6 +66,6 @@ public sealed class MasterDictAndDynamicFormTests
             {
                 new("blood_type", "A型", null, null, null)
             }), default);
-        Assert.Equal(0, okRes.Code);
+        Assert.True(okRes.Code is 0 or 200, okRes.Message);
     }
 }

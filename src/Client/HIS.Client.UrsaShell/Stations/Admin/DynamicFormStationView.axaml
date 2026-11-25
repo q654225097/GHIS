@@ -398,9 +398,14 @@
                                                           IsVisible="{Binding IsEnumControl}"
                                                           Height="32"
                                                           HorizontalAlignment="Stretch"/>
-                                                <DatePicker SelectedDate="{Binding RuntimeDate, Mode=TwoWay}"
+                                                <u:DatePicker SelectedDate="{Binding RuntimeDateTime, Mode=TwoWay}"
+                                                            DisplayFormat="yyyy-MM-dd"
                                                             IsVisible="{Binding IsDateControl}"
                                                             Height="32"/>
+                                                <u:DateTimePicker SelectedDate="{Binding RuntimeDateTime, Mode=TwoWay}"
+                                                                DisplayFormat="yyyy-MM-dd HH:mm:ss"
+                                                                IsVisible="{Binding IsDateTimeControl}"
+                                                                Height="32"/>
                                                 <CheckBox Content="{Binding FieldLabel}"
                                                           IsChecked="{Binding RuntimeBoolean, Mode=TwoWay}"
                                                           IsVisible="{Binding IsBooleanControl}"/>
@@ -433,6 +438,51 @@
                                                 </StackPanel>
                                                 <controls:StatusTag Grid.Column="1" Text="处方前置审方通过" Kind="Success"/>
                                             </Grid>
+
+                                            <!-- Live Outpatient Doctor Station Prescription Table Columns Preview -->
+                                            <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="4" Padding="6" Margin="0,4,0,0">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="门诊医生站处方开立表格列实时映射效果：" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
+                                                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                                        <StackPanel Spacing="2">
+                                                            <!-- Header Preview -->
+                                                            <Border Background="{DynamicResource SemiColorBackground2}" CornerRadius="3" Padding="4,4">
+                                                                <ItemsControl ItemsSource="{Binding Workbench.PrescriptionColumns}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <StackPanel Orientation="Horizontal"/>
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:PrescriptionColumnModel">
+                                                                            <Border Width="{Binding Width}" Padding="4,0">
+                                                                                <TextBlock Text="{Binding FieldLabel}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SemiColorText2}" TextTrimming="CharacterEllipsis"/>
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </Border>
+                                                            <!-- Sample Row Preview -->
+                                                            <Border Background="{DynamicResource SemiColorBackground0}" CornerRadius="3" Padding="4,4" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                                                <ItemsControl ItemsSource="{Binding Workbench.PrescriptionColumns}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <StackPanel Orientation="Horizontal"/>
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:PrescriptionColumnModel">
+                                                                            <Border Width="{Binding Width}" Padding="4,0">
+                                                                                <TextBlock Text="{Binding Placeholder}" FontSize="10" Foreground="{DynamicResource SemiColorPrimary}" TextTrimming="CharacterEllipsis"/>
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </ScrollViewer>
+                                                </StackPanel>
+                                            </Border>
 
                                             <!-- Dynamic Custom Fields on Prescription Item -->
                                             <Border Background="{DynamicResource SemiColorBackground1}" CornerRadius="4" Padding="8,6" Margin="0,2,0,0">

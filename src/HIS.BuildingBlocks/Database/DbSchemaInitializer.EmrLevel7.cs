@@ -244,6 +244,7 @@ CREATE TABLE IF NOT EXISTS cpw_stage_items (
     item_name VARCHAR(128) NOT NULL,
     is_mandatory SMALLINT NOT NULL DEFAULT 1,
     is_default_selected SMALLINT NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 1,
     ext_data_json VARCHAR(4000),
     schema_version INT NOT NULL DEFAULT 1,
     created_at_ms BIGINT NOT NULL,

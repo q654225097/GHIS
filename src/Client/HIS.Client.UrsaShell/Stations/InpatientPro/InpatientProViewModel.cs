@@ -50,7 +50,7 @@ public sealed class MarPlanRow
     public string? RouteCode { get; set; }
 
     public string PlannedTimeText => PlannedTimeMs > 0
-        ? DateTimeOffset.FromUnixTimeMilliseconds(PlannedTimeMs).ToLocalTime().ToString("MM-dd HH:mm")
+        ? DateTimeOffset.FromUnixTimeMilliseconds(PlannedTimeMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
         : "-";
     public string ExecStatusText => ExecStatus == 1 ? "✅ 已执行" : "⏳ 待执行";
 }
@@ -66,7 +66,7 @@ public sealed class VitalsPointRow
     public int Dbp { get; set; }
     public int Spo2 { get; set; }
     public string TimeText => RecordedAtMs > 0
-        ? DateTimeOffset.FromUnixTimeMilliseconds(RecordedAtMs).ToLocalTime().ToString("MM-dd HH:mm")
+        ? DateTimeOffset.FromUnixTimeMilliseconds(RecordedAtMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
         : "-";
 }
 
@@ -95,7 +95,7 @@ public sealed class ConsultRow
         _ => "🔵 普通会诊(24h)"
     };
     public string DeadlineText => DeadlineMs > 0
-        ? DateTimeOffset.FromUnixTimeMilliseconds(DeadlineMs).ToLocalTime().ToString("MM-dd HH:mm")
+        ? DateTimeOffset.FromUnixTimeMilliseconds(DeadlineMs).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
         : "-";
     public string EmrSyncDisplay => SyncedToEmr == 1 ? "已回写EMR" : "未回写";
 }
