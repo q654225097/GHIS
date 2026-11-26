@@ -118,7 +118,7 @@ public sealed class InpatientDailyBillingHostedService : BackgroundService
                    COALESCE(b.daily_fee, 0) AS BedDailyFee
             FROM ipd_encounters e
             LEFT JOIN ipd_beds b ON b.current_encounter_id = e.id
-            WHERE e.status = 1")).ToList();
+            WHERE e.status = 1 AND COALESCE(e.is_deceased, 0) = 0")).ToList();
 
         long now = SystemTime.UtcNowMs;
         int bedFeeCount = 0;

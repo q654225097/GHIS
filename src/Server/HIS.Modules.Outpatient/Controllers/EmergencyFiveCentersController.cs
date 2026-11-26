@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace HIS.Modules.Outpatient.Controllers;
 /// 3) 结案强制超时归因（超时未填原因 HTTP 400 拦截）与质控达标率看板
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "WARD_NURSE", "IPD_ATTENDING", "IPD_RESIDENT")]
 [Route("api/v4/five-centers")]
 public sealed class EmergencyFiveCentersController : ControllerBase
 {
@@ -80,7 +82,7 @@ public sealed class EmergencyFiveCentersController : ControllerBase
     };
 
     [HttpGet("cases")]
-    public async Task<IActionResult> ListCases([FromQuery] string? centerType = null, [FromQuery] string? status = null, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListCases([FromQuery] string? centerType = null, [FromQuery] string? status = null, CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -98,17 +100,17 @@ public sealed class EmergencyFiveCentersController : ControllerBase
         }
         sql += " ORDER BY door_at_ms DESC LIMIT 200";
         var rows = await conn.QueryAsync(sql, p);
-        return Ok(rows);
+        return ApiResponse<object>.Success(rows);
     }
 
     [HttpPost("cases")]
-    public async Task<IActionResult> OpenCase([FromBody] OpenCenterCaseDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> OpenCase([FromBody] OpenCenterCaseDto dto, CancellationToken ct)
     {
         var center = (dto.CenterType ?? string.Empty).Trim().ToUpperInvariant();
         if (center is not ("CHEST_PAIN" or "STROKE" or "TRAUMA" or "MATERNAL" or "NEONATAL"))
-            return BadRequest(new { message = "不支持的急救中心类型，仅支持 CHEST_PAIN/STROKE/TRAUMA/MATERNAL/NEONATAL。" });
+            return ApiResponse<object>.Fail(400, "不支持的急救中心类型，仅支持 CHEST_PAIN/STROKE/TRAUMA/MATERNAL/NEONATAL。");
         if (string.IsNullOrWhiteSpace(dto.PatientId) || string.IsNullOrWhiteSpace(dto.PatientName))
-            return BadRequest(new { message = "患者ID与患者姓名不能为空。" });
+            return ApiResponse<object>.Fail(400, "患者ID与患者姓名不能为空。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var doorAt = dto.DoorAtMs ?? now;
@@ -159,7 +161,7 @@ INSERT INTO er_five_center_milestones (
 
         await tx.CommitAsync(ct);
 
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             id,
             caseNo,
@@ -171,34 +173,34 @@ INSERT INTO er_five_center_milestones (
     }
 
     [HttpGet("cases/{caseId}/milestones")]
-    public async Task<IActionResult> GetMilestones(string caseId, CancellationToken ct)
+    public async Task<ApiResponse<object>> GetMilestones(string caseId, CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync(
             "SELECT * FROM er_five_center_milestones WHERE case_id = @CaseId ORDER BY occurred_at_ms ASC",
             new { CaseId = caseId });
-        return Ok(rows);
+        return ApiResponse<object>.Success(rows);
     }
 
     [HttpPost("cases/{caseId}/milestones")]
-    public async Task<IActionResult> RecordMilestone(string caseId, [FromBody] RecordMilestoneDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> RecordMilestone(string caseId, [FromBody] RecordMilestoneDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.MilestoneCode) || string.IsNullOrWhiteSpace(dto.MilestoneName))
-            return BadRequest(new { message = "时间节点编码与名称不能为空。" });
+            return ApiResponse<object>.Fail(400, "时间节点编码与名称不能为空。");
 
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var c = await conn.QueryFirstOrDefaultAsync(
             "SELECT id, door_at_ms, target_limit_minutes, center_type, status FROM er_five_center_cases WHERE id = @Id",
             new { Id = caseId });
-        if (c == null) return NotFound(new { message = "急救专案不存在。" });
+        if (c == null) return ApiResponse<object>.Fail(404, "急救专案不存在。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var occurredAt = dto.OccurredAtMs ?? now;
         long doorAt = Convert.ToInt64(c.door_at_ms);
         if (occurredAt < doorAt)
-            return BadRequest(new { message = "节点发生时间不能早于患者到院时间。" });
+            return ApiResponse<object>.Fail(400, "节点发生时间不能早于患者到院时间。");
 
         int elapsedMin = (int)Math.Round((occurredAt - doorAt) / 60000.0, MidpointRounding.AwayFromZero);
         var code = dto.MilestoneCode.Trim().ToUpperInvariant();
@@ -259,7 +261,7 @@ INSERT INTO er_five_center_milestones (
 
         await tx.CommitAsync(ct);
 
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             milestoneId = msId,
             milestoneCode = code,
@@ -270,14 +272,14 @@ INSERT INTO er_five_center_milestones (
     }
 
     [HttpPost("cases/{caseId}/complete")]
-    public async Task<IActionResult> CompleteCase(string caseId, [FromBody] CompleteCenterCaseDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> CompleteCase(string caseId, [FromBody] CompleteCenterCaseDto dto, CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var c = await conn.QueryFirstOrDefaultAsync(
             "SELECT id, door_at_ms, target_limit_minutes, actual_minutes, is_overtime FROM er_five_center_cases WHERE id = @Id",
             new { Id = caseId });
-        if (c == null) return NotFound(new { message = "急救专案不存在。" });
+        if (c == null) return ApiResponse<object>.Fail(404, "急救专案不存在。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         int actualMin = c.actual_minutes != null
@@ -287,7 +289,7 @@ INSERT INTO er_five_center_milestones (
         bool isOvertime = actualMin > targetLimit || Convert.ToInt32(c.is_overtime) == 1;
 
         if (isOvertime && string.IsNullOrWhiteSpace(dto.OvertimeReason))
-            return BadRequest(new { message = $"该专案耗时 {actualMin} 分钟超过标准限额 {targetLimit} 分钟，结案必须填写超时归因说明。" });
+            return ApiResponse<object>.Fail(400, $"该专案耗时 {actualMin} 分钟超过标准限额 {targetLimit} 分钟，结案必须填写超时归因说明。");
 
         await conn.ExecuteAsync(@"
 UPDATE er_five_center_cases
@@ -310,11 +312,11 @@ WHERE id = @Id;", new
             Id = caseId
         });
 
-        return Ok(new { caseId, actualMinutes = actualMin, isOvertime, status = "COMPLETED" });
+        return ApiResponse<object>.Success(new { caseId, actualMinutes = actualMin, isOvertime, status = "COMPLETED" });
     }
 
     [HttpGet("dashboard")]
-    public async Task<IActionResult> GetDashboard(CancellationToken ct)
+    public async Task<ApiResponse<object>> GetDashboard(CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -327,6 +329,6 @@ SELECT center_type,
        AVG(actual_minutes) AS avg_minutes
 FROM er_five_center_cases
 GROUP BY center_type;");
-        return Ok(stats);
+        return ApiResponse<object>.Success(stats);
     }
 }

@@ -17,6 +17,7 @@ namespace HIS.Modules.Checkup.Controllers;
 /// 健康体检管理模块（个人/团体体检登记、套餐自动拆解分科项目、分科结果录入、主检总检与报告发布）
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "MEDTECH", "CASHIER", "WARD_NURSE")]
 [Route("api/v4/checkup")]
 public sealed class CheckupController : ControllerBase
 {

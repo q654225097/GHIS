@@ -14,6 +14,8 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
       <ProjectReference Include="..\HIS.Modules.Consumables\HIS.Modules.Consumables.csproj" />
       <ProjectReference Include="..\HIS.Modules.Pharmacy\HIS.Modules.Pharmacy.csproj" />
+      <ProjectReference Include="..\HIS.Modules.Patient\HIS.Modules.Patient.csproj" />
+      <ProjectReference Include="..\HIS.Modules.Hr\HIS.Modules.Hr.csproj" />
   </ItemGroup>
 
   <ItemGroup>

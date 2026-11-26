@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,6 +22,7 @@ namespace HIS.Modules.MedTech.Controllers;
 /// 6) 术后 PCA 镇痛泵（PCIA/PCEA）与 24h/48h/72h VAS 疼痛随访
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE", "MEDTECH")]
 [Route("api/v4/aims")]
 public sealed class AimsController : ControllerBase
 {
@@ -271,6 +273,18 @@ public sealed class AimsController : ControllerBase
                 Actor = ActorId
             }, tx);
         tx.Commit();
+
+                // 跨表闭环：同步将 AIMS 术前麻醉 ASA 评估状态回写手术排班主表 mte_surgery_schedules
+        await conn.ExecuteAsync(@"
+UPDATE mte_surgery_schedules
+SET ext_data_json = @ExtJson, updated_at_ms = @Now, updated_by = @Actor
+WHERE id = @Sid OR schedule_no = @Sid;", new
+        {
+            ExtJson = System.Text.Json.JsonSerializer.Serialize(new { aims_preop_id = id, aims_preop_asa = req.AsaClass, mallampati = req.MallampatiClass }),
+            Now = now,
+            Actor = ActorId,
+            Sid = req.ScheduleId.Trim()
+        });
 
         return ApiResponse<object>.Success(new { Id = id, AssessmentNo = no, TidalVolumeRangeMl = tvRange, LidocaineMaxMg = lidoMax, RopivacaineMaxMg = ropiMax, RiskAlerts = riskText },
             $"术前麻醉访视 {no} 已完成并回写电子病历");

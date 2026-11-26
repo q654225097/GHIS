@@ -224,4 +224,40 @@ public sealed class MultiDbConnectionFactory : IDbConnectionFactory
         }
         return translated;
     }
+
+    /// <summary>
+    /// 跨库查询与 DML 方言实时翻译器（解决 SQLite 专属语法在达梦 DM8 / PostgreSQL 下的兼容性问题）：
+    /// - INSERT OR IGNORE INTO  -> PostgreSQL: INSERT INTO ... ON CONFLICT DO NOTHING / Dameng: INSERT /*+ IGNORE_ROW_ON_DUPKEY_INDEX */ INTO
+    /// - CAST(x AS TEXT)        -> Dameng: CAST(x AS VARCHAR(4000))
+    /// - datetime('now')        -> Dameng: SYSDATE / PostgreSQL: NOW()
+    /// - strftime('%Y-%m', ...) -> Dameng/PG: TO_CHAR(...)
+    /// </summary>
+    public static string TranslateSqlForDialect(string sql, HisDbProviderKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(sql) || kind == HisDbProviderKind.Sqlite)
+            return sql;
+
+        string t = TranslateDdlForDialect(sql, kind);
+
+        if (kind == HisDbProviderKind.Dameng)
+        {
+            t = Regex.Replace(t, @"INSERT\s+OR\s+IGNORE\s+INTO", "INSERT /*+ IGNORE_ROW_ON_DUPKEY_INDEX */ INTO", RegexOptions.IgnoreCase);
+            t = Regex.Replace(t, @"INSERT\s+OR\s+REPLACE\s+INTO", "INSERT /*+ IGNORE_ROW_ON_DUPKEY_INDEX */ INTO", RegexOptions.IgnoreCase);
+            t = Regex.Replace(t, @"CAST\s*\(([^)]+?)\s+AS\s+TEXT\s*\)", "CAST($1 AS VARCHAR(4000))", RegexOptions.IgnoreCase);
+            t = Regex.Replace(t, @"datetime\s*\(\s*'now'\s*\)", "SYSDATE", RegexOptions.IgnoreCase);
+        }
+        else if (kind == HisDbProviderKind.Postgres)
+        {
+            if (Regex.IsMatch(t, @"INSERT\s+OR\s+IGNORE\s+INTO", RegexOptions.IgnoreCase))
+            {
+                t = Regex.Replace(t, @"INSERT\s+OR\s+IGNORE\s+INTO", "INSERT INTO", RegexOptions.IgnoreCase);
+                t = Regex.Replace(t, @";\s*$", " ON CONFLICT DO NOTHING;", RegexOptions.Multiline);
+                if (!t.Contains("ON CONFLICT", StringComparison.OrdinalIgnoreCase))
+                    t += " ON CONFLICT DO NOTHING";
+            }
+            t = Regex.Replace(t, @"datetime\s*\(\s*'now'\s*\)", "NOW()", RegexOptions.IgnoreCase);
+        }
+
+        return t;
+    }
 }

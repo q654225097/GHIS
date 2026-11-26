@@ -1,0 +1,161 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.StaffLifecycle"
+             x:Class="HIS.Client.UrsaShell.Stations.StaffLifecycle.StaffLifecycleStationView"
+             x:DataType="local:StaffLifecycleViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="医院职工全生命周期治理中心（人 · 证 · 权 · 床 · 号 · 章六维联动）" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding SummaryBanner}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: 入职准入绿灯清单与一键转正 -->
+            <TabItem Header="① 入职准入与转正">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="新职工上岗准入 4 步绿灯核验" FontWeight="Bold"/>
+                            <TextBox Text="{Binding ObEmpId, Mode=TwoWay}" PlaceholderText="职工ID (如 EMP-NEW-01)"/>
+                            <TextBox Text="{Binding ObUserId, Mode=TwoWay}" PlaceholderText="系统账号ID"/>
+                            <TextBox Text="{Binding ObName, Mode=TwoWay}" PlaceholderText="职工姓名"/>
+                            <Button Content="建立上岗准入清单" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding InitOnboardingCommand}"/>
+                            <Button Content="一键绿灯核验选中人员 4 项准入" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding VerifyAllOnboardingStepsCommand}"/>
+                            <Button Content="正式转正并签发 CA 与医务授权" HorizontalAlignment="Stretch" Command="{Binding ActivateOnboardingCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Onboardings}" SelectedItem="{Binding SelectedOnboarding, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="职工ID" Binding="{Binding EmployeeId}" Width="120"/>
+                                <DataGridTextColumn Header="姓名" Binding="{Binding EmployeeName}" Width="90"/>
+                                <DataGridTextColumn Header="执业证" Binding="{Binding LicenseVerified}" Width="65"/>
+                                <DataGridTextColumn Header="院感考核" Binding="{Binding IpcTrainingPassed}" Width="75"/>
+                                <DataGridTextColumn Header="CA证书" Binding="{Binding CaCertIssued}" Width="70"/>
+                                <DataGridTextColumn Header="医务授权" Binding="{Binding MedPrivilegeGranted}" Width="75"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 请假/外出进修/支医与临床代理 -->
+            <TabItem Header="② 请假进修与临床代理">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="离岗不离责：自动停诊与管床托管" FontWeight="Bold"/>
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding LeaveTypes}" SelectedItem="{Binding LvType, Mode=TwoWay}"/>
+                            <TextBox Text="{Binding LvEmpId, Mode=TwoWay}" PlaceholderText="离岗职工ID"/>
+                            <TextBox Text="{Binding LvUserId, Mode=TwoWay}" PlaceholderText="离岗账号ID"/>
+                            <TextBox Text="{Binding LvName, Mode=TwoWay}" PlaceholderText="离岗医师姓名"/>
+                            <TextBox Text="{Binding LvDelegateUserId, Mode=TwoWay}" PlaceholderText="临床代理人账号ID"/>
+                            <Button Content="生效离岗并托管管床与排班" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding ApplyLeaveCommand}"/>
+                            <Button Content="选中人员销假复岗并收回代理" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding ReturnLeaveCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Leaves}" SelectedItem="{Binding SelectedLeave, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="离岗单号" Binding="{Binding LeaveNo}" Width="140"/>
+                                <DataGridTextColumn Header="姓名" Binding="{Binding EmployeeName}" Width="90"/>
+                                <DataGridTextColumn Header="类型" Binding="{Binding LeaveType}" Width="95"/>
+                                <DataGridTextColumn Header="临床代理人" Binding="{Binding DelegateUserId}" Width="115"/>
+                                <DataGridTextColumn Header="通知预约数" Binding="{Binding MigratedApptsCnt}" Width="90"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 离职/退休5项清零与跨科调岗 -->
+            <TabItem Header="③ 离职退休清零与调科">
+                <Grid ColumnDefinitions="360,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="5 项临床在途清零门禁与一键交接" FontWeight="Bold"/>
+                            <TextBox Text="{Binding OffEmpId, Mode=TwoWay}" PlaceholderText="待离职/退休/调科职工ID"/>
+                            <TextBox Text="{Binding OffHandoverTo, Mode=TwoWay}" PlaceholderText="交接接替医师账号ID"/>
+                            <TextBox Text="{Binding OffTargetDeptId, Mode=TwoWay}" PlaceholderText="调入新科室ID (调科时填)"/>
+                            <Button Content="扫描该职工 5 项在途业务" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding AuditOffboardingCommand}"/>
+                            <Button Content="执行离职/退休清零交接并吊销CA" Classes="Danger" HorizontalAlignment="Stretch" Command="{Binding ExecuteOffboardingCommand}"/>
+                            <Button Content="执行跨科调岗(旧科清零+医务重评)" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding TransferWithClearanceCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="实时 5 项临床在途清零审计结果" FontSize="15" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding OffboardAuditDetail}" TextWrapping="Wrap" FontSize="13"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: 退休返聘与外院专家多点执业 -->
+            <TabItem Header="④ 退休返聘与外院专家">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="退休专家返聘激活 (REHIRED_EXPERT)" FontWeight="Bold"/>
+                            <TextBox Text="{Binding RehireEmpId, Mode=TwoWay}" PlaceholderText="已退休专家职工ID"/>
+                            <Button Content="激活退休返聘(留门诊收行政)" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding RehireExpertCommand}"/>
+                            <TextBlock Text="外院特邀专家/多点执业限时备案" FontWeight="Bold" Margin="0,10,0,0"/>
+                            <TextBox Text="{Binding ExtName, Mode=TwoWay}" PlaceholderText="外院专家姓名"/>
+                            <TextBox Text="{Binding ExtHospital, Mode=TwoWay}" PlaceholderText="原执业三甲医院"/>
+                            <TextBox Text="{Binding ExtLicense, Mode=TwoWay}" PlaceholderText="执业医师证号"/>
+                            <Button Content="签发 7 天限时备案与临时手术账号" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding RegisterExternalExpertCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding ExternalExperts}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="备案号" Binding="{Binding FilingNo}" Width="140"/>
+                                <DataGridTextColumn Header="专家姓名" Binding="{Binding ExpertName}" Width="100"/>
+                                <DataGridTextColumn Header="原执业医院" Binding="{Binding OriginHospital}" Width="160"/>
+                                <DataGridTextColumn Header="临时账号" Binding="{Binding TempUserId}" Width="130"/>
+                                <DataGridTextColumn Header="手术级别" Binding="{Binding AllowedSurgeryLevel}" Width="75"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 5: 住培轮转、CME定期考核与到期自动熔断 -->
+            <TabItem Header="⑤ 轮转 · CME定考 · 自动熔断">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="住培轮转与到期自动熔断巡检" FontWeight="Bold"/>
+                            <TextBox Text="{Binding RotEmpId, Mode=TwoWay}" PlaceholderText="规培生职工ID"/>
+                            <TextBox Text="{Binding RotUserId, Mode=TwoWay}" PlaceholderText="规培生账号ID"/>
+                            <TextBox Text="{Binding RotName, Mode=TwoWay}" PlaceholderText="姓名"/>
+                            <TextBox Text="{Binding RotDeptId, Mode=TwoWay}" PlaceholderText="轮转目标科室ID"/>
+                            <Button Content="排定跨科轮转计划" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding ScheduleRotationCommand}"/>
+                            <Button Content="立即执行证照/外院备案/轮转自动巡检" Classes="Danger" HorizontalAlignment="Stretch" Margin="0,12,0,0" Command="{Binding RunGovernanceSweepCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding Rotations}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="姓名" Binding="{Binding EmployeeName}" Width="95"/>
+                                <DataGridTextColumn Header="目标科室" Binding="{Binding TargetDeptName}" Width="130"/>
+                                <DataGridTextColumn Header="开始日期" Binding="{Binding StartDateInt}" Width="95"/>
+                                <DataGridTextColumn Header="结束日期" Binding="{Binding EndDateInt}" Width="95"/>
+                                <DataGridTextColumn Header="自动切科" Binding="{Binding AutoSwitched}" Width="80"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

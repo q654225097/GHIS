@@ -84,6 +84,7 @@ public class PrescriptionReviewEngine : IPrescriptionReviewEngine
 
         // 1. RULE_ALLERGY & RULE_SKIN_TEST: 过敏史及皮试阻断
         CheckAllergyAndSkinTest(patient, drugList, itemList, issues);
+        await CheckDbAllergyAndCrossReactivityAsync(patientId, drugList, itemList, issues, ct);
 
         // 2. RULE_DOSE_LIMIT: 单次剂量与日用剂量极限审查
         CheckDoseLimits(drugList, itemList, issues);
@@ -864,5 +865,64 @@ public class PrescriptionReviewEngine : IPrescriptionReviewEngine
             if (text.Contains(n, StringComparison.OrdinalIgnoreCase)) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// R-01 闭环：实时读取数据库 pat_patients.allergy_history_text 与 nur_skin_test_records(POSITIVE)，
+    /// 并执行青霉素/阿莫西林/哌拉西林/头孢等 β-内酰胺类交叉过敏强拦截。
+    /// </summary>
+    private async Task CheckDbAllergyAndCrossReactivityAsync(
+        string patientId,
+        List<DrugCatalogSnapshotDto> drugs,
+        List<OpdPrescriptionItem> items,
+        List<PrescriptionReviewIssueDto> issues,
+        CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = _connFactory.CreateConnection();
+            if (conn.State != ConnectionState.Open) await conn.OpenAsync(ct);
+
+            string? allergyText = await conn.ExecuteScalarAsync<string?>(
+                "SELECT allergy_history_text FROM pat_patients WHERE id = @Pid", new { Pid = patientId });
+            var posDrugs = (await conn.QueryAsync<string>(
+                "SELECT drug_name FROM nur_skin_test_records WHERE patient_id = @Pid AND result = 'POSITIVE'",
+                new { Pid = patientId })).ToList();
+
+            string combined = string.Join(";", new[] { allergyText ?? string.Empty }.Concat(posDrugs));
+            if (string.IsNullOrWhiteSpace(combined)) return;
+
+            bool hasPenicillinAllergy = combined.Contains("青霉素", StringComparison.OrdinalIgnoreCase)
+                || combined.Contains("阿莫西林", StringComparison.OrdinalIgnoreCase)
+                || combined.Contains("哌拉西林", StringComparison.OrdinalIgnoreCase)
+                || combined.Contains("氨苄西林", StringComparison.OrdinalIgnoreCase);
+
+            foreach (var it in items)
+            {
+                string dName = it.DrugNameSnapshot ?? string.Empty;
+                bool directHit = posDrugs.Any(p => !string.IsNullOrWhiteSpace(p) && dName.Contains(p.Split('(')[0].Trim(), StringComparison.OrdinalIgnoreCase));
+                bool crossBetaLactam = hasPenicillinAllergy && (
+                    dName.Contains("青霉素", StringComparison.OrdinalIgnoreCase) ||
+                    dName.Contains("阿莫西林", StringComparison.OrdinalIgnoreCase) ||
+                    dName.Contains("哌拉西林", StringComparison.OrdinalIgnoreCase) ||
+                    dName.Contains("氨苄西林", StringComparison.OrdinalIgnoreCase) ||
+                    dName.Contains("头孢", StringComparison.OrdinalIgnoreCase));
+
+                if (directHit || crossBetaLactam)
+                {
+                    issues.Add(new PrescriptionReviewIssueDto
+                    {
+                        RuleCode = "RULE_DB_ALLERGY_CROSS_BLOCK",
+                        RuleName = "实时皮试阳性与β-内酰胺交叉过敏强拦截",
+                        Severity = "BLOCK",
+                        Title = $"严禁开具过敏/交叉过敏药物：{dName}",
+                        Message = $"患者主索引过敏史或皮试阳性台账记录 [{combined}]，当前处方药物 [{dName}] 触发直接或 β-内酰胺类交叉过敏高危阻断！",
+                        ClinicalSuggestion = "请立即更换为大环内酯类或喹诺酮类替代抗菌药物。",
+                        ReferenceStandard = "《β内酰胺类抗菌药物皮肤试验指导原则(2021年版)》"
+                    });
+                }
+            }
+        }
+        catch { }
     }
 }

@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.BloodBank.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "MEDTECH", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 [Route("api/v4/blood")]
 [Route("api/v4/blood-bank")]
 public class BloodBankController : ControllerBase

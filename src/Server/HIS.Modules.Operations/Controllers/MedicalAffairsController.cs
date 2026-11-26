@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,6 +20,7 @@ namespace HIS.Modules.Operations.Controllers;
 /// 4) 新技术新项目临床准入审批与并发症监测
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING")]
 [Route("api/v4/medical-affairs")]
 public sealed class MedicalAffairsController : ControllerBase
 {

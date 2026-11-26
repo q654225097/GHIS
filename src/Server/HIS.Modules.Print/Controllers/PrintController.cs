@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.Print.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE", "CASHIER", "PHARMACIST", "MEDTECH")]
 [Route("api/v4/print")]
 public sealed class PrintController : ControllerBase
 {

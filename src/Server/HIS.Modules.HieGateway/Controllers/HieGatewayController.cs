@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.HieGateway.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "MEDTECH")]
 [Route("api/v4/hie")]
 public class HieGatewayController : ControllerBase
 {

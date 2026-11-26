@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using Dapper;
 using System.Text.Json;
 using HIS.BuildingBlocks.Common;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.Outpatient.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "CASHIER", "OPD_DOC", "WARD_NURSE")]
 [Route("api/v4/opd/registration")]
 public class OpdRegistrationController : ControllerBase
 {

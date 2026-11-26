@@ -540,6 +540,18 @@ VALUES
                         // 闭环：患者正式出院释放床位时，自动推送待回收病案至 mrms_case_records 并自动注销陪护/探视证
                         using (var mrmsConn = _connFactory.CreateConnection())
                         {
+                            // R-09 闭环：正式出院时自动生成 7 天院后随访计划（幂等防重）
+                            int hasFu = await mrmsConn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM followup_plans WHERE encounter_id = @Eid", new { Eid = encounter.Id });
+                            if (hasFu == 0)
+                            {
+                                string fuPatName = await mrmsConn.ExecuteScalarAsync<string?>("SELECT full_name FROM pat_patients WHERE id = @Pid", new { Pid = encounter.PatientId }) ?? encounter.PatientId;
+                                long fuNow = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                                int planDateInt = int.Parse(DateTime.UtcNow.AddDays(7).ToString("yyyyMMdd"));
+                                await mrmsConn.ExecuteAsync(@"
+INSERT INTO followup_plans (id, plan_no, encounter_id, patient_id, patient_name, specialty_tag, discharge_at_ms, planned_date_int, channel, status, created_at_ms, created_by, updated_at_ms, updated_by)
+VALUES (@Id, @No, @Eid, @Pid, @Pname, '出院7天自动随访', @Now, @PlanDate, 'PHONE', 'SCHEDULED', @Now, 'SYSTEM_DISCHARGE', @Now, 'SYSTEM_DISCHARGE');",
+                                    new { Id = Guid.NewGuid().ToString("N"), No = $"FU{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(10, 99)}", Eid = encounter.Id, Pid = encounter.PatientId, Pname = fuPatName, Now = fuNow, PlanDate = planDateInt });
+                            }
                             int hasCase = await mrmsConn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM mrms_case_records WHERE encounter_id = @Eid", new { Eid = encounter.Id });
                             if (hasCase == 0)
                             {

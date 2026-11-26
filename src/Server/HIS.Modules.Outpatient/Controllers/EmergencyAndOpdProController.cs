@@ -16,6 +16,7 @@ namespace HIS.Modules.Outpatient.Controllers;
 /// 急诊 5 级预检分诊（MEWS/GCS/抢救留观/绿通转住院）与门诊增强（临床优先级排队、慢病一键续方、诊断证明/病假条防伪签发）
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "WARD_NURSE", "IPD_ATTENDING", "IPD_RESIDENT")]
 [Route("api/v4/er-opd")]
 public sealed class EmergencyAndOpdProController : ControllerBase
 {

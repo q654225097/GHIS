@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +16,7 @@ namespace HIS.Modules.Inventory.Controllers;
 /// 基于近 90 天真实 inv_stock_ledgers 出库消耗流水与当前 inv_drug_batches 有效未过期库存实时计算
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "WAREHOUSE_KEEPER", "PHARMACIST")]
 [Route("api/v4/inventory/forecast")]
 public sealed class InventoryForecastController : ControllerBase
 {

@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.KnowledgeBase.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "PHARMACIST", "WARD_NURSE")]
 [Route("api/v4/kb")]
 public class KnowledgeController : ControllerBase
 {

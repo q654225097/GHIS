@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,6 +20,7 @@ namespace HIS.Modules.Consumables.Controllers;
 /// 3) 供应商代销月结对账单自动汇总与核销
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "WAREHOUSE_KEEPER", "WARD_NURSE", "IPD_ATTENDING", "MEDTECH")]
 [Route("api/v4/udi")]
 public sealed class UdiConsumablesController : ControllerBase
 {
@@ -70,7 +72,7 @@ public sealed class UdiConsumablesController : ControllerBase
     }
 
     [HttpGet("inventory")]
-    public async Task<IActionResult> ListInventory([FromQuery] string? status = null, [FromQuery] string? supplierName = null, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListInventory([FromQuery] string? status = null, [FromQuery] string? supplierName = null, CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -87,34 +89,34 @@ public sealed class UdiConsumablesController : ControllerBase
             p.Add("Sup", supplierName.Trim());
         }
         sql += " ORDER BY created_at_ms DESC LIMIT 200";
-        return Ok(await conn.QueryAsync(sql, p));
+        return ApiResponse<object>.Success(await conn.QueryAsync(sql, p));
     }
 
     [HttpPost("inventory/receive")]
-    public async Task<IActionResult> ReceiveUdi([FromBody] ReceiveUdiDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> ReceiveUdi([FromBody] ReceiveUdiDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.UdiFull) || string.IsNullOrWhiteSpace(dto.MaterialName) || string.IsNullOrWhiteSpace(dto.SupplierName))
-            return BadRequest(new { message = "UDI 条码、耗材名称与供应商不能为空。" });
+            return ApiResponse<object>.Fail(400, "UDI 条码、耗材名称与供应商不能为空。");
         if (dto.UnitPrice <= 0 || dto.CostPrice < 0)
-            return BadRequest(new { message = "高值耗材计费单价必须大于 0。" });
+            return ApiResponse<object>.Fail(400, "高值耗材计费单价必须大于 0。");
 
         var udi = dto.UdiFull.Trim();
         var (di, expInt, lot, serial) = ParseGs1Udi(udi, dto.OverrideExpiryDateInt);
         int todayInt = int.Parse(DateTime.UtcNow.ToString("yyyyMMdd"));
         if (expInt < todayInt)
-            return BadRequest(new { message = $"该高值耗材效期({expInt})已过期，禁止入库！" });
+            return ApiResponse<object>.Fail(400, $"该高值耗材效期({expInt})已过期，禁止入库！");
 
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var dup = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM udi_implant_inventory WHERE udi_full = @Udi", new { Udi = udi });
         if (dup > 0)
-            return BadRequest(new { message = $"UDI 唯一码 [{udi}] 已存在，严禁重复入库。" });
+            return ApiResponse<object>.Fail(400, $"UDI 唯一码 [{udi}] 已存在，严禁重复入库。");
 
         var mdmConsumable = await conn.QueryFirstOrDefaultAsync<dynamic>(
             "SELECT code AS Code, name AS Name, spec AS Spec, is_active AS IsActive FROM csm_consumables WHERE udi_di = @Di OR code = @Code LIMIT 1",
             new { Di = di, Code = dto.MaterialCode?.Trim() ?? string.Empty });
         if (mdmConsumable != null && Convert.ToInt32(mdmConsumable.IsActive) == 0)
-            return BadRequest(new { message = $"耗材主数据 [{mdmConsumable.Code}] 已停用，禁止 UDI 入库！" });
+            return ApiResponse<object>.Fail(400, $"耗材主数据 [{mdmConsumable.Code}] 已停用，禁止 UDI 入库！");
 
         string resolvedCode = !string.IsNullOrWhiteSpace(dto.MaterialCode) ? dto.MaterialCode.Trim()
             : (mdmConsumable != null ? (string)mdmConsumable.Code : di);
@@ -152,26 +154,26 @@ INSERT INTO udi_implant_inventory (
             Now = now
         });
 
-        return Ok(new { id, udiFull = udi, udiDi = di, udiPiLot = lot, udiPiSerial = serial, expiryDateInt = expInt, status = "IN_STOCK" });
+        return ApiResponse<object>.Success(new { id, udiFull = udi, udiDi = di, udiPiLot = lot, udiPiSerial = serial, expiryDateInt = expInt, status = "IN_STOCK" });
     }
 
     [HttpPost("inventory/consume")]
-    public async Task<IActionResult> ConsumeAndBillUdi([FromBody] ConsumeUdiDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> ConsumeAndBillUdi([FromBody] ConsumeUdiDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.UdiFull) || string.IsNullOrWhiteSpace(dto.EncounterId) || string.IsNullOrWhiteSpace(dto.PatientId))
-            return BadRequest(new { message = "UDI 唯一码、住院就诊ID与患者ID不能为空。" });
+            return ApiResponse<object>.Fail(400, "UDI 唯一码、住院就诊ID与患者ID不能为空。");
 
         var udi = dto.UdiFull.Trim();
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var item = await conn.QueryFirstOrDefaultAsync("SELECT * FROM udi_implant_inventory WHERE udi_full = @Udi", new { Udi = udi });
-        if (item == null) return NotFound(new { message = $"未找到 UDI 耗材台账：{udi}" });
+        if (item == null) return ApiResponse<object>.Fail(404, $"未找到 UDI 耗材台账：{udi}");
         if ((string)item.status != "IN_STOCK")
-            return BadRequest(new { message = $"该高值耗材当前状态为 {item.status}，无法重复消耗记账。" });
+            return ApiResponse<object>.Fail(400, $"该高值耗材当前状态为 {item.status}，无法重复消耗记账。");
 
         int todayInt = int.Parse(DateTime.UtcNow.ToString("yyyyMMdd"));
         if (Convert.ToInt32(item.expiry_date_int) < todayInt)
-            return BadRequest(new { message = $"该高值耗材已过效期 ({item.expiry_date_int})，严禁临床使用！" });
+            return ApiResponse<object>.Fail(400, $"该高值耗材已过效期 ({item.expiry_date_int})，严禁临床使用！");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var ledgerId = Guid.NewGuid().ToString("N");
@@ -226,9 +228,46 @@ WHERE id = @Id AND status = 'IN_STOCK';", new
             Id = (string)item.id
         }, tx);
 
+
+        // 3) 跨表闭环：同步扣减耗材仓库总账 (csm_stocks) 并留痕 csm_stock_movements，消除高值耗材双轨库存断层
+        var matchedCsmId = await conn.ExecuteScalarAsync<string?>(
+            "SELECT id FROM csm_consumables WHERE consumable_code = @Code OR consumable_name = @Name LIMIT 1",
+            new { Code = (string)item.material_code, Name = (string)item.material_name }, tx);
+        if (!string.IsNullOrWhiteSpace(matchedCsmId))
+        {
+            await conn.ExecuteAsync(@"
+UPDATE csm_stocks
+SET quantity = CASE WHEN quantity > 0 THEN quantity - 1 ELSE 0 END,
+    updated_at_ms = @Now,
+    updated_by = @Actor,
+    version_no = version_no + 1
+WHERE consumable_id = @CsmId;", new { Now = now, Actor = ActorId, CsmId = matchedCsmId }, tx);
+
+            await conn.ExecuteAsync(@"
+INSERT INTO csm_stock_movements (
+    id, consumable_id, batch_id, from_warehouse_id, to_warehouse_id, movement_type,
+    quantity, unit_price, reference_id, remark,
+    schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no
+) VALUES (
+    @MovId, @CsmId, NULL, 'WH-OR-CONSIGN', @ExecDept, 'UDI_CONSUME',
+    1, @UnitPrice, @LedgerId, @Remark,
+    1, @Now, @Actor, @Now, @Actor, 1
+);", new
+            {
+                MovId = Guid.NewGuid().ToString("N"),
+                CsmId = matchedCsmId,
+                ExecDept = dto.ExecDeptId ?? "OR-DEPT",
+                UnitPrice = unitPrice,
+                LedgerId = ledgerId,
+                Remark = $"手术高值耗材 UDI 扫码消耗 [{udi}]",
+                Now = now,
+                Actor = ActorId
+            }, tx);
+        }
+
         await tx.CommitAsync(ct);
 
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             udiInventoryId = (string)item.id,
             udiFull = udi,
@@ -239,10 +278,10 @@ WHERE id = @Id AND status = 'IN_STOCK';", new
     }
 
     [HttpPost("consignment/statements/generate")]
-    public async Task<IActionResult> GenerateConsignmentStatement([FromBody] GenerateStatementDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> GenerateConsignmentStatement([FromBody] GenerateStatementDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.SupplierName) || string.IsNullOrWhiteSpace(dto.PeriodYm))
-            return BadRequest(new { message = "供应商名称与对账账期(YYYY-MM)不能为空。" });
+            return ApiResponse<object>.Fail(400, "供应商名称与对账账期(YYYY-MM)不能为空。");
 
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -253,7 +292,7 @@ WHERE supplier_name = @Sup AND is_consignment = 1 AND status = 'CONSUMED' AND st
             new { Sup = dto.SupplierName.Trim() })).ToList();
 
         if (items.Count == 0)
-            return BadRequest(new { message = $"供应商 [{dto.SupplierName}] 当前没有待对账的已消耗代销高值耗材。" });
+            return ApiResponse<object>.Fail(400, $"供应商 [{dto.SupplierName}] 当前没有待对账的已消耗代销高值耗材。");
 
         decimal totalCost = 0m;
         decimal totalCharge = 0m;
@@ -294,7 +333,7 @@ WHERE supplier_name = @Sup AND is_consignment = 1 AND status = 'CONSUMED' AND st
 
         await tx.CommitAsync(ct);
 
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             statementId = stmtId,
             statementNo = stmtNo,
@@ -308,15 +347,15 @@ WHERE supplier_name = @Sup AND is_consignment = 1 AND status = 'CONSUMED' AND st
     }
 
     [HttpGet("consignment/statements")]
-    public async Task<IActionResult> ListStatements(CancellationToken ct)
+    public async Task<ApiResponse<object>> ListStatements(CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
-        return Ok(await conn.QueryAsync("SELECT * FROM udi_consignment_statements ORDER BY created_at_ms DESC LIMIT 100"));
+        return ApiResponse<object>.Success(await conn.QueryAsync("SELECT * FROM udi_consignment_statements ORDER BY created_at_ms DESC LIMIT 100"));
     }
 
     [HttpPost("consignment/statements/{statementId}/confirm")]
-    public async Task<IActionResult> ConfirmStatement(string statementId, CancellationToken ct)
+    public async Task<ApiResponse<object>> ConfirmStatement(string statementId, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await using var conn = _connFactory.CreateConnection();
@@ -326,7 +365,7 @@ UPDATE udi_consignment_statements
 SET status = 'CONFIRMED', confirmed_by = @ActorName, confirmed_at_ms = @Now, updated_at_ms = @Now
 WHERE id = @Id AND status = 'DRAFT';", new { ActorName, Now = now, Id = statementId });
 
-        if (affected == 0) return BadRequest(new { message = "代销对账单不存在或已确认。" });
-        return Ok(new { statementId, status = "CONFIRMED", confirmedBy = ActorName });
+        if (affected == 0) return ApiResponse<object>.Fail(400, "代销对账单不存在或已确认。");
+        return ApiResponse<object>.Success(new { statementId, status = "CONFIRMED", confirmedBy = ActorName });
     }
 }

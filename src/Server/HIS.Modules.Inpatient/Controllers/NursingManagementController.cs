@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace HIS.Modules.Inpatient.Controllers;
 /// 4) 病区结构化 SBAR 床旁交接班（交班/接班双人异人签收）
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "WARD_NURSE")]
 [Route("api/v4/nursing-mgmt")]
 public sealed class NursingManagementController : ControllerBase
 {

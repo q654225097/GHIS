@@ -20,6 +20,7 @@ namespace HIS.Modules.Inpatient.Controllers;
 /// 转正式住院合并记账、B诊断紧急收治+医生/财务复合拆分以及取消/超期自动转门诊结算。
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "CASHIER", "WARD_NURSE")]
 [Route("api/v4/pre-admission")]
 public sealed class PreAdmissionController : ControllerBase
 {

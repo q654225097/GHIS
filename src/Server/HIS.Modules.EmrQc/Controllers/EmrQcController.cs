@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.EmrQc.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT")]
 [Route("api/v4/emr-qc")]
 public class EmrQcController : ControllerBase
 {

@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace HIS.Modules.Inpatient.Controllers;
 /// 3) 30 天非计划再入院自动检测（比对上次出院时间与本次入院时间，<=30天自动入库质控追踪）
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE", "OPD_DOC")]
 [Route("api/v4/followup")]
 public sealed class FollowupAndReadmissionController : ControllerBase
 {
@@ -60,7 +62,7 @@ public sealed class FollowupAndReadmissionController : ControllerBase
         string? PrimaryDiagnosis);
 
     [HttpGet("plans")]
-    public async Task<IActionResult> ListPlans([FromQuery] string? status = null, [FromQuery] string? specialtyTag = null, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListPlans([FromQuery] string? status = null, [FromQuery] string? specialtyTag = null, CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -77,14 +79,14 @@ public sealed class FollowupAndReadmissionController : ControllerBase
             p.Add("Tag", specialtyTag.Trim());
         }
         sql += " ORDER BY planned_date_int ASC LIMIT 200";
-        return Ok(await conn.QueryAsync(sql, p));
+        return ApiResponse<object>.Success(await conn.QueryAsync(sql, p));
     }
 
     [HttpPost("plans/generate-from-discharge")]
-    public async Task<IActionResult> GenerateFromDischarge([FromBody] GenerateFollowupDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> GenerateFromDischarge([FromBody] GenerateFollowupDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.EncounterId) || string.IsNullOrWhiteSpace(dto.PatientId))
-            return BadRequest(new { message = "出院就诊ID与患者ID不能为空。" });
+            return ApiResponse<object>.Fail(400, "出院就诊ID与患者ID不能为空。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var dischargeMs = dto.DischargeAtMs ?? now;
@@ -120,14 +122,14 @@ INSERT INTO followup_plans (
             Actor = ActorId
         });
 
-        return Ok(new { id, planNo, plannedDateInt, status = "SCHEDULED" });
+        return ApiResponse<object>.Success(new { id, planNo, plannedDateInt, status = "SCHEDULED" });
     }
 
     [HttpPost("plans/{planId}/complete")]
-    public async Task<IActionResult> CompleteFollowup(string planId, [FromBody] CompleteFollowupDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> CompleteFollowup(string planId, [FromBody] CompleteFollowupDto dto, CancellationToken ct)
     {
         if (dto.SatisfactionScore is < 1 or > 5)
-            return BadRequest(new { message = "患者满意度评分必须在 1~5 之间。" });
+            return ApiResponse<object>.Fail(400, "患者满意度评分必须在 1~5 之间。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await using var conn = _connFactory.CreateConnection();
@@ -155,25 +157,25 @@ WHERE id = @Id;", new
             Id = planId
         });
 
-        if (affected == 0) return NotFound(new { message = "随访计划不存在。" });
-        return Ok(new { planId, status = "COMPLETED", satisfactionScore = dto.SatisfactionScore });
+        if (affected == 0) return ApiResponse<object>.Fail(404, "随访计划不存在。");
+        return ApiResponse<object>.Success(new { planId, status = "COMPLETED", satisfactionScore = dto.SatisfactionScore });
     }
 
     [HttpPost("readmissions/detect")]
-    public async Task<IActionResult> DetectReadmission30d([FromBody] DetectReadmissionDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> DetectReadmission30d([FromBody] DetectReadmissionDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.PatientId) || string.IsNullOrWhiteSpace(dto.IndexEncounterId) || string.IsNullOrWhiteSpace(dto.ReadmitEncounterId))
-            return BadRequest(new { message = "患者ID、原出院ID与新入院ID不能为空。" });
+            return ApiResponse<object>.Fail(400, "患者ID、原出院ID与新入院ID不能为空。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var readmitAt = dto.ReadmitAtMs ?? now;
         if (readmitAt < dto.IndexDischargeAtMs)
-            return BadRequest(new { message = "再入院时间不能早于原出院时间。" });
+            return ApiResponse<object>.Fail(400, "再入院时间不能早于原出院时间。");
 
         int intervalDays = (int)Math.Floor((readmitAt - dto.IndexDischargeAtMs) / 86400000.0);
         if (intervalDays > 30)
         {
-            return Ok(new { isReadmission30d = false, intervalDays, message = $"间隔 {intervalDays} 天超过 30 天，不计入 30 天再入院质控。" });
+            return ApiResponse<object>.Success(new { isReadmission30d = false, intervalDays, message = $"间隔 {intervalDays} 天超过 30 天，不计入 30 天再入院质控。" });
         }
 
         await using var conn = _connFactory.CreateConnection();
@@ -184,7 +186,7 @@ WHERE id = @Id;", new
 
         if (existingId != null)
         {
-            return Ok(new { isReadmission30d = true, id = existingId, intervalDays, alreadyTracked = true });
+            return ApiResponse<object>.Success(new { isReadmission30d = true, id = existingId, intervalDays, alreadyTracked = true });
         }
 
         var id = Guid.NewGuid().ToString("N");
@@ -212,11 +214,11 @@ INSERT INTO readmission_tracking (
             Now = now
         });
 
-        return Ok(new { isReadmission30d = true, id, intervalDays, isUnplanned = dto.IsUnplanned, qcStatus = "PENDING_REVIEW" });
+        return ApiResponse<object>.Success(new { isReadmission30d = true, id, intervalDays, isUnplanned = dto.IsUnplanned, qcStatus = "PENDING_REVIEW" });
     }
 
     [HttpGet("readmissions")]
-    public async Task<IActionResult> ListReadmissions(CancellationToken ct)
+    public async Task<ApiResponse<object>> ListReadmissions(CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -226,6 +228,6 @@ SELECT COUNT(1) AS total_30d,
        SUM(CASE WHEN is_unplanned = 1 THEN 1 ELSE 0 END) AS unplanned_30d,
        AVG(interval_days) AS avg_interval_days
 FROM readmission_tracking;");
-        return Ok(new { stats, items });
+        return ApiResponse<object>.Success(new { stats, items });
     }
 }

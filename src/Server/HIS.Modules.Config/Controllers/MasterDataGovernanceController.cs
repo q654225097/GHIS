@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +16,7 @@ namespace HIS.Modules.Config.Controllers;
 /// 全院 15 大主数据治理中心 (MDM)：覆盖核心实体与资源、药耗诊疗收费、临床标准术语与参考字典
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "WAREHOUSE_KEEPER", "PHARMACIST")]
 [Route("api/v4/mdm")]
 public sealed partial class MasterDataGovernanceController : ControllerBase
 {

@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.ClinicalPathway.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 [Route("api/v4/cpw")]
 public class ClinicalPathwayController : ControllerBase
 {

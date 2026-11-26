@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace HIS.Modules.Finance.Controllers;
 /// 3) 全院在院患者一键扫描与特病单议申诉闭环
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "CASHIER", "IPD_ATTENDING", "IPD_RESIDENT")]
 [Route("api/v4/drg-cost")]
 public sealed class DrgCostControlController : ControllerBase
 {
@@ -48,18 +50,18 @@ public sealed class DrgCostControlController : ControllerBase
     public sealed record SpecialAppealDto(string AppealReason);
 
     [HttpGet("benchmarks")]
-    public async Task<IActionResult> ListBenchmarks(CancellationToken ct)
+    public async Task<ApiResponse<object>> ListBenchmarks(CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
-        return Ok(await conn.QueryAsync("SELECT * FROM drg_benchmark_rules WHERE is_active = 1 ORDER BY group_code"));
+        return ApiResponse<object>.Success(await conn.QueryAsync("SELECT * FROM drg_benchmark_rules WHERE is_active = 1 ORDER BY group_code"));
     }
 
     [HttpPost("benchmarks")]
-    public async Task<IActionResult> UpsertBenchmark([FromBody] UpsertBenchmarkDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> UpsertBenchmark([FromBody] UpsertBenchmarkDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.GroupCode) || dto.BenchmarkFee <= 0)
-            return BadRequest(new { message = "病组编码不能为空且基准费用必须大于 0。" });
+            return ApiResponse<object>.Fail(400, "病组编码不能为空且基准费用必须大于 0。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var code = dto.GroupCode.Trim().ToUpperInvariant();
@@ -87,7 +89,7 @@ WHERE id = @Id;", new
                 Los = dto.StandardLosDays <= 0 ? 7 : dto.StandardLosDays,
                 Now = now
             });
-            return Ok(new { id = existingId, groupCode = code, updated = true });
+            return ApiResponse<object>.Success(new { id = existingId, groupCode = code, updated = true });
         }
 
         var id = Guid.NewGuid().ToString("N");
@@ -113,21 +115,21 @@ INSERT INTO drg_benchmark_rules (
             Los = dto.StandardLosDays <= 0 ? 7 : dto.StandardLosDays,
             Now = now
         });
-        return Ok(new { id, groupCode = code, created = true });
+        return ApiResponse<object>.Success(new { id, groupCode = code, created = true });
     }
 
     [HttpPost("evaluate/{encounterId}")]
-    public async Task<IActionResult> EvaluateEncounter(string encounterId, [FromBody] EvaluateEncounterDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> EvaluateEncounter(string encounterId, [FromBody] EvaluateEncounterDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.GroupCode))
-            return BadRequest(new { message = "请指定 DRG/DIP 病组编码。" });
+            return ApiResponse<object>.Fail(400, "请指定 DRG/DIP 病组编码。");
 
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var rule = await conn.QueryFirstOrDefaultAsync(
             "SELECT * FROM drg_benchmark_rules WHERE group_code = @Code AND is_active = 1",
             new { Code = dto.GroupCode.Trim().ToUpperInvariant() });
-        if (rule == null) return NotFound(new { message = $"未找到启用的 DRG/DIP 病组规则：{dto.GroupCode}" });
+        if (rule == null) return ApiResponse<object>.Fail(404, $"未找到启用的 DRG/DIP 病组规则：{dto.GroupCode}");
 
         // 实时聚合真实住院费用明细 fin_charge_ledgers
         decimal totalFee = await conn.ExecuteScalarAsync<decimal>(
@@ -201,7 +203,7 @@ INSERT INTO drg_realtime_alerts (
             });
         }
 
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             encounterId,
             groupCode = (string)rule.group_code,
@@ -216,7 +218,7 @@ INSERT INTO drg_realtime_alerts (
     }
 
     [HttpGet("alerts")]
-    public async Task<IActionResult> ListAlerts([FromQuery] string? alertLevel = null, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListAlerts([FromQuery] string? alertLevel = null, CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -228,14 +230,14 @@ INSERT INTO drg_realtime_alerts (
             p.Add("Level", alertLevel.Trim().ToUpperInvariant());
         }
         sql += " ORDER BY fee_ratio DESC LIMIT 200";
-        return Ok(await conn.QueryAsync(sql, p));
+        return ApiResponse<object>.Success(await conn.QueryAsync(sql, p));
     }
 
     [HttpPost("alerts/{encounterId}/appeal")]
-    public async Task<IActionResult> SubmitSpecialCaseAppeal(string encounterId, [FromBody] SpecialAppealDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> SubmitSpecialCaseAppeal(string encounterId, [FromBody] SpecialAppealDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.AppealReason))
-            return BadRequest(new { message = "特病单议申诉理由不能为空。" });
+            return ApiResponse<object>.Fail(400, "特病单议申诉理由不能为空。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await using var conn = _connFactory.CreateConnection();
@@ -248,7 +250,7 @@ SET special_case_appeal = 1,
     updated_at_ms = @Now
 WHERE encounter_id = @EncId;", new { Reason = dto.AppealReason.Trim(), Actor = ActorName, Now = now, EncId = encounterId });
 
-        if (affected == 0) return NotFound(new { message = "未找到该住院记录的 DRG 控费评估单。" });
-        return Ok(new { encounterId, specialCaseAppeal = true, reviewedBy = ActorName });
+        if (affected == 0) return ApiResponse<object>.Fail(404, "未找到该住院记录的 DRG 控费评估单。");
+        return ApiResponse<object>.Success(new { encounterId, specialCaseAppeal = true, reviewedBy = ActorName });
     }
 }

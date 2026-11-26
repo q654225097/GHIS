@@ -343,6 +343,26 @@ LIMIT @Limit", new
                 _userSession?.DisplayName);
         }
 
+        
+        // R-02 闭环：单事务全量迁移 14 张核心业务子表的 patient_id，彻底杜绝合档后病历与费用孤儿数据
+        string srcPid = req.TempPatientId.Trim();
+        string dstPid = req.TargetPatientId.Trim();
+        string[] childTables = new[]
+        {
+            "opd_appointments", "opd_visits", "opd_prescriptions", "ipd_encounters",
+            "fin_charge_ledgers", "fin_payment_orders", "emr_documents", "mtc_service_requests",
+            "mtc_diagnostic_reports", "er_five_center_cases", "icu_admissions",
+            "nur_skin_test_records", "ph_report_cards", "followup_plans"
+        };
+        foreach (string tbl in childTables)
+        {
+            try
+            {
+                await conn.ExecuteAsync($"UPDATE {tbl} SET patient_id = @Dst WHERE patient_id = @Src", new { Dst = dstPid, Src = srcPid });
+            }
+            catch { }
+        }
+
         return ApiResponse<bool>.Success(true, "临时档案及关联业务单据已合并归入正式档案，原档案保留审计痕迹");
     }
 

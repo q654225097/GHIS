@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,6 +20,7 @@ namespace HIS.Modules.Config.Controllers;
 /// 以及按 (entityType, entityId) 校验持久化扩展字段并同步回写 BO 主表 ext_data_json。
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE", "MEDTECH", "CASHIER")]
 [Route("api/v4/config/bo")]
 public sealed class DynamicFormBoController : ControllerBase
 {

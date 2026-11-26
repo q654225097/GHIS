@@ -21,6 +21,7 @@ namespace HIS.Modules.Inpatient.Controllers;
 /// 4) 专科扩展（产科分娩与新生儿建档、日间手术24h闭环+PADSS评分、病区陪护/探视证）
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 [Route("api/v4/ipd-pro")]
 public sealed class InpatientProController : ControllerBase
 {
@@ -191,16 +192,40 @@ public sealed class InpatientProController : ControllerBase
         return ApiResponse<IReadOnlyList<object>>.Success(rows);
     }
 
+    public sealed record ExecuteMarDto(string? FirstNurseName = null, string? SecondNurseName = null);
+
     [HttpPost("mar/{planId}/execute")]
-    public async Task<ApiResponse<object>> ExecuteMarPlan(string planId)
+    public async Task<ApiResponse<object>> ExecuteMarPlan(string planId, [FromBody] ExecuteMarDto? dto = null)
     {
         using var conn = _connFactory.CreateConnection();
+        string firstNurse = string.IsNullOrWhiteSpace(dto?.FirstNurseName) ? ActorName : dto!.FirstNurseName!.Trim();
+        string? itemName = await conn.ExecuteScalarAsync<string?>(@"
+SELECT o.item_name
+FROM ord_execution_plans p
+JOIN ord_medical_orders o ON o.id = p.order_id
+WHERE p.id = @Id;", new { Id = planId });
+
+        // R-05 闭环：高警示药品（胰岛素/氯化钾/高渗盐水/肝素/华法林/血管活性药/吗啡）强制要求异人双签核对
+        bool isHighAlert = !string.IsNullOrWhiteSpace(itemName) && new[]
+        {
+            "胰岛素", "氯化钾", "高渗盐水", "肝素", "华法林", "去甲肾上腺素", "肾上腺素", "吗啡"
+        }.Any(kw => itemName.Contains(kw, StringComparison.OrdinalIgnoreCase));
+
+        if (isHighAlert)
+        {
+            if (string.IsNullOrWhiteSpace(dto?.SecondNurseName))
+                return ApiResponse<object>.Fail(400, $"高警示药品 [{itemName}] 必须执行双人核对制度，请指定第二核对护士！");
+            if (string.Equals(firstNurse, dto!.SecondNurseName!.Trim(), StringComparison.OrdinalIgnoreCase))
+                return ApiResponse<object>.Fail(400, $"高警示药品 [{itemName}] 严禁同人双签：复核护士不能与执行护士相同！");
+        }
+
         long now = SystemTime.UtcNowMs;
+        string recorder = isHighAlert ? $"{firstNurse} / 复核:{dto!.SecondNurseName!.Trim()}" : firstNurse;
         int n = await conn.ExecuteAsync(
             "UPDATE ord_execution_plans SET exec_status = 1, exec_nurse_id = @Nurse, executed_at_ms = @Now, updated_at_ms = @Now, updated_by = @Actor WHERE id = @Id",
-            new { Nurse = ActorName, Now = now, Actor = ActorId, Id = planId });
+            new { Nurse = recorder, Now = now, Actor = ActorId, Id = planId });
         if (n == 0) return ApiResponse<object>.Fail(404, "未找到该执行计划");
-        return ApiResponse<object>.Success(new { PlanId = planId, ExecutedAtMs = now }, "已完成床旁扫码执行确认");
+        return ApiResponse<object>.Success(new { PlanId = planId, ExecutedAtMs = now, HighAlertDualChecked = isHighAlert, Recorder = recorder }, "已完成床旁扫码执行确认");
     }
 
     [HttpGet("vitals-chart/{encounterId}")]

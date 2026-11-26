@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace HIS.Modules.Inpatient.Controllers;
 /// 3) 营养科配餐汇总看板与送餐闭环
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 [Route("api/v4/nutrition")]
 public sealed class ClinicalNutritionController : ControllerBase
 {
@@ -57,7 +59,7 @@ public sealed class ClinicalNutritionController : ControllerBase
     public sealed record UpdateDietStatusDto(string Status);
 
     [HttpGet("nrs2002")]
-    public async Task<IActionResult> ListScreenings([FromQuery] string? riskLevel = null, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListScreenings([FromQuery] string? riskLevel = null, CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -69,16 +71,16 @@ public sealed class ClinicalNutritionController : ControllerBase
             p.Add("Risk", riskLevel.Trim().ToUpperInvariant());
         }
         sql += " ORDER BY screened_at_ms DESC LIMIT 200";
-        return Ok(await conn.QueryAsync(sql, p));
+        return ApiResponse<object>.Success(await conn.QueryAsync(sql, p));
     }
 
     [HttpPost("nrs2002")]
-    public async Task<IActionResult> SubmitNrs2002([FromBody] Nrs2002Dto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> SubmitNrs2002([FromBody] Nrs2002Dto dto, CancellationToken ct)
     {
         if (dto.DiseaseSeverityScore is < 0 or > 3 || dto.NutritionalImpairedScore is < 0 or > 3)
-            return BadRequest(new { message = "NRS-2002 疾病严重度与营养受损评分必须在 0~3 分之间。" });
+            return ApiResponse<object>.Fail(400, "NRS-2002 疾病严重度与营养受损评分必须在 0~3 分之间。");
         if (string.IsNullOrWhiteSpace(dto.EncounterId) || string.IsNullOrWhiteSpace(dto.PatientId))
-            return BadRequest(new { message = "住院就诊ID与患者ID不能为空。" });
+            return ApiResponse<object>.Fail(400, "住院就诊ID与患者ID不能为空。");
 
         int ageScore = dto.AgeYears >= 70 ? 1 : 0;
         int total = dto.DiseaseSeverityScore + dto.NutritionalImpairedScore + ageScore;
@@ -121,7 +123,7 @@ INSERT INTO nut_nrs2002_screenings (
             Note = dto.Note
         });
 
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             id,
             totalScore = total,
@@ -132,7 +134,7 @@ INSERT INTO nut_nrs2002_screenings (
     }
 
     [HttpGet("diet-orders")]
-    public async Task<IActionResult> ListDietOrders([FromQuery] string? status = null, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListDietOrders([FromQuery] string? status = null, CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -144,14 +146,14 @@ INSERT INTO nut_nrs2002_screenings (
             p.Add("Status", status.Trim().ToUpperInvariant());
         }
         sql += " ORDER BY created_at_ms DESC LIMIT 200";
-        return Ok(await conn.QueryAsync(sql, p));
+        return ApiResponse<object>.Success(await conn.QueryAsync(sql, p));
     }
 
     [HttpPost("diet-orders")]
-    public async Task<IActionResult> CreateDietOrder([FromBody] CreateDietOrderDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> CreateDietOrder([FromBody] CreateDietOrderDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.EncounterId) || string.IsNullOrWhiteSpace(dto.DietType))
-            return BadRequest(new { message = "住院就诊ID与膳食类型不能为空。" });
+            return ApiResponse<object>.Fail(400, "住院就诊ID与膳食类型不能为空。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var id = Guid.NewGuid().ToString("N");
@@ -165,7 +167,7 @@ INSERT INTO nut_nrs2002_screenings (
             "SELECT item_code AS ItemCode, kcal_per_unit AS KcalPerUnit, is_active AS IsActive FROM mdm_nutrition_items WHERE UPPER(item_code) = @Key OR UPPER(item_name) = @Key OR UPPER(nutrition_type) = @Key LIMIT 1",
             new { Key = dietKey });
         if (nutMdm != null && Convert.ToInt32(nutMdm.IsActive) == 0)
-            return BadRequest(new { message = $"营养制剂主数据 [{dto.DietType}] 已停用，禁止开立膳食医嘱！" });
+            return ApiResponse<object>.Fail(400, $"营养制剂主数据 [{dto.DietType}] 已停用，禁止开立膳食医嘱！");
 
         decimal resolvedKcal = dto.KcalTarget > 0 ? dto.KcalTarget
             : (nutMdm != null && Convert.ToDecimal(nutMdm.KcalPerUnit) > 0 ? Convert.ToDecimal(nutMdm.KcalPerUnit) : 1800m);
@@ -197,15 +199,15 @@ INSERT INTO nut_diet_orders (
             Now = now
         });
 
-        return Ok(new { id, dietNo, status = "ACTIVE" });
+        return ApiResponse<object>.Success(new { id, dietNo, status = "ACTIVE" });
     }
 
     [HttpPost("diet-orders/{id}/status")]
-    public async Task<IActionResult> UpdateDietStatus(string id, [FromBody] UpdateDietStatusDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> UpdateDietStatus(string id, [FromBody] UpdateDietStatusDto dto, CancellationToken ct)
     {
         var st = (dto.Status ?? string.Empty).Trim().ToUpperInvariant();
         if (st is not ("PREPARING" or "DELIVERED" or "STOPPED"))
-            return BadRequest(new { message = "状态仅支持 PREPARING/DELIVERED/STOPPED。" });
+            return ApiResponse<object>.Fail(400, "状态仅支持 PREPARING/DELIVERED/STOPPED。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await using var conn = _connFactory.CreateConnection();
@@ -217,12 +219,12 @@ SET status = @Status,
     updated_at_ms = @Now
 WHERE id = @Id;", new { Status = st, Now = now, Id = id });
 
-        if (affected == 0) return NotFound(new { message = "营养配餐单不存在。" });
-        return Ok(new { id, status = st });
+        if (affected == 0) return ApiResponse<object>.Fail(404, "营养配餐单不存在。");
+        return ApiResponse<object>.Success(new { id, status = st });
     }
 
     [HttpGet("kitchen-summary")]
-    public async Task<IActionResult> GetKitchenSummary(CancellationToken ct)
+    public async Task<ApiResponse<object>> GetKitchenSummary(CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -232,6 +234,6 @@ FROM nut_diet_orders
 WHERE status IN ('ACTIVE', 'PREPARING')
 GROUP BY ward_name, diet_type
 ORDER BY ward_name, diet_type;");
-        return Ok(summary);
+        return ApiResponse<object>.Success(summary);
     }
 }

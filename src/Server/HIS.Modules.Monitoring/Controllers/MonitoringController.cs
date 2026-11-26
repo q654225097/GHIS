@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.Monitoring.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 [Route("api/v4/monitoring")]
 public class MonitoringController : ControllerBase
 {

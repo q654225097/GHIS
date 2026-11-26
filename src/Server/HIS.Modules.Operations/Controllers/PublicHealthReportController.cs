@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace HIS.Modules.Operations.Controllers;
 /// 3) 全院公卫报卡逾期与待办统计看板
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 [Route("api/v4/public-health")]
 public sealed class PublicHealthReportController : ControllerBase
 {
@@ -45,18 +47,18 @@ public sealed class PublicHealthReportController : ControllerBase
     public sealed record AuditCardDto(bool Approved, string? AuditNote);
 
     [HttpGet("rules")]
-    public async Task<IActionResult> ListRules(CancellationToken ct)
+    public async Task<ApiResponse<object>> ListRules(CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
-        return Ok(await conn.QueryAsync("SELECT * FROM ph_icd_trigger_rules WHERE is_active = 1 ORDER BY report_deadline_hours ASC, icd_prefix"));
+        return ApiResponse<object>.Success(await conn.QueryAsync("SELECT * FROM ph_icd_trigger_rules WHERE is_active = 1 ORDER BY report_deadline_hours ASC, icd_prefix"));
     }
 
     [HttpPost("evaluate-diagnosis")]
-    public async Task<IActionResult> EvaluateDiagnosisTrigger([FromBody] EvaluateDiagnosisDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> EvaluateDiagnosisTrigger([FromBody] EvaluateDiagnosisDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.IcdCode) || string.IsNullOrWhiteSpace(dto.PatientId) || string.IsNullOrWhiteSpace(dto.VisitOrEncounterId))
-            return BadRequest(new { message = "ICD-10 编码、患者ID与就诊ID不能为空。" });
+            return ApiResponse<object>.Fail(400, "ICD-10 编码、患者ID与就诊ID不能为空。");
 
         var icd = dto.IcdCode.Trim().ToUpperInvariant();
         await using var conn = _connFactory.CreateConnection();
@@ -66,7 +68,7 @@ public sealed class PublicHealthReportController : ControllerBase
 
         if (matched == null)
         {
-            return Ok(new { triggered = false, hardBlock = false, message = "当前诊断未命中公卫法定报卡触发规则。" });
+            return ApiResponse<object>.Success(new { triggered = false, hardBlock = false, message = "当前诊断未命中公卫法定报卡触发规则。" });
         }
 
         string cardType = (string)matched.card_type;
@@ -82,7 +84,7 @@ public sealed class PublicHealthReportController : ControllerBase
         {
             string st = (string)existing.status;
             bool stillBlocked = isHardBlock && st == "PENDING_REPORT";
-            return Ok(new
+            return ApiResponse<object>.Success(new
             {
                 triggered = true,
                 hardBlock = stillBlocked,
@@ -127,7 +129,7 @@ INSERT INTO ph_report_cards (
             Actor = ActorId
         });
 
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             triggered = true,
             hardBlock = isHardBlock,
@@ -143,7 +145,7 @@ INSERT INTO ph_report_cards (
     }
 
     [HttpGet("cards")]
-    public async Task<IActionResult> ListCards([FromQuery] string? status = null, [FromQuery] string? cardType = null, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListCards([FromQuery] string? status = null, [FromQuery] string? cardType = null, CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -160,16 +162,16 @@ INSERT INTO ph_report_cards (
             p.Add("Type", cardType.Trim().ToUpperInvariant());
         }
         sql += " ORDER BY deadline_at_ms ASC LIMIT 200";
-        return Ok(await conn.QueryAsync(sql, p));
+        return ApiResponse<object>.Success(await conn.QueryAsync(sql, p));
     }
 
     [HttpPost("cards/{cardId}/submit")]
-    public async Task<IActionResult> SubmitCard(string cardId, [FromBody] SubmitCardDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> SubmitCard(string cardId, [FromBody] SubmitCardDto dto, CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var card = await conn.QueryFirstOrDefaultAsync("SELECT id, deadline_at_ms, status FROM ph_report_cards WHERE id = @Id", new { Id = cardId });
-        if (card == null) return NotFound(new { message = "公卫报卡不存在。" });
+        if (card == null) return ApiResponse<object>.Fail(404, "公卫报卡不存在。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         int isOverdue = now > Convert.ToInt64(card.deadline_at_ms) ? 1 : 0;
@@ -194,11 +196,11 @@ WHERE id = @Id;", new
             Id = cardId
         });
 
-        return Ok(new { cardId, status = "SUBMITTED", isOverdue = isOverdue == 1 });
+        return ApiResponse<object>.Success(new { cardId, status = "SUBMITTED", isOverdue = isOverdue == 1 });
     }
 
     [HttpPost("cards/{cardId}/audit")]
-    public async Task<IActionResult> AuditCard(string cardId, [FromBody] AuditCardDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> AuditCard(string cardId, [FromBody] AuditCardDto dto, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var nextStatus = dto.Approved ? "AUDITED" : "REJECTED";
@@ -222,12 +224,12 @@ WHERE id = @Id AND status = 'SUBMITTED';", new
             Id = cardId
         });
 
-        if (affected == 0) return BadRequest(new { message = "仅已提交(SUBMITTED)的报卡允许公卫科审核。" });
-        return Ok(new { cardId, status = nextStatus, auditorName = ActorName });
+        if (affected == 0) return ApiResponse<object>.Fail(400, "仅已提交(SUBMITTED)的报卡允许公卫科审核。");
+        return ApiResponse<object>.Success(new { cardId, status = nextStatus, auditorName = ActorName });
     }
 
     [HttpGet("overdue-summary")]
-    public async Task<IActionResult> GetOverdueSummary(CancellationToken ct)
+    public async Task<ApiResponse<object>> GetOverdueSummary(CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await using var conn = _connFactory.CreateConnection();
@@ -239,6 +241,6 @@ SELECT COUNT(1) AS total_cards,
        SUM(CASE WHEN status = 'AUDITED' THEN 1 ELSE 0 END) AS audited_count,
        SUM(CASE WHEN is_overdue = 1 OR (status = 'PENDING_REPORT' AND deadline_at_ms < @Now) THEN 1 ELSE 0 END) AS overdue_count
 FROM ph_report_cards;", new { Now = now });
-        return Ok(summary);
+        return ApiResponse<object>.Success(summary);
     }
 }

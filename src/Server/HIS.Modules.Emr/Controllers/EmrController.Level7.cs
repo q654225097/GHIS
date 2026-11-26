@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HIS.Modules.Emr.Controllers;
 
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 public partial class EmrController
 {
     // ==========================================

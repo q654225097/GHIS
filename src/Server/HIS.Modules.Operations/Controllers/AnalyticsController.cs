@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.Operations.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "CASHIER", "IPD_ATTENDING")]
 [Route("api/v4/analytics")]
 [Route("api/v4/ops/analytics")]
 [RequireRole(RoleCode.Admin, "DIRECTOR", "LEADER", RoleCode.Cashier, RoleCode.DoctorOpd, RoleCode.DoctorIpd)]

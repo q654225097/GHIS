@@ -86,6 +86,10 @@ CREATE INDEX IF NOT EXISTS ix_sys_refresh_tokens_expiry ON sys_refresh_tokens (e
 		await InitializeAimsTablesAsync(conn);
 		await InitializeMedNursingAdminTablesAsync(conn);
 		await InitializeClinicalP0P1TablesAsync(conn);
+		await InitializeRbacPermissionSeedAsync(conn);
+		await InitializeFourRoleClosedLoopTablesAsync(conn);
+		await InitializeDeepSafetyClosuresTablesAsync(conn);
+		await InitializeStaffLifecycleTablesAsync(conn);
 		await InitializeGapClosure2026TablesAsync(conn);
 		await conn.ExecuteAsync("""
 			CREATE TABLE IF NOT EXISTS mte_surgery_safety_entries (

@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace HIS.Modules.Pharmacy.Controllers;
 /// 3) PIVAS 静配中心全流程闭环：审方排批 -> 贴签 -> 调配 -> 双人独立核对(禁止同人) -> 出仓签收
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "PHARMACIST", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 [Route("api/v4/pivas-abx")]
 public sealed class PivasAndAntimicrobialController : ControllerBase
 {
@@ -52,24 +54,24 @@ public sealed class PivasAndAntimicrobialController : ControllerBase
     public sealed record CheckPivasDto(string CheckerName);
 
     [HttpPost("abx/check-privilege")]
-    public async Task<IActionResult> CheckAntibioticPrivilege([FromBody] CheckAbxPrivilegeDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> CheckAntibioticPrivilege([FromBody] CheckAbxPrivilegeDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.DoctorUserId) || string.IsNullOrWhiteSpace(dto.DrugCode))
-            return BadRequest(new { message = "医师ID与药品编码不能为空。" });
+            return ApiResponse<object>.Fail(400, "医师ID与药品编码不能为空。");
 
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var user = await conn.QueryFirstOrDefaultAsync(
             "SELECT id, display_name, prescribe_level FROM sys_users WHERE id = @Id",
             new { Id = dto.DoctorUserId.Trim() });
-        if (user == null) return NotFound(new { message = "未找到对应医师账号。" });
+        if (user == null) return ApiResponse<object>.Fail(404, "未找到对应医师账号。");
 
         var abx = await conn.QueryFirstOrDefaultAsync(
             "SELECT drug_code, drug_name, antibiotic_level, ddd_value_grams FROM abx_ddd_standards WHERE drug_code = @Code",
             new { Code = dto.DrugCode.Trim().ToUpperInvariant() });
         if (abx == null)
         {
-            return Ok(new { allowed = true, isAntibiotic = false, message = "非抗菌药物监测目录品种，允许开具。" });
+            return ApiResponse<object>.Success(new { allowed = true, isAntibiotic = false, message = "非抗菌药物监测目录品种，允许开具。" });
         }
 
         int doctorLevel = Convert.ToInt32(user.prescribe_level);
@@ -77,7 +79,7 @@ public sealed class PivasAndAntimicrobialController : ControllerBase
         bool allowed = doctorLevel >= reqLevel;
 
         string levelName = reqLevel switch { 3 => "特殊使用级(3级)", 2 => "限制使用级(2级)", _ => "非限制使用级(1级)" };
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             allowed,
             isAntibiotic = true,
@@ -92,7 +94,7 @@ public sealed class PivasAndAntimicrobialController : ControllerBase
     }
 
     [HttpGet("abx/aud-report")]
-    public async Task<IActionResult> GetAntibioticAudReport([FromQuery] int totalPatientBedDays = 100, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> GetAntibioticAudReport([FromQuery] int totalPatientBedDays = 100, CancellationToken ct = default)
     {
         if (totalPatientBedDays <= 0) totalPatientBedDays = 100;
 
@@ -135,7 +137,7 @@ ORDER BY s.antibiotic_level DESC, s.drug_code;")).ToList();
         }
 
         decimal aud = Math.Round((grandTotalDdds / totalPatientBedDays) * 100m, 2);
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             totalPatientBedDays,
             grandTotalDdds = Math.Round(grandTotalDdds, 2),
@@ -147,7 +149,7 @@ ORDER BY s.antibiotic_level DESC, s.drug_code;")).ToList();
     }
 
     [HttpGet("pivas/orders")]
-    public async Task<IActionResult> ListPivasOrders([FromQuery] string? status = null, [FromQuery] string? batchCode = null, CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListPivasOrders([FromQuery] string? status = null, [FromQuery] string? batchCode = null, CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -164,14 +166,14 @@ ORDER BY s.antibiotic_level DESC, s.drug_code;")).ToList();
             p.Add("Batch", batchCode.Trim().ToUpperInvariant());
         }
         sql += " ORDER BY created_at_ms DESC LIMIT 200";
-        return Ok(await conn.QueryAsync(sql, p));
+        return ApiResponse<object>.Success(await conn.QueryAsync(sql, p));
     }
 
     [HttpPost("pivas/orders")]
-    public async Task<IActionResult> CreatePivasOrder([FromBody] CreatePivasOrderDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> CreatePivasOrder([FromBody] CreatePivasOrderDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.OrderId) || string.IsNullOrWhiteSpace(dto.DrugName) || string.IsNullOrWhiteSpace(dto.SolventName))
-            return BadRequest(new { message = "医嘱ID、主药名称与溶媒名称不能为空。" });
+            return ApiResponse<object>.Fail(400, "医嘱ID、主药名称与溶媒名称不能为空。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var id = Guid.NewGuid().ToString("N");
@@ -206,14 +208,14 @@ INSERT INTO pivas_orders (
             Actor = ActorId
         });
 
-        return Ok(new { id, pivasNo, status = "PENDING_REVIEW" });
+        return ApiResponse<object>.Success(new { id, pivasNo, status = "PENDING_REVIEW" });
     }
 
     [HttpPost("pivas/orders/{id}/review")]
-    public async Task<IActionResult> ReviewPivasOrder(string id, [FromBody] ReviewPivasDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> ReviewPivasOrder(string id, [FromBody] ReviewPivasDto dto, CancellationToken ct)
     {
         if (!dto.Approved && string.IsNullOrWhiteSpace(dto.RejectReason))
-            return BadRequest(new { message = "静配审方打回时必须填写配伍禁忌或不合理原因。" });
+            return ApiResponse<object>.Fail(400, "静配审方打回时必须填写配伍禁忌或不合理原因。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var nextStatus = dto.Approved ? "REVIEWED" : "REJECTED";
@@ -240,12 +242,12 @@ WHERE id = @Id AND status = 'PENDING_REVIEW';", new
             Id = id
         });
 
-        if (affected == 0) return BadRequest(new { message = "静配工单不存在或当前非待审方状态。" });
-        return Ok(new { id, status = nextStatus });
+        if (affected == 0) return ApiResponse<object>.Fail(400, "静配工单不存在或当前非待审方状态。");
+        return ApiResponse<object>.Success(new { id, status = nextStatus });
     }
 
     [HttpPost("pivas/orders/{id}/label")]
-    public async Task<IActionResult> PrintLabel(string id, CancellationToken ct)
+    public async Task<ApiResponse<object>> PrintLabel(string id, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var barcode = $"PVL-{DateTime.UtcNow:yyyyMMdd}-{id[..8].ToUpperInvariant()}";
@@ -256,12 +258,12 @@ UPDATE pivas_orders
 SET status = 'LABELED', label_barcode = @Barcode, updated_at_ms = @Now, updated_by = @Actor, version_no = version_no + 1
 WHERE id = @Id AND status = 'REVIEWED';", new { Barcode = barcode, Now = now, Actor = ActorId, Id = id });
 
-        if (affected == 0) return BadRequest(new { message = "仅已审方(REVIEWED)的静配工单允许贴签。" });
-        return Ok(new { id, status = "LABELED", labelBarcode = barcode });
+        if (affected == 0) return ApiResponse<object>.Fail(400, "仅已审方(REVIEWED)的静配工单允许贴签。");
+        return ApiResponse<object>.Success(new { id, status = "LABELED", labelBarcode = barcode });
     }
 
     [HttpPost("pivas/orders/{id}/compound")]
-    public async Task<IActionResult> CompoundOrder(string id, [FromBody] CompoundPivasDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> CompoundOrder(string id, [FromBody] CompoundPivasDto dto, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var compounder = string.IsNullOrWhiteSpace(dto.CompounderName) ? ActorName : dto.CompounderName.Trim();
@@ -272,25 +274,25 @@ UPDATE pivas_orders
 SET status = 'COMPOUNDED', compounder_name = @Compounder, compounded_at_ms = @Now, updated_at_ms = @Now, updated_by = @Actor, version_no = version_no + 1
 WHERE id = @Id AND status = 'LABELED';", new { Compounder = compounder, Now = now, Actor = ActorId, Id = id });
 
-        if (affected == 0) return BadRequest(new { message = "仅已贴签(LABELED)的静配工单允许进仓调配。" });
-        return Ok(new { id, status = "COMPOUNDED", compounderName = compounder });
+        if (affected == 0) return ApiResponse<object>.Fail(400, "仅已贴签(LABELED)的静配工单允许进仓调配。");
+        return ApiResponse<object>.Success(new { id, status = "COMPOUNDED", compounderName = compounder });
     }
 
     [HttpPost("pivas/orders/{id}/check")]
-    public async Task<IActionResult> DoubleCheckOrder(string id, [FromBody] CheckPivasDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> DoubleCheckOrder(string id, [FromBody] CheckPivasDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.CheckerName))
-            return BadRequest(new { message = "核对人姓名不能为空。" });
+            return ApiResponse<object>.Fail(400, "核对人姓名不能为空。");
 
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var row = await conn.QueryFirstOrDefaultAsync("SELECT status, compounder_name FROM pivas_orders WHERE id = @Id", new { Id = id });
-        if (row == null) return NotFound(new { message = "静配工单不存在。" });
+        if (row == null) return ApiResponse<object>.Fail(404, "静配工单不存在。");
         if ((string)row.status != "COMPOUNDED")
-            return BadRequest(new { message = "仅已调配(COMPOUNDED)的静配工单允许出仓核对。" });
+            return ApiResponse<object>.Fail(400, "仅已调配(COMPOUNDED)的静配工单允许出仓核对。");
 
         if (string.Equals((string?)row.compounder_name, dto.CheckerName.Trim(), StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "PIVAS 严格执行双人核对制度：核对人不能与调配人相同。" });
+            return ApiResponse<object>.Fail(400, "PIVAS 严格执行双人核对制度：核对人不能与调配人相同。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         string checker = dto.CheckerName.Trim();
@@ -301,13 +303,13 @@ WHERE id = @Id AND status = 'COMPOUNDED' AND LOWER(COALESCE(compounder_name, '')
             new { Checker = checker, Now = now, Actor = ActorId, Id = id });
 
         if (affected == 0)
-            return Conflict(new { message = "静配工单状态已变更或核对人与调配人相同，无法完成复核。" });
+            return ApiResponse<object>.Fail(409, "静配工单状态已变更或核对人与调配人相同，无法完成复核。");
 
-        return Ok(new { id, status = "CHECKED", checkerName = checker });
+        return ApiResponse<object>.Success(new { id, status = "CHECKED", checkerName = checker });
     }
 
     [HttpPost("pivas/orders/{id}/dispatch")]
-    public async Task<IActionResult> DispatchOrder(string id, CancellationToken ct)
+    public async Task<ApiResponse<object>> DispatchOrder(string id, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await using var conn = _connFactory.CreateConnection();
@@ -317,7 +319,35 @@ UPDATE pivas_orders
 SET status = 'DISPATCHED', dispatched_at_ms = @Now, updated_at_ms = @Now, updated_by = @Actor, version_no = version_no + 1
 WHERE id = @Id AND status = 'CHECKED';", new { Now = now, Actor = ActorId, Id = id });
 
-        if (affected == 0) return BadRequest(new { message = "仅已完成双人核对(CHECKED)的成品输液允许出仓配送。" });
-        return Ok(new { id, status = "DISPATCHED", dispatchedAtMs = now });
+        if (affected == 0) return ApiResponse<object>.Fail(400, "仅已完成双人核对(CHECKED)的成品输液允许出仓配送。");
+
+        // 跨表闭环：同步写入住院药房静配批次台账 (phm_ward_pivas_batches)
+        var ord = await conn.QueryFirstOrDefaultAsync("SELECT encounter_id, ward_name, batch_code, reviewer_name, compounder_name, checker_name FROM pivas_orders WHERE id = @Id", new { Id = id });
+        if (ord != null)
+        {
+            await conn.ExecuteAsync(@"
+INSERT INTO phm_ward_pivas_batches (
+    id, encounter_id, ward_id, batch_no, prep_type, pharmacist_audit_by,
+    label_printed_at_ms, compounded_by, rechecked_by, dispatched_at_ms, status,
+    schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no
+) VALUES (
+    @Bid, @EncId, @Ward, @BatchNo, 'PIVAS_IV', @AuditBy,
+    @Now, @CompBy, @CheckBy, @Now, 'DISPATCHED',
+    1, @Now, @Actor, @Now, @Actor, 1
+);", new
+            {
+                Bid = Guid.NewGuid().ToString("N"),
+                EncId = (string?)ord.encounter_id ?? string.Empty,
+                Ward = (string?)ord.ward_name ?? "住院病区",
+                BatchNo = (string?)ord.batch_code ?? "BATCH_1",
+                AuditBy = (string?)ord.reviewer_name ?? ActorName,
+                CompBy = (string?)ord.compounder_name ?? ActorName,
+                CheckBy = (string?)ord.checker_name ?? ActorName,
+                Now = now,
+                Actor = ActorId
+            });
+        }
+
+        return ApiResponse<object>.Success(new { id, status = "DISPATCHED", dispatchedAtMs = now });
     }
 }

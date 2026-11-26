@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +16,7 @@ namespace HIS.Modules.Config.Controllers;
 /// 全院主数据字典中心：管理字典分类与标准字典项，供动态表单设计器引用（限制用户输入、标准计量单位直接点选）及服务端强校验
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE", "PHARMACIST", "MEDTECH")]
 [Route("api/v4/config/dictionaries")]
 public sealed class MasterDictionaryController : ControllerBase
 {

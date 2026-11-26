@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +16,7 @@ namespace HIS.Modules.Emr.Controllers;
 /// 病案室管理与临床编码工作台 (MRMS)：出院病案回收、ICD-10/ICD-9-CM-3 编码复核、DRG 预分组、归档上架、依法封存与借阅复印登记
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT")]
 [Route("api/v4/mrms")]
 public sealed class MrmsController : ControllerBase
 {

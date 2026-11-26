@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace HIS.Modules.Inpatient.Controllers;
 /// 3) 三管院感监测（VAP 呼吸机管道 / CLABSI 中心静脉 / CAUTI 导尿管），确诊感染自动联动写入不良事件台账
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE")]
 [Route("api/v4/icu-cis")]
 public sealed class IcuCisController : ControllerBase
 {
@@ -73,7 +75,7 @@ public sealed class IcuCisController : ControllerBase
     public sealed record ConfirmCatheterInfectionDto(string InfectionNote);
 
     [HttpGet("admissions")]
-    public async Task<IActionResult> ListAdmissions([FromQuery] string? status = "IN_ICU", CancellationToken ct = default)
+    public async Task<ApiResponse<object>> ListAdmissions([FromQuery] string? status = "IN_ICU", CancellationToken ct = default)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -85,14 +87,14 @@ public sealed class IcuCisController : ControllerBase
             p.Add("Status", status.Trim().ToUpperInvariant());
         }
         sql += " ORDER BY admitted_at_ms DESC LIMIT 200";
-        return Ok(await conn.QueryAsync(sql, p));
+        return ApiResponse<object>.Success(await conn.QueryAsync(sql, p));
     }
 
     [HttpPost("admissions")]
-    public async Task<IActionResult> AdmitToIcu([FromBody] AdmitIcuDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> AdmitToIcu([FromBody] AdmitIcuDto dto, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(dto.EncounterId) || string.IsNullOrWhiteSpace(dto.IcuBedCode))
-            return BadRequest(new { message = "住院就诊ID与ICU床位号不能为空。" });
+            return ApiResponse<object>.Fail(400, "住院就诊ID与ICU床位号不能为空。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var id = Guid.NewGuid().ToString("N");
@@ -123,14 +125,14 @@ INSERT INTO icu_admissions (
             Actor = ActorId
         });
 
-        return Ok(new { id, icuNo, status = "IN_ICU" });
+        return ApiResponse<object>.Success(new { id, icuNo, status = "IN_ICU" });
     }
 
     [HttpPost("admissions/{icuAdmissionId}/severity-score")]
-    public async Task<IActionResult> ComputeSeverityScores(string icuAdmissionId, [FromBody] SeverityScoreDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> ComputeSeverityScores(string icuAdmissionId, [FromBody] SeverityScoreDto dto, CancellationToken ct)
     {
         if (dto.GcsScore < 3 || dto.GcsScore > 15)
-            return BadRequest(new { message = "GCS 评分必须在 3~15 之间。" });
+            return ApiResponse<object>.Fail(400, "GCS 评分必须在 3~15 之间。");
 
         // 1) 标准 SOFA (0~24分): 呼吸/凝血/肝脏/心血管/神经/肾脏 6 大系统
         int sofaResp = dto.Pao2Fio2Ratio < 100 ? 4 : dto.Pao2Fio2Ratio < 200 ? 3 : dto.Pao2Fio2Ratio < 300 ? 2 : dto.Pao2Fio2Ratio < 400 ? 1 : 0;
@@ -171,9 +173,9 @@ SET apache_ii_score = @Apache,
     version_no = version_no + 1
 WHERE id = @Id;", new { Apache = apacheIi, Sofa = sofa, Mortality = mortalityPct, Now = now, Actor = ActorId, Id = icuAdmissionId });
 
-        if (affected == 0) return NotFound(new { message = "ICU 收治单不存在。" });
+        if (affected == 0) return ApiResponse<object>.Fail(404, "ICU 收治单不存在。");
 
-        return Ok(new
+        return ApiResponse<object>.Success(new
         {
             icuAdmissionId,
             apacheIiScore = apacheIi,
@@ -184,7 +186,7 @@ WHERE id = @Id;", new { Apache = apacheIi, Sofa = sofa, Mortality = mortalityPct
     }
 
     [HttpGet("admissions/{icuAdmissionId}/hourly")]
-    public async Task<IActionResult> ListHourlyRecords(string icuAdmissionId, CancellationToken ct)
+    public async Task<ApiResponse<object>> ListHourlyRecords(string icuAdmissionId, CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
@@ -200,14 +202,14 @@ SELECT COALESCE(SUM(intake_ml), 0) AS total_intake_24h,
 FROM icu_hourly_records
 WHERE icu_admission_id = @Id AND record_time_ms >= @Cutoff;", new { Id = icuAdmissionId, Cutoff = cutoff24h });
 
-        return Ok(new { records, summary24h });
+        return ApiResponse<object>.Success(new { records, summary24h });
     }
 
     [HttpPost("admissions/{icuAdmissionId}/hourly")]
-    public async Task<IActionResult> AddHourlyRecord(string icuAdmissionId, [FromBody] HourlyRecordDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> AddHourlyRecord(string icuAdmissionId, [FromBody] HourlyRecordDto dto, CancellationToken ct)
     {
         if (dto.IntakeMl < 0 || dto.OutputMl < 0)
-            return BadRequest(new { message = "入量与出量不能为负数。" });
+            return ApiResponse<object>.Fail(400, "入量与出量不能为负数。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var net = dto.IntakeMl - dto.OutputMl;
@@ -247,31 +249,31 @@ INSERT INTO icu_hourly_records (
             Actor = ActorId
         });
 
-        return Ok(new { id, netBalanceMl = net, hypotensionAlert = dto.MapMmhg is < 65 });
+        return ApiResponse<object>.Success(new { id, netBalanceMl = net, hypotensionAlert = dto.MapMmhg is < 65 });
     }
 
     [HttpGet("admissions/{icuAdmissionId}/catheters")]
-    public async Task<IActionResult> ListCatheters(string icuAdmissionId, CancellationToken ct)
+    public async Task<ApiResponse<object>> ListCatheters(string icuAdmissionId, CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync(
             "SELECT * FROM icu_catheter_surveillance WHERE icu_admission_id = @Id ORDER BY inserted_at_ms DESC",
             new { Id = icuAdmissionId });
-        return Ok(rows);
+        return ApiResponse<object>.Success(rows);
     }
 
     [HttpPost("admissions/{icuAdmissionId}/catheters")]
-    public async Task<IActionResult> InsertCatheter(string icuAdmissionId, [FromBody] InsertCatheterDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> InsertCatheter(string icuAdmissionId, [FromBody] InsertCatheterDto dto, CancellationToken ct)
     {
         var type = (dto.CatheterType ?? string.Empty).Trim().ToUpperInvariant();
         if (type is not ("VAP" or "CLABSI" or "CAUTI"))
-            return BadRequest(new { message = "三管类型仅支持 VAP(呼吸机插管)/CLABSI(中心静脉)/CAUTI(导尿管)。" });
+            return ApiResponse<object>.Fail(400, "三管类型仅支持 VAP(呼吸机插管)/CLABSI(中心静脉)/CAUTI(导尿管)。");
 
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var adm = await conn.QueryFirstOrDefaultAsync("SELECT encounter_id FROM icu_admissions WHERE id = @Id", new { Id = icuAdmissionId });
-        if (adm == null) return NotFound(new { message = "ICU 收治单不存在。" });
+        if (adm == null) return ApiResponse<object>.Fail(404, "ICU 收治单不存在。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var id = Guid.NewGuid().ToString("N");
@@ -286,18 +288,18 @@ INSERT INTO icu_catheter_surveillance (
     @Now, @Actor, @Now, @Actor
 );", new { Id = id, AdmId = icuAdmissionId, EncId = (string)adm.encounter_id, Type = type, Site = dto.SiteName, Now = now, Actor = ActorId });
 
-        return Ok(new { id, catheterType = type, status = "INDWELLING" });
+        return ApiResponse<object>.Success(new { id, catheterType = type, status = "INDWELLING" });
     }
 
     [HttpPost("catheters/{catheterId}/confirm-infection")]
-    public async Task<IActionResult> ConfirmCatheterInfection(string catheterId, [FromBody] ConfirmCatheterInfectionDto dto, CancellationToken ct)
+    public async Task<ApiResponse<object>> ConfirmCatheterInfection(string catheterId, [FromBody] ConfirmCatheterInfectionDto dto, CancellationToken ct)
     {
         await using var conn = _connFactory.CreateConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         var cath = await conn.QueryFirstOrDefaultAsync(
-            "SELECT id, icu_admission_id, catheter_type FROM icu_catheter_surveillance WHERE id = @Id",
+            "SELECT c.id, c.icu_admission_id, c.encounter_id, c.catheter_type, a.patient_id, a.patient_name FROM icu_catheter_surveillance c LEFT JOIN icu_admissions a ON a.id = c.icu_admission_id WHERE c.id = @Id",
             new { Id = catheterId });
-        if (cath == null) return NotFound(new { message = "导管监测记录不存在。" });
+        if (cath == null) return ApiResponse<object>.Fail(404, "导管监测记录不存在。");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var eventNo = $"HAI{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(10, 99)}";
@@ -332,8 +334,32 @@ INSERT INTO med_safety_rca_events (
             Actor = ActorId
         }, tx);
 
+
+        // 跨模块闭环 2：同步写入院感科监测表 (ipc_infection_reports)，消除 ICU 三管与院感科数据孤岛
+        await conn.ExecuteAsync(@"
+INSERT INTO ipc_infection_reports (
+    id, report_no, encounter_id, patient_id, patient_name, ward_id, infection_site,
+    pathogen, is_mdro, diagnosed_at_ms, clinical_manifestation, status, reporter_id,
+    schema_version, created_at_ms, created_by, updated_at_ms, updated_by, version_no
+) VALUES (
+    @RepId, @RepNo, @EncId, @PatId, @PatName, 'DEPT-ICU', @Site,
+    '待药敏明确', 0, @Now, @Manifest, 'REPORTED', @Actor,
+    1, @Now, @Actor, @Now, @Actor, 1
+);", new
+        {
+            RepId = Guid.NewGuid().ToString("N"),
+            RepNo = $"IPC-{eventNo}",
+            EncId = (string?)cath.encounter_id ?? string.Empty,
+            PatId = (string?)cath.patient_id ?? string.Empty,
+            PatName = (string?)cath.patient_name ?? "ICU患者",
+            Site = $"ICU三管-{cath.catheter_type}",
+            Manifest = dto.InfectionNote,
+            Now = now,
+            Actor = ActorId
+        }, tx);
+
         await tx.CommitAsync(ct);
 
-        return Ok(new { catheterId, infectionConfirmed = true, linkedSafetyEventId = safetyEventId, linkedEventNo = eventNo });
+        return ApiResponse<object>.Success(new { catheterId, infectionConfirmed = true, linkedSafetyEventId = safetyEventId, linkedEventNo = eventNo });
     }
 }

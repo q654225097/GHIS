@@ -1,0 +1,138 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HIS.Client.UrsaShell.Stations.FourRoleClosure"
+             x:Class="HIS.Client.UrsaShell.Stations.FourRoleClosure.FourRoleClosureStationView"
+             x:DataType="local:FourRoleClosureViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="14" RowSpacing="10">
+        <Border Grid.Row="0" Padding="14,10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="四角色现实闭环运营台（挂号员 · 医生 · 护士 · 患者门户与复印）" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding BannerText}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="刷新全部" Classes="Primary" Height="32" Command="{Binding RefreshAllCommand}"/>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: 挂号员/收费员闭环 -->
+            <TabItem Header="① 挂号与三方退检退费池">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="三方退检/退费申请与超时释号" FontWeight="Bold"/>
+                            <TextBox Text="{Binding RfPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <TextBox Text="{Binding RfItemName, Mode=TwoWay}" PlaceholderText="退费项目 (如 胸部CT平扫)"/>
+                            <TextBox Text="{Binding RfReason, Mode=TwoWay}" PlaceholderText="退费原因"/>
+                            <Button Content="发起退检/退费申请" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding CreateRefundReqCommand}"/>
+                            <Button Content="医技确认未执行 (解锁退费)" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding ConfirmRefundExecCommand}"/>
+                            <Button Content="收费窗口现金退费核销" HorizontalAlignment="Stretch" Command="{Binding ExecuteCashierRefundCommand}"/>
+                            <Button Content="一键扫描释放超时未取号源(爽约记账)" HorizontalAlignment="Stretch" Margin="0,8,0,0" Command="{Binding ReleaseExpiredCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding RefundRequests}" SelectedItem="{Binding SelectedRefund, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="申请单号" Binding="{Binding RequestNo}" Width="145"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="项目" Binding="{Binding ItemName}" Width="150"/>
+                                <DataGridTextColumn Header="金额" Binding="{Binding RefundAmount}" Width="80"/>
+                                <DataGridTextColumn Header="发起医师" Binding="{Binding InitiatorDoctor}" Width="90"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 医生闭环 -->
+            <TabItem Header="② 医生病危通知书与回诊插队">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="病危/病重通知书强触发与家属签字" FontWeight="Bold"/>
+                            <TextBox Text="{Binding CritPatientName, Mode=TwoWay}" PlaceholderText="住院患者姓名"/>
+                            <TextBox Text="{Binding CritCondition, Mode=TwoWay}" PlaceholderText="危重病情说明"/>
+                            <Button Content="签发病危通知书 (同步报备医务科)" Classes="Danger" HorizontalAlignment="Stretch" Command="{Binding IssueCriticalNoticeCommand}"/>
+                            <TextBox Text="{Binding FamilySignerName, Mode=TwoWay}" PlaceholderText="家属签字姓名" Margin="0,6,0,0"/>
+                            <Button Content="采集家属电子签名并归档" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding FamilySignCriticalCommand}"/>
+                            <Button Content="门诊看报告回诊签到 (2:1自动插队)" Classes="Secondary" HorizontalAlignment="Stretch" Margin="0,10,0,0" Command="{Binding ReportReturnCheckinCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding CriticalNotices}" SelectedItem="{Binding SelectedCritical, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="通知书号" Binding="{Binding NoticeNo}" Width="145"/>
+                                <DataGridTextColumn Header="级别" Binding="{Binding NoticeLevel}" Width="115"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="下达医师" Binding="{Binding IssuedDoctor}" Width="90"/>
+                                <DataGridTextColumn Header="家属签字" Binding="{Binding FamilySignerName}" Width="90"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: 护士安全闭环 -->
+            <TabItem Header="③ 护士皮试20分双签 · 输液反应 · UD摆药">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="皮试计时双签与输液应急" FontWeight="Bold"/>
+                            <TextBox Text="{Binding StPatientName, Mode=TwoWay}" PlaceholderText="患者姓名"/>
+                            <TextBox Text="{Binding StDrugName, Mode=TwoWay}" PlaceholderText="皮试药品 (如 注射用青霉素钠)"/>
+                            <Button Content="皮试注射打点 (启动20分钟倒计时)" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding InjectSkinTestCommand}"/>
+                            <Button Content="双人判定阳性 (自动写过敏史阻断)" Classes="Danger" HorizontalAlignment="Stretch" Command="{Binding JudgeSkinTestPosCommand}"/>
+                            <Button Content="突发输液反应应急封存并上报ADR" HorizontalAlignment="Stretch" Margin="0,8,0,0" Command="{Binding EmergencyStopInfusionCommand}"/>
+                            <Button Content="生成病区晨间口服药UD分包" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding PackUdOralCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding SkinTests}" SelectedItem="{Binding SelectedSkinTest, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="皮试单号" Binding="{Binding TestNo}" Width="140"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="药品" Binding="{Binding DrugName}" Width="155"/>
+                                <DataGridTextColumn Header="结果" Binding="{Binding Result}" Width="95"/>
+                                <DataGridTextColumn Header="判定人" Binding="{Binding ReaderName}" Width="80"/>
+                                <DataGridTextColumn Header="复核人" Binding="{Binding CheckerName}" Width="80"/>
+                                <DataGridTextColumn Header="过敏同步" Binding="{Binding AllergyDisplay}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: 患者 C 端指引、病历复印与满意度 -->
+            <TabItem Header="④ 患者指引单 · 病历复印邮寄 · 满意度">
+                <Grid ColumnDefinitions="340,*" ColumnSpacing="12" Margin="0,8,0,0">
+                    <Border Grid.Column="0" Padding="12" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="病历复印邮寄审核与患者就诊指引" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding PatientServiceSummary}" FontSize="12" Foreground="{DynamicResource SemiColorPrimary}" TextWrapping="Wrap"/>
+                            <TextBox Text="{Binding CopyPatientName, Mode=TwoWay}" PlaceholderText="申请人患者姓名"/>
+                            <TextBox Text="{Binding CopyMailAddress, Mode=TwoWay}" PlaceholderText="邮寄收件地址"/>
+                            <Button Content="提交在线病历复印邮寄申请" Classes="Primary" HorizontalAlignment="Stretch" Command="{Binding SubmitCopyRequestCommand}"/>
+                            <TextBox Text="{Binding CopyExpressNo, Mode=TwoWay}" PlaceholderText="快递单号 (如 SF1029384756)" Margin="0,6,0,0"/>
+                            <Button Content="病案室审核通过并填写快递发货" Classes="Secondary" HorizontalAlignment="Stretch" Command="{Binding ShipCopyRequestCommand}"/>
+                            <Button Content="生成示例患者就诊指引单(空腹/楼层)" HorizontalAlignment="Stretch" Margin="0,8,0,0" Command="{Binding PreviewGuideSheetCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <DataGrid ItemsSource="{Binding CopyRequests}" SelectedItem="{Binding SelectedCopyReq, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="复印单号" Binding="{Binding CopyNo}" Width="140"/>
+                                <DataGridTextColumn Header="患者" Binding="{Binding PatientName}" Width="90"/>
+                                <DataGridTextColumn Header="用途" Binding="{Binding Purpose}" Width="110"/>
+                                <DataGridTextColumn Header="方式" Binding="{Binding DeliveryMode}" Width="85"/>
+                                <DataGridTextColumn Header="快递单号" Binding="{Binding ExpressNo}" Width="135"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

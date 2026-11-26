@@ -146,9 +146,9 @@ public sealed class PublicHealthSupplyViewModel : ClientModelBase
 
     private static async Task LoadPlainListAsync<T>(System.Net.Http.HttpClient http, string url, ObservableCollection<T> target)
     {
-        var list = await http.GetFromJsonAsync<List<T>>(url, JsonOpts);
+        var env = await http.GetFromJsonAsync<ClientApiEnvelope<List<T>>>(url, JsonOpts);
         target.Clear();
-        if (list != null) foreach (var it in list) target.Add(it);
+        if (env?.Data != null) foreach (var it in env.Data) target.Add(it);
     }
 
     private async Task TriggerPhCardAsync()

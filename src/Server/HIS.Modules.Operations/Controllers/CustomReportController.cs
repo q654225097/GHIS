@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.Operations.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "CASHIER")]
 [Route("api/v4/ops/reports")]
 [RequireRole(RoleCode.Admin, "DIRECTOR", "LEADER", RoleCode.Cashier, RoleCode.DoctorOpd, RoleCode.DoctorIpd)]
 public class CustomReportController : ControllerBase

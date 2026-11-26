@@ -17,6 +17,7 @@ namespace HIS.Modules.MedTech.Controllers;
 /// 医技报告书写审签工作站与分科室自定义编辑/打印模板引擎
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "MEDTECH", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT")]
 [Route("api/v4/medtech-reports")]
 public sealed class MedTechReportController : ControllerBase
 {

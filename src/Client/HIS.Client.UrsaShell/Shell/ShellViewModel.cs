@@ -563,6 +563,8 @@ public sealed partial class ShellViewModel : ClientModelBase
                 IsClinical = true,
                 Description = "公卫ICD-10多报卡强触发、院后专病随访与30天再入院追踪、高值耗材UDI消耗记账代销对账、NRS-2002营养配餐"
             });
+            clinical.Items.Add(new ShellNavItem { Key = "four_role_closure", LegacyNavIndex = -1, Title = "四角色闭环运营台", Icon = "🔄", Description = "挂号改签与三方退费池、病危通知与2:1回诊插队、皮试20分双签与输液ADR应急、患者指引与病历复印邮寄" });
+            clinical.Items.Add(new ShellNavItem { Key = "staff_lifecycle", LegacyNavIndex = -1, Title = "职工全生命周期中心", Icon = "🪪", Description = "新职工上岗4步准入、请假外出临床代理、离职退休5项清零与CA吊销、退休返聘、外院专家限时备案与轮转定考" });
         }
         clinical.Items.Add(new ShellNavItem
         {
@@ -952,6 +954,8 @@ public sealed partial class ShellViewModel : ClientModelBase
             "nursing_mgmt" => new Stations.NursingMgmt.NursingMgmtStationView { DataContext = new Stations.NursingMgmt.NursingMgmtViewModel(Workbench, this) },
             "critical_care_control" => new Stations.CriticalCareControl.CriticalCareControlStationView { DataContext = new Stations.CriticalCareControl.CriticalCareControlViewModel(Workbench, this) },
             "public_health_supply" => new Stations.PublicHealthSupply.PublicHealthSupplyStationView { DataContext = new Stations.PublicHealthSupply.PublicHealthSupplyViewModel(Workbench, this) },
+            "four_role_closure" => new Stations.FourRoleClosure.FourRoleClosureStationView { DataContext = new Stations.FourRoleClosure.FourRoleClosureViewModel(Workbench, this) },
+            "staff_lifecycle" => new Stations.StaffLifecycle.StaffLifecycleStationView { DataContext = new Stations.StaffLifecycle.StaffLifecycleViewModel(Workbench, this) },
             "aims" => new Stations.Aims.AimsStationView { DataContext = new Stations.Aims.AimsViewModel(Workbench, this) },
             "master_dict" => new Stations.MasterDict.MasterDictStationView { DataContext = new Stations.MasterDict.MasterDictViewModel(Workbench, this) },
             "mrms" => new Stations.Mrms.MrmsStationView { DataContext = new Stations.Mrms.MrmsViewModel(Workbench, this) },

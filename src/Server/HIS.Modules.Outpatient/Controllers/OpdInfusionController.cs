@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.Outpatient.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "WARD_NURSE")]
 [Route("api/v4/opd/infusion")]
 public sealed class OpdInfusionController : ControllerBase
 {

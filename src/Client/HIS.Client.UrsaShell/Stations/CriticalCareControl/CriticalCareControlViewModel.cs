@@ -151,10 +151,10 @@ public sealed class CriticalCareControlViewModel : ClientModelBase
             await LoadPlainListAsync(http, "api/v4/drg-cost/alerts", DrgAlerts);
             await LoadPlainListAsync(http, "api/v4/pivas-abx/pivas/orders", PivasOrders);
 
-            var aud = await http.GetFromJsonAsync<JsonElement>("api/v4/pivas-abx/abx/aud-report", JsonOpts);
-            if (aud.ValueKind == JsonValueKind.Object && aud.TryGetProperty("audPer100BedDays", out var audVal))
+            var audEnv = await http.GetFromJsonAsync<ClientApiEnvelope<JsonElement>>("api/v4/pivas-abx/abx/aud-report", JsonOpts);
+            if (audEnv?.Data.ValueKind == JsonValueKind.Object && audEnv.Data.TryGetProperty("audPer100BedDays", out var audVal))
             {
-                AbxAudSummary = $"住院抗菌药物强度 AUD: {audVal.GetDecimal():F2} / 红线 40.00 (总DDDs: {aud.GetProperty("grandTotalDdds").GetDecimal():F2})";
+                AbxAudSummary = $"住院抗菌药物强度 AUD: {audVal.GetDecimal():F2} / 红线 40.00 (总DDDs: {audEnv.Data.GetProperty("grandTotalDdds").GetDecimal():F2})";
             }
 
             SummaryBanner = $"五大中心专案 {FiveCenterCases.Count} · ICU在科 {IcuAdmissions.Count} · DRG预警 {DrgAlerts.Count} · PIVAS静配单 {PivasOrders.Count}";
@@ -164,9 +164,9 @@ public sealed class CriticalCareControlViewModel : ClientModelBase
 
     private static async Task LoadPlainListAsync<T>(System.Net.Http.HttpClient http, string url, ObservableCollection<T> target)
     {
-        var list = await http.GetFromJsonAsync<List<T>>(url, JsonOpts);
+        var env = await http.GetFromJsonAsync<ClientApiEnvelope<List<T>>>(url, JsonOpts);
         target.Clear();
-        if (list != null) foreach (var it in list) target.Add(it);
+        if (env?.Data != null) foreach (var it in env.Data) target.Add(it);
     }
 
     private async Task OpenFiveCenterCaseAsync()

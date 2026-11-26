@@ -21,6 +21,7 @@ namespace HIS.Modules.Checkup.Controllers;
 /// 职业病体检（接害因素/结论规范/省平台网报导出）与从业健康证管理。
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "MEDTECH", "CASHIER", "WARD_NURSE")]
 [Route("api/v4/checkup-pro")]
 public sealed class CheckupProController : ControllerBase
 {

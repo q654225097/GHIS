@@ -329,6 +329,7 @@ public class Program
 		builder.Services.AddHostedService<NursingCarePlanReminderWorker>();
 		builder.Services.AddHostedService<InpatientDailyBillingHostedService>();
 		builder.Services.AddHostedService<OutboxBackgroundDispatcher>();
+		builder.Services.AddHostedService<HIS.Modules.Hr.Services.StaffLifecycleGovernanceWorker>();
 		builder.Services.AddScoped((Func<IServiceProvider, IUserSession>)((IServiceProvider sp) =>
 		{
 			HttpContext? httpContext = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
@@ -536,7 +537,25 @@ public class Program
 				return;
 			}
 
+			using (var expConn = context.RequestServices.GetRequiredService<IDbConnectionFactory>().CreateConnection())
+			{
+				long? accExpire = await Dapper.SqlMapper.ExecuteScalarAsync<long?>(expConn, "SELECT account_expire_at_ms FROM sys_users WHERE id = @Uid", new { Uid = userId });
+				if (accExpire.HasValue && accExpire.Value > 0 && accExpire.Value < DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+				{
+					context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+					await context.Response.WriteAsJsonAsync(ApiResponse<object>.Fail(401, "限时执业/多点备案账号已到期自动熔断，请联系人事或医务科续签"));
+					return;
+				}
+			}
 			context.User = principal;
+			Endpoint? endpoint = context.GetEndpoint();
+			var roleReqs = endpoint?.Metadata.GetOrderedMetadata<HIS.BuildingBlocks.Security.RequireHisRoleAttribute>();
+			if (roleReqs != null && roleReqs.Count > 0 && !HIS.BuildingBlocks.Security.RequireHisRoleAttribute.IsAuthorized(principal, roleReqs))
+			{
+				context.Response.StatusCode = StatusCodes.Status403Forbidden;
+				await context.Response.WriteAsJsonAsync(ApiResponse<object>.Fail(403, "权限不足：当前岗位角色无权访问该业务接口"));
+				return;
+			}
 			await next();
 		});
 		app.Use(async (HttpContext context, Func<Task> next) =>

@@ -1,3 +1,4 @@
+using HIS.BuildingBlocks.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,7 @@ namespace HIS.Modules.Checkup.Controllers;
 /// 全院基础字典维护（药品基本字典、耗材基本字典、收费项目目录）与现代医疗组合套餐引擎
 /// </summary>
 [ApiController]
+[RequireHisRole("ADMIN", "WAREHOUSE_KEEPER", "PHARMACIST", "CASHIER")]
 [Route("api/v4/catalog")]
 public sealed class MasterCatalogController : ControllerBase
 {

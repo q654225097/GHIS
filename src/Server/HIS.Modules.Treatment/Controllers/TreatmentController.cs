@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.Treatment.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE", "MEDTECH")]
 [Route("api/v4/treatment")]
 public class TreatmentController : ControllerBase
 {

@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HIS.Modules.Config.Controllers;
 
 [ApiController]
+[RequireHisRole("ADMIN", "OPD_DOC", "IPD_ATTENDING", "IPD_RESIDENT", "WARD_NURSE", "PHARMACIST", "CASHIER", "MEDTECH", "WAREHOUSE_KEEPER")]
 [Route("api/v4/config")]
 public class ConfigController : ControllerBase
 {
